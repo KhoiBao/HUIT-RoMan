@@ -89,9 +89,3 @@ dotnet add src/API/HUIT-RoMan.API.csproj reference src/Application/HUIT-RoMan.Ap
 4. Viết controller thin ở `API/Controllers/RoomsController.cs` (nhận DTO -> gọi service -> trả kết quả).
 5. Nếu đổi entity: `dotnet ef migrations add ThemX --project src/Infrastructure --startup-project src/API`.
 
-## 5. Vì sao push nhẹ rồi
-
-`.gitignore` ở root đã ignore `[Bb]in/ [Oo]bj/ .vs/ *.user TestResults/`.
-Trước khi có file này, `backend/` chứa hàng trăm MB `obj/*.json + bin/*.dll`.
-Kiểm tra nhanh: `git check-ignore -v backend/src/API/obj` phải in ra dòng `.gitignore`.
-Không bao giờ commit `bin/obj/.vs` lên GitHub.
