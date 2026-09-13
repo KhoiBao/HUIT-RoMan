@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -22,7 +22,7 @@ namespace HUIT_RoMan.Domain.Entities
         public string Position { get; set; } // Chức vụ
 
         public DateTime? HireDate { get; set; }
-        public int Status { get; set; }
+        public string Status { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -34,6 +34,5 @@ namespace HUIT_RoMan.Domain.Entities
         public virtual ICollection<ShiftLog> ShiftLogs { get; set; } = new List<ShiftLog>();
         public virtual ICollection<Shift> Shifts { get; set; } = new List<Shift>();
         public virtual ICollection<MaintenanceRecord> MaintenanceRecords { get; set; } = new List<MaintenanceRecord>();
-        public virtual ICollection<ApprovalHistory> ApprovalHistories { get; set; } = new List<ApprovalHistory>();
     }
 }

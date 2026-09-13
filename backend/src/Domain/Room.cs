@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -31,7 +31,7 @@ namespace HUIT_RoMan.Domain.Entities
         public string RoomNumber { get; set; }
 
         public int Capacity { get; set; }
-        public int Status { get; set; }
+        public string Status { get; set; }
         public string Description { get; set; }
 
         [ForeignKey("RoomType")]

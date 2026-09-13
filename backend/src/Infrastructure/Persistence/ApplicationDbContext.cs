@@ -16,12 +16,12 @@ namespace HUIT_RoMan.Infrastructure.Persistence
         public DbSet<Employee> Employees { get; set; }
         public DbSet<Shift> Shifts { get; set; }
         public DbSet<ShiftLog> ShiftLogs { get; set; }
+        public DbSet<Period> Periods { get; set; }
         public DbSet<RoomType> RoomTypes { get; set; }
         public DbSet<Room> Rooms { get; set; }
         public DbSet<Booking> Bookings { get; set; }
         public DbSet<BookingDetail> BookingDetails { get; set; }
         public DbSet<UsageSession> UsageSessions { get; set; }
-        public DbSet<ApprovalHistory> ApprovalHistories { get; set; }
         public DbSet<ViolationType> ViolationTypes { get; set; }
         public DbSet<ViolationRecord> ViolationRecords { get; set; }
         public DbSet<Feedback> Feedbacks { get; set; }
