@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -22,7 +22,7 @@ namespace HUIT_RoMan.Domain.Entities
 
         public string Content { get; set; }
         public int Type { get; set; }
-        public int Status { get; set; }
+        public string Status { get; set; }
 
         // Navigation properties
         public virtual ICollection<RoomTypeCondition> RoomTypeConditions { get; set; } = new List<RoomTypeCondition>();

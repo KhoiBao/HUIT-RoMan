@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -16,7 +16,7 @@ namespace HUIT_RoMan.Domain.Entities
 
         public DateTime StartTime { get; set; } = DateTime.UtcNow;
         public DateTime? EndTime { get; set; }
-        public int Status { get; set; }
+        public string Status { get; set; }
 
         [ForeignKey("User")]
         public int UserId { get; set; } // Người yêu cầu hỗ trợ

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -23,7 +23,7 @@ namespace HUIT_RoMan.Domain.Entities
 
         public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
         
-        public int Status { get; set; } // Trạng thái đơn (Chờ duyệt, Đã duyệt, Đã hủy,...)
+        public string Status { get; set; } // Trạng thái đơn (Chờ duyệt, Đã duyệt, Đã hủy,...)
         
         public string RejectionReason { get; set; }
         
@@ -37,6 +37,5 @@ namespace HUIT_RoMan.Domain.Entities
 
         // Navigation properties
         public virtual ICollection<BookingDetail> BookingDetails { get; set; } = new List<BookingDetail>();
-        public virtual ICollection<ApprovalHistory> ApprovalHistories { get; set; } = new List<ApprovalHistory>();
     }
 }

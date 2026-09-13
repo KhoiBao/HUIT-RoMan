@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -17,7 +17,7 @@ namespace HUIT_RoMan.Domain.Entities
         public DateTime? ActualCheckIn { get; set; }
         public DateTime? ActualCheckOut { get; set; }
         
-        public int Status { get; set; }
+        public string Status { get; set; }
         
         [StringLength(50)]
         public string ConfirmationCode { get; set; } // Mã xác nhận nhận phòng

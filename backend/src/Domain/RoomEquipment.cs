@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -24,6 +24,6 @@ namespace HUIT_RoMan.Domain.Entities
         public DateTime? RemovedDate { get; set; }
         
         public int Quantity { get; set; }
-        public int Status { get; set; }
+        public string Status { get; set; }
     }
 }
