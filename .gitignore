@@ -1,0 +1,50 @@
+## .NET build outputs (nặng nhất khi push - bắt buộc ignore)
+[Bb]in/
+[Oo]bj/
+out/
+publish/
+TestResults/
+BenchmarkDotNet.Artifacts/
+
+## Visual Studio / VS Code / Rider
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.DotSettings.user
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## EF Core tools
+*.mdf
+*.ldf
+
+## OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+## Temp / logs
+*.log
+*.tmp
+*.temp
+~$*
+
+## Secrets local (giữ appsettings.json mẫu, ignore override cá nhân)
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json

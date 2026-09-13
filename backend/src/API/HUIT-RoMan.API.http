@@ -1,0 +1,6 @@
+@HUIT_RoMan.API_HostAddress = http://localhost:5056
+
+GET {{HUIT_RoMan.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
