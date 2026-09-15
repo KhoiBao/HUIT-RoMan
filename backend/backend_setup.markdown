@@ -30,11 +30,10 @@ git checkout -b dev/<ten-ban>
 ```powershell
 cd backend
 
-# lần đầu (hoặc khi pull code mới về)
 dotnet restore HUIT-RoMan.sln
 dotnet build HUIT-RoMan.sln --nologo
 
-# tạo DB từ migration có sẵn (lần đầu)
+# cập nhật database khi có thay đổi
 dotnet ef database update --project src/Infrastructure --startup-project src/API
 
 # chạy API
