@@ -1,7 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Domain\HUIT-RoMan.Domain.csproj" />
+    <ProjectReference Include="..\Application\HUIT-RoMan.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>
