@@ -19,6 +19,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.IUnitOfWork, HUIT_RoMan.Infrastructure.Repositories.UnitOfWork>();
 builder.Services.AddScoped(typeof(HUIT_RoMan.Application.Common.Interfaces.IRepository<>), typeof(HUIT_RoMan.Infrastructure.Repositories.Repository<>));
+builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.IStoredProcedureService, HUIT_RoMan.Infrastructure.Repositories.StoredProcedureService>();
 
 
 // Identity (User : IdentityUser<int> trong Domain)

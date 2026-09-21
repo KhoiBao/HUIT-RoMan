@@ -1,11 +1,11 @@
 using System;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HUIT_RoMan.Application.Common.Interfaces;
+using HUIT_RoMan.Application.Common.Models;
 using HUIT_RoMan.Application.Modules.Identity.DTOs;
 using HUIT_RoMan.Domain.Entities;
-using HUIT_RoMan.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Identity;
 
 namespace HUIT_RoMan.Application.Modules.Identity.Services
@@ -23,86 +23,82 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             _userManager = userManager;
         }
 
-        public async Task<IEnumerable<EmployeeDto>> GetAllAsync()
+        // ─────────────────────────────────────────────────────────────────
+        // GET ALL
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<IEnumerable<EmployeeDto>>> GetAllAsync()
         {
-            var employees = await _employeeRepo.GetAllAsync(e => e.User);
-            return employees.Select(e => new EmployeeDto
-            {
-                Id = e.Id,
-                Code = e.Code,
-                Position = e.Position,
-                HireDate = e.HireDate,
-                Status = e.Status,
-                UserId = e.UserId,
-                FullName = e.User?.FullName,
-                DepartmentId = e.User?.DepartmentId
-            }).ToList();
+            var employees = await _employeeRepo.GetAllAsync(e => e.User, e => e.User.Department);
+            var dtos = employees.Select(MapDto).ToList();
+            return ApiResponse<IEnumerable<EmployeeDto>>.SuccessResponse(dtos);
         }
 
-        public async Task<EmployeeDto> GetByIdAsync(int id)
+        // ─────────────────────────────────────────────────────────────────
+        // GET BY ID
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<EmployeeDto>> GetByIdAsync(int id)
         {
-            var e = await _employeeRepo.GetByIdAsync(id, e => e.User);
-            if (e == null) return null;
-
-            return new EmployeeDto
-            {
-                Id = e.Id,
-                Code = e.Code,
-                Position = e.Position,
-                HireDate = e.HireDate,
-                Status = e.Status,
-                UserId = e.UserId,
-                FullName = e.User?.FullName,
-                DepartmentId = e.User?.DepartmentId
-            };
+            var e = await _employeeRepo.GetByIdAsync(id, e => e.User, e => e.User.Department);
+            if (e == null)
+                return ApiResponse<EmployeeDto>.ErrorResponse("Không tìm thấy nhân viên.");
+            return ApiResponse<EmployeeDto>.SuccessResponse(MapDto(e));
         }
 
-        public async Task<EmployeeDto> CreateAsync(CreateEmployeeDto request)
+        // ─────────────────────────────────────────────────────────────────
+        // CREATE
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<EmployeeDto>> CreateAsync(CreateEmployeeDto request)
         {
             var user = await _userManager.FindByIdAsync(request.UserId.ToString());
             if (user == null)
-            {
-                // Không tìm thấy user
-                return null;
-            }
+                return ApiResponse<EmployeeDto>.ErrorResponse("Không tìm thấy người dùng với ID đã cung cấp.");
 
-            // Kiểm tra xem user này đã là employee chưa
-            var existingEmployee = await _employeeRepo.FirstOrDefaultAsync(e => e.UserId == user.Id);
-            if (existingEmployee != null)
-            {
-                // Đã là employee
-                return null;
-            }
+            // Kiểm tra đã là employee chưa
+            var existing = await _employeeRepo.FirstOrDefaultAsync(e => e.UserId == user.Id);
+            if (existing != null)
+                return ApiResponse<EmployeeDto>.ErrorResponse("Người dùng này đã có hồ sơ nhân viên.");
 
-            // Đảm bảo user có role Employee
+            // Gán role Employee nếu chưa có
             if (!await _userManager.IsInRoleAsync(user, "Employee"))
             {
+                var currentRoles = await _userManager.GetRolesAsync(user);
+                if (currentRoles.Any())
+                    await _userManager.RemoveFromRolesAsync(user, currentRoles);
                 await _userManager.AddToRoleAsync(user, "Employee");
             }
 
             var employee = new Employee
             {
-                Code = user.CardCode, // Lấy Code từ CardCode của User
-                Position = request.Position,
-                Status = "Active",
+                Code = user.CardCode,
+                Position = request.Position ?? "Nhân viên",
+                Status = "Hoạt động",
                 UserId = user.Id,
-                HireDate = DateTime.UtcNow
+                HireDate = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
             };
 
             await _employeeRepo.AddAsync(employee);
             await _unitOfWork.SaveChangesAsync();
 
-            return await GetByIdAsync(employee.Id);
+            var result = await GetByIdAsync(employee.Id);
+            return ApiResponse<EmployeeDto>.SuccessResponse(result.Data, "Tạo hồ sơ nhân viên thành công.");
         }
 
-        public async Task<bool> UpdateAsync(int id, UpdateEmployeeDto request)
+        // ─────────────────────────────────────────────────────────────────
+        // UPDATE
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<bool>> UpdateAsync(int id, UpdateEmployeeDto request)
         {
             var e = await _employeeRepo.GetByIdAsync(id, e => e.User);
-            if (e == null) return false;
+            if (e == null)
+                return ApiResponse<bool>.ErrorResponse("Không tìm thấy nhân viên.");
 
-            e.Position = request.Position;
-            e.Status = request.Status;
-            
+            if (!string.IsNullOrWhiteSpace(request.Position))
+                e.Position = request.Position;
+
+            if (!string.IsNullOrWhiteSpace(request.Status))
+                e.Status = request.Status;
+
             if (e.User != null && request.DepartmentId.HasValue)
             {
                 e.User.DepartmentId = request.DepartmentId;
@@ -111,17 +107,54 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
 
             _employeeRepo.Update(e);
             await _unitOfWork.SaveChangesAsync();
-            return true;
+
+            return ApiResponse<bool>.SuccessResponse(true, "Cập nhật nhân viên thành công.");
         }
 
-        public async Task<bool> DeleteAsync(int id)
+        // ─────────────────────────────────────────────────────────────────
+        // DELETE (xoá hồ sơ nhân viên, giữ lại User)
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<bool>> DeleteAsync(int id)
         {
-            var e = await _employeeRepo.GetByIdAsync(id);
-            if (e == null) return false;
+            var e = await _employeeRepo.GetByIdAsync(id, e => e.User);
+            if (e == null)
+                return ApiResponse<bool>.ErrorResponse("Không tìm thấy nhân viên.");
+
+            // Thu hồi role Employee, chuyển về Lecturer hoặc Student tuỳ trường hợp
+            if (e.User != null)
+            {
+                var roles = await _userManager.GetRolesAsync(e.User);
+                if (roles.Contains("Employee"))
+                {
+                    await _userManager.RemoveFromRoleAsync(e.User, "Employee");
+                    // Mặc định trả về role Lecturer sau khi xoá nhân viên
+                    await _userManager.AddToRoleAsync(e.User, "Lecturer");
+                }
+            }
 
             _employeeRepo.Remove(e);
             await _unitOfWork.SaveChangesAsync();
-            return true;
+
+            return ApiResponse<bool>.SuccessResponse(true, "Xoá hồ sơ nhân viên thành công.");
         }
+
+        // ─────────────────────────────────────────────────────────────────
+        // HELPERS
+        // ─────────────────────────────────────────────────────────────────
+        private static EmployeeDto MapDto(Employee e) => new EmployeeDto
+        {
+            Id = e.Id,
+            Code = e.Code,
+            Position = e.Position,
+            HireDate = e.HireDate,
+            Status = e.Status,
+            UserId = e.UserId,
+            UserName = e.User?.UserName,
+            CardCode = e.User?.CardCode,
+            FullName = e.User?.FullName,
+            Email = e.User?.Email,
+            DepartmentId = e.User?.DepartmentId,
+            DepartmentName = e.User?.Department?.Name
+        };
     }
 }

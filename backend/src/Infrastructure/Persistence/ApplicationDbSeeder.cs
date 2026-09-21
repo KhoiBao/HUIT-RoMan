@@ -17,7 +17,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             var dbContext = serviceProvider.GetRequiredService<ApplicationDbContext>();
 
             // 1. Khởi tạo các Roles cơ bản
-            string[] roles = { "Admin", "   ", "Student", "Lecturer" };
+            string[] roles = { "Admin", "Employee", "Student", "Lecturer" };
 
             foreach (var role in roles)
             {
@@ -40,10 +40,10 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 adminUser = new User
                 {
                     UserName = "admin",
-                    CardCode = "ADMIN_001",
+                    CardCode = "admin",
                     FullName = "System Administrator",
                     Email = "admin@huit.edu.vn",
-                    Status = "Active",
+                    Status = "Hoạt động",
                     DepartmentId = deptAdmin.Id
                 };
 
@@ -66,14 +66,63 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             // 5. Khởi tạo Sinh viên & Giảng viên thuộc Khoa CNTT
             await EnsureUserAsync(userManager, "SV001", "Sinh Viên CNTT 01", "Student", deptCNTT.Id);
             await EnsureUserAsync(userManager, "GV001", "Giảng Viên CNTT 01", "Lecturer", deptCNTT.Id);
+
+            // 6. Apply Stored Procedures / Functions PostgreSQL
+            await SeedStoredProceduresAsync(dbContext);
         }
+
+        /// <summary>
+        /// Đọc file SQL và apply tất cả stored procedures/functions vào PostgreSQL.
+        /// Dùng CREATE OR REPLACE nên hoàn toàn idempotent (an toàn khi chạy lại).
+        /// </summary>
+        private static async Task SeedStoredProceduresAsync(ApplicationDbContext dbContext)
+        {
+            try
+            {
+                // Tìm file SQL tương đối với assembly location
+                var assemblyDir = System.IO.Path.GetDirectoryName(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location);
+
+                // Thử nhiều đường dẫn (local dev vs publish)
+                var candidates = new[]
+                {
+                    System.IO.Path.Combine(assemblyDir!, "SQL", "StoredProcedures.sql"),
+                    System.IO.Path.Combine(assemblyDir!, "..", "SQL", "StoredProcedures.sql"),
+                };
+
+                string sqlPath = null;
+                foreach (var candidate in candidates)
+                {
+                    if (System.IO.File.Exists(candidate))
+                    {
+                        sqlPath = candidate;
+                        break;
+                    }
+                }
+
+                if (sqlPath == null)
+                {
+                    Console.WriteLine("[Seeder] Không tìm thấy SQL/StoredProcedures.sql – bỏ qua.");
+                    return;
+                }
+
+                var sql = await System.IO.File.ReadAllTextAsync(sqlPath);
+                await dbContext.Database.ExecuteSqlRawAsync(sql);
+                Console.WriteLine("[Seeder] Stored procedures / functions đã được apply thành công.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Seeder] Lỗi khi apply stored procedures: {ex.Message}");
+            }
+        }
+
 
         private static async Task<Department> EnsureDepartmentAsync(ApplicationDbContext dbContext, string name, string type)
         {
             var dept = await dbContext.Departments.FirstOrDefaultAsync(d => d.Name == name);
             if (dept == null)
             {
-                dept = new Department { Name = name, Type = type, Status = "Active" };
+                dept = new Department { Name = name, Type = type, Status = "Hoạt động" };
                 dbContext.Departments.Add(dept);
                 await dbContext.SaveChangesAsync();
             }
@@ -91,7 +140,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                     CardCode = code,
                     FullName = fullName,
                     Email = $"{code.ToLower()}@{role.ToLower()}.huit.edu.vn",
-                    Status = "Active",
+                    Status = "Hoạt động",
                     DepartmentId = departmentId
                 };
 
@@ -121,7 +170,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                     {
                         Code = user.CardCode,
                         Position = position,
-                        Status = "Active",
+                        Status = "Hoạt động",
                         UserId = user.Id,
                         HireDate = DateTime.UtcNow
                     };

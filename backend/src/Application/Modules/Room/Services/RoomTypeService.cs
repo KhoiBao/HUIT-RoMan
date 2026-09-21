@@ -36,7 +36,8 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Name = rt.Name,
                 Description = rt.Description,
                 DefaultCapacity = rt.DefaultCapacity,
-                DepartmentId = rt.DepartmentId
+                DepartmentId = rt.DepartmentId,
+                IsBookingByPeriod = rt.IsBookingByPeriod
             }).ToList();
 
             return ApiResponse<IEnumerable<RoomTypeDto>>.SuccessResponse(dtos);
@@ -58,7 +59,8 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Name = rt.Name,
                 Description = rt.Description,
                 DefaultCapacity = rt.DefaultCapacity,
-                DepartmentId = rt.DepartmentId
+                DepartmentId = rt.DepartmentId,
+                IsBookingByPeriod = rt.IsBookingByPeriod
             };
 
             return ApiResponse<RoomTypeDto>.SuccessResponse(dto);
@@ -71,7 +73,8 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Name = request.Name,
                 Description = request.Description,
                 DefaultCapacity = request.DefaultCapacity,
-                Status = "Active"
+                IsBookingByPeriod = request.IsBookingByPeriod,
+                Status = "Hoạt động"
             };
 
             if (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
@@ -92,7 +95,8 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Name = rt.Name,
                 Description = rt.Description,
                 DefaultCapacity = rt.DefaultCapacity,
-                DepartmentId = rt.DepartmentId
+                DepartmentId = rt.DepartmentId,
+                IsBookingByPeriod = rt.IsBookingByPeriod
             };
             
             return ApiResponse<RoomTypeDto>.SuccessResponse(dto, "Tạo loại phòng thành công");
@@ -111,6 +115,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             rt.Name = request.Name;
             rt.Description = request.Description;
             rt.DefaultCapacity = request.DefaultCapacity;
+            rt.IsBookingByPeriod = request.IsBookingByPeriod;
 
             if (_currentUser.IsAdmin)
             {

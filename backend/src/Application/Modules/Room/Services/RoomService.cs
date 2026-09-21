@@ -38,10 +38,13 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Name = r.Name,
                 RoomCode = r.RoomCode,
                 Building = r.Building,
+                Floor = r.Floor,
+                RoomNumber = r.RoomNumber,
                 Capacity = r.Capacity,
                 Status = r.Status,
                 RoomTypeId = r.RoomTypeId,
-                RoomTypeName = r.RoomType?.Name
+                RoomTypeName = r.RoomType?.Name,
+                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
             }).ToList();
             
             return ApiResponse<IEnumerable<RoomDto>>.SuccessResponse(dtos);
@@ -67,10 +70,13 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Name = r.Name,
                 RoomCode = r.RoomCode,
                 Building = r.Building,
+                Floor = r.Floor,
+                RoomNumber = r.RoomNumber,
                 Capacity = r.Capacity,
                 Status = r.Status,
                 RoomTypeId = r.RoomTypeId,
-                RoomTypeName = r.RoomType?.Name
+                RoomTypeName = r.RoomType?.Name,
+                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
             };
             
             return ApiResponse<RoomDto>.SuccessResponse(dto);
@@ -90,10 +96,12 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var room = new Domain.Entities.Room
             {
                 Name = request.Name,
-                RoomCode = request.RoomCode,
+                RoomCode =  request.Building + request.Floor + request.RoomNumber,
                 Building = request.Building,
+                Floor = request.Floor,
+                RoomNumber = request.RoomNumber,
                 Capacity = request.Capacity,
-                Status = "Available",
+                Status = "Trống",
                 RoomTypeId = request.RoomTypeId
             };
 
@@ -116,13 +124,14 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                     return ApiResponse<bool>.ErrorResponse("Bạn không có quyền sửa phòng của khoa khác.");
                 }
                 
-                // Allow transfer, we don't check if the new RoomTypeId belongs to their department
-                // since they said "Nhân viên được phép chuyển phòng sang khoa khác"
+
             }
 
             r.Name = request.Name;
-            r.RoomCode = request.RoomCode;
+            r.RoomCode = request.Building + request.Floor + request.RoomNumber;
             r.Building = request.Building;
+            r.Floor = request.Floor;
+            r.RoomNumber = request.RoomNumber;
             r.Capacity = request.Capacity;
             r.Status = request.Status;
             r.RoomTypeId = request.RoomTypeId;

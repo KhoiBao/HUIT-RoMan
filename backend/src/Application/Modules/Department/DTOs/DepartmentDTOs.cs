@@ -19,7 +19,7 @@ namespace HUIT_RoMan.Application.Modules.Department.DTOs
         [StringLength(100)]
         public string Type { get; set; }
 
-        public string Status { get; set; } = "Active";
+        public string Status { get; set; } = "Hoạt động";
     }
 
     public class UpdateDepartmentDto

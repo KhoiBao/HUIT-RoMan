@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using HUIT_RoMan.Application.Modules.Identity.Services;
 using HUIT_RoMan.Application.Modules.Room.Services;
 using HUIT_RoMan.Application.Modules.Department.Services;
+using HUIT_RoMan.Application.Modules.Booking.Services;
 
 namespace HUIT_RoMan.Application;
 
@@ -22,8 +23,12 @@ public static class DependencyInjection
         // Room Services
         services.AddScoped<IRoomTypeService, RoomTypeService>();
         services.AddScoped<IRoomService, RoomService>();
+        services.AddScoped<IEquipmentCategoryService, EquipmentCategoryService>();
         services.AddScoped<IEquipmentService, EquipmentService>();
         services.AddScoped<IRoomEquipmentService, RoomEquipmentService>();
+
+        // Booking Services
+        services.AddScoped<IBookingService, BookingService>();
 
         return services;
     }

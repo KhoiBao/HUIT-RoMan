@@ -94,8 +94,28 @@ Quản lý danh sách phòng vật lý cụ thể.
 
 ---
 
-## 5. Module Thiết bị & Kho (Equipments)
-Quản lý danh sách và thông tin các loại thiết bị trong hệ thống.
+## 5. Module Thiết bị & Kho (Equipments & Categories)
+Quản lý danh sách, danh mục và thông tin các loại thiết bị trong hệ thống.
+
+### `GET /api/EquipmentCategories`
+- **Mô tả:** Lấy danh sách toàn bộ danh mục thiết bị.
+- **Quyền hạn:** Cần đăng nhập.
+
+### `GET /api/EquipmentCategories/{id}`
+- **Mô tả:** Xem chi tiết danh mục thiết bị.
+- **Quyền hạn:** Cần đăng nhập.
+
+### `POST /api/EquipmentCategories`
+- **Mô tả:** Thêm danh mục thiết bị mới.
+- **Quyền hạn:** **Admin**, **Employee**.
+
+### `PUT /api/EquipmentCategories/{id}`
+- **Mô tả:** Sửa thông tin danh mục thiết bị.
+- **Quyền hạn:** **Admin**, **Employee**.
+
+### `DELETE /api/EquipmentCategories/{id}`
+- **Mô tả:** Xóa danh mục thiết bị.
+- **Quyền hạn:** **Admin**, **Employee**.
 
 ### `GET /api/Equipments`
 - **Mô tả:** Lấy danh sách toàn bộ thiết bị.

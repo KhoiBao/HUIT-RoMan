@@ -9,6 +9,8 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public string Description { get; set; }
         public int DefaultCapacity { get; set; }
         public int? DepartmentId { get; set; }
+        /// <summary>true = mượn theo tiết học cố định; false = mượn theo khung giờ tự do</summary>
+        public bool IsBookingByPeriod { get; set; }
     }
 
     public class CreateRoomTypeDto
@@ -17,6 +19,8 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public string Description { get; set; }
         public int DefaultCapacity { get; set; }
         public int? DepartmentId { get; set; }
+        /// <summary>true = mượn theo tiết học cố định; false = mượn theo khung giờ tự do</summary>
+        public bool IsBookingByPeriod { get; set; }
     }
 
     public class RoomDto
@@ -25,10 +29,15 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public string Name { get; set; }
         public string RoomCode { get; set; }
         public string Building { get; set; }
+        public string Floor { get; set; }
+        public string RoomNumber { get; set; }
         public int Capacity { get; set; }
         public string Status { get; set; }
+        public string Description { get; set; }
         public int RoomTypeId { get; set; }
         public string RoomTypeName { get; set; }
+        /// <summary>true = loại phòng mượn theo tiết học cố định</summary>
+        public bool IsBookingByPeriod { get; set; }
     }
 
     public class CreateRoomDto
@@ -36,7 +45,10 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public string Name { get; set; }
         public string RoomCode { get; set; }
         public string Building { get; set; }
+        public string Floor { get; set; }
+        public string RoomNumber { get; set; }
         public int Capacity { get; set; }
+        public string Description { get; set; }
         public int RoomTypeId { get; set; }
     }
 
@@ -45,14 +57,18 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public string Name { get; set; }
         public string RoomCode { get; set; }
         public string Building { get; set; }
+        public string Floor { get; set; }
+        public string RoomNumber { get; set; }
         public int Capacity { get; set; }
         public string Status { get; set; }
+        public string Description { get; set; }
         public int RoomTypeId { get; set; }
     }
 
     public class EquipmentDto
     {
         public int Id { get; set; }
+        public string Code { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
         public string Status { get; set; }
@@ -61,6 +77,7 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
 
     public class CreateEquipmentDto
     {
+        public string Code { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
         public int EquipmentCategoryId { get; set; }
@@ -81,5 +98,18 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public int EquipmentId { get; set; }
         public int Quantity { get; set; }
         public string Status { get; set; }
+    }
+
+    public class EquipmentCategoryDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Description { get; set; }
+    }
+
+    public class CreateEquipmentCategoryDto
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
     }
 }

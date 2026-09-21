@@ -24,6 +24,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             return equipments.Select(e => new EquipmentDto
             {
                 Id = e.Id,
+                Code = e.Code,
                 Name = e.Name,
                 Description = e.Description,
                 Status = e.Status,
@@ -39,6 +40,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             return new EquipmentDto
             {
                 Id = e.Id,
+                Code = e.Code,
                 Name = e.Name,
                 Description = e.Description,
                 Status = e.Status,
@@ -50,9 +52,10 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         {
             var equipment = new Equipment
             {
+                Code = request.Code,
                 Name = request.Name,
                 Description = request.Description,
-                Status = "Active",
+                Status = "Hoạt động",
                 EquipmentCategoryId = request.EquipmentCategoryId
             };
 
@@ -62,6 +65,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             return new EquipmentDto
             {
                 Id = equipment.Id,
+                Code = equipment.Code,
                 Name = equipment.Name,
                 Description = equipment.Description,
                 Status = equipment.Status,
@@ -74,6 +78,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var e = await _equipmentRepo.GetByIdAsync(id);
             if (e == null) return false;
 
+            e.Code = request.Code;
             e.Name = request.Name;
             e.Description = request.Description;
             e.EquipmentCategoryId = request.EquipmentCategoryId;
