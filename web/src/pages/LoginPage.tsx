@@ -1,4 +1,4 @@
-import { useState} from "react";
+import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { validateLoginInput } from "../lib/auth";
