@@ -1,45 +1,83 @@
-import { describe, expect, test } from "vitest";
+// @vitest-environment jsdom
+import { describe, expect, test, beforeEach } from "vitest";
 import {
   buildLoginPayload,
   getHomePathForRole,
   mapRoleToGroup,
+  saveSession,
   validateLoginInput,
 } from "./auth";
 
 describe("validateLoginInput", () => {
-  test("rejects empty email", () => {
+  test("rejects empty identifier", () => {
     const result = validateLoginInput("", "Huit@123");
-    expect(result.email).toBe("Vui lòng nhập email HUIT");
+    expect(result.identifier).toBe(
+      "Vui lòng nhập MSSV/Mã CBVC hoặc email HUIT",
+    );
   });
 
-  test("rejects non-huit email", () => {
+  test("accepts MSSV digits", () => {
+    const result = validateLoginInput("2001230417", "Huit@123");
+    expect(result.valid).toBe(true);
+  });
+
+  test("accepts staff code", () => {
+    const result = validateLoginInput("TV001", "Huit@123");
+    expect(result.valid).toBe(true);
+  });
+
+  test("rejects identifier with @ but non-huit domain", () => {
     const result = validateLoginInput("someone@gmail.com", "Huit@123");
-    expect(result.email).toBe("Email phải có đuôi @huit.edu.vn");
+    expect(result.identifier).toBe("Email phải có đuôi @huit.edu.vn");
   });
 
   test("accepts huit email case-insensitively", () => {
     const result = validateLoginInput("200123456@HUIT.EDU.VN", "Huit@123");
-    expect(result.email).toBeUndefined();
+    expect(result.valid).toBe(true);
+  });
+
+  test("rejects too-short code", () => {
+    const result = validateLoginInput("ab", "Huit@123");
+    expect(result.identifier).toBe("Mã số không hợp lệ");
   });
 
   test("rejects empty password", () => {
     const result = validateLoginInput("200123456@huit.edu.vn", "");
     expect(result.password).toBe("Vui lòng nhập mật khẩu");
   });
-
-  test("accepts valid input", () => {
-    const result = validateLoginInput("200123456@huit.edu.vn", "Huit@123");
-    expect(result.valid).toBe(true);
-  });
 });
 
 describe("buildLoginPayload", () => {
-  test("maps email input to CardCode field (backend compat)", () => {
-    const payload = buildLoginPayload(" 200123456@huit.edu.vn ", "Huit@123");
-    expect(payload).toEqual({
+  test("trims identifier into CardCode field (backend compat)", () => {
+    expect(buildLoginPayload("  TV001 ", "Huit@123")).toEqual({
+      cardCode: "TV001",
+      password: "Huit@123",
+    });
+    expect(
+      buildLoginPayload("200123456@huit.edu.vn", "Huit@123"),
+    ).toEqual({
       cardCode: "200123456@huit.edu.vn",
       password: "Huit@123",
     });
+  });
+});
+
+describe("saveSession", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  test("remember=true persists to localStorage", () => {
+    saveSession("tok", '{"id":1}', true);
+    expect(localStorage.getItem("huit-roman-token")).toBe("tok");
+    expect(sessionStorage.getItem("huit-roman-token")).toBeNull();
+  });
+
+  test("remember=false persists to sessionStorage", () => {
+    saveSession("tok", '{"id":1}', false);
+    expect(sessionStorage.getItem("huit-roman-token")).toBe("tok");
+    expect(localStorage.getItem("huit-roman-token")).toBeNull();
   });
 });
 
