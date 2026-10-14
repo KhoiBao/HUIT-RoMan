@@ -67,6 +67,50 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             await EnsureUserAsync(userManager, "SV001", "Sinh Viên CNTT 01", "Student", deptCNTT.Id);
             await EnsureUserAsync(userManager, "GV001", "Giảng Viên CNTT 01", "Lecturer", deptCNTT.Id);
 
+            // 5b. Tài khoản demo cho đồ án nội bộ (login bằng email @huit.edu.vn, pass Huit@123).
+            // Nhóm người dùng: 5 SV + 3 GV; nhóm nhân sự: 3 thủ thư + 3 quản lý phòng; nhóm quản trị: +2 admin.
+            const string demoPassword = "Huit@123";
+            var students = new[]
+            {
+                ("200123456", "Nguyễn Văn An"),
+                ("200123457", "Trần Thị Bình"),
+                ("200123458", "Lê Văn Cường"),
+                ("200123459", "Phạm Thị Dung"),
+                ("200123460", "Hoàng Văn Em"),
+            };
+            foreach (var (code, name) in students)
+                await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code}@huit.edu.vn", name, "Student", deptCNTT.Id, demoPassword, null);
+
+            var lecturers = new[]
+            {
+                ("10010001", "Nguyễn Văn Giảng 01"),
+                ("10010002", "Trần Thị Giảng 02"),
+                ("10010003", "Lê Văn Giảng 03"),
+            };
+            foreach (var (code, name) in lecturers)
+                await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code}@huit.edu.vn", name, "Lecturer", deptCNTT.Id, demoPassword, null);
+
+            var librarians = new[]
+            {
+                ("TV001", "Thủ thư 01"),
+                ("TV002", "Thủ thư 02"),
+                ("TV003", "Thủ thư 03"),
+            };
+            foreach (var (code, name) in librarians)
+                await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code.ToLower()}@huit.edu.vn", name, "Employee", deptThuVien.Id, demoPassword, "Thủ thư");
+
+            var managers = new[]
+            {
+                ("QLP001", "Quản lý phòng 01"),
+                ("QLP002", "Quản lý phòng 02"),
+                ("QLP003", "Quản lý phòng 03"),
+            };
+            foreach (var (code, name) in managers)
+                await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code.ToLower()}@huit.edu.vn", name, "Employee", deptDaoTao.Id, demoPassword, "Quản lý phòng");
+
+            await EnsureDemoAccountAsync(userManager, dbContext, "ADMIN002", "admin02@huit.edu.vn", "Quản trị viên 02", "Admin", deptAdmin.Id, demoPassword, null);
+            await EnsureDemoAccountAsync(userManager, dbContext, "ADMIN003", "admin03@huit.edu.vn", "Quản trị viên 03", "Admin", deptAdmin.Id, demoPassword, null);
+
             // 6. Apply Stored Procedures / Functions PostgreSQL
             await SeedStoredProceduresAsync(dbContext);
         }
@@ -175,6 +219,52 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                         HireDate = DateTime.UtcNow
                     };
                     dbContext.Employees.Add(employee);
+                    await dbContext.SaveChangesAsync();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Seed tài khoản demo đăng nhập bằng email @huit.edu.vn.
+        /// Idempotent: tìm theo UserName (= email) trước, rồi theo CardCode.
+        /// </summary>
+        private static async Task EnsureDemoAccountAsync(UserManager<User> userManager, ApplicationDbContext dbContext, string cardCode, string email, string fullName, string role, int departmentId, string password, string position)
+        {
+            var user = await userManager.FindByNameAsync(email)
+                ?? (await userManager.FindByEmailAsync(email))
+                ?? dbContext.Users.FirstOrDefault(u => u.CardCode == cardCode);
+            if (user == null)
+            {
+                user = new User
+                {
+                    UserName = email,
+                    Email = email,
+                    EmailConfirmed = true,
+                    CardCode = cardCode,
+                    FullName = fullName,
+                    Status = "Hoạt động",
+                    DepartmentId = departmentId
+                };
+                var result = await userManager.CreateAsync(user, password);
+                if (!result.Succeeded) return;
+            }
+            if (!await userManager.IsInRoleAsync(user, role))
+            {
+                await userManager.AddToRoleAsync(user, role);
+            }
+            if (role == "Employee")
+            {
+                var employee = await dbContext.Employees.FirstOrDefaultAsync(e => e.UserId == user.Id);
+                if (employee == null)
+                {
+                    dbContext.Employees.Add(new Employee
+                    {
+                        Code = user.CardCode,
+                        Position = position ?? "Nhân viên",
+                        Status = "Hoạt động",
+                        UserId = user.Id,
+                        HireDate = DateTime.UtcNow
+                    });
                     await dbContext.SaveChangesAsync();
                 }
             }

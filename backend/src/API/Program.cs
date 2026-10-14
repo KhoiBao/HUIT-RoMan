@@ -13,6 +13,15 @@ var builder = WebApplication.CreateBuilder(args);
 // Controllers (thin - logic nằm ở Application, DB nằm ở Infrastructure)
 builder.Services.AddControllers();
 
+// CORS cho web React (Vite dev http://localhost:5173)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Web", policy => policy
+        .WithOrigins("http://localhost:5173", "https://localhost:5173")
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
+
 // PostgreSQL + EF Core (giữ nguyên connection string từ db_Library cũ)
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -118,6 +127,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("Web");
 
 app.UseAuthentication();
 app.UseAuthorization();

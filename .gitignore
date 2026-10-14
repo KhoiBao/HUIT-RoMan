@@ -48,3 +48,9 @@ Desktop.ini
 appsettings.Local.json
 appsettings.*.Local.json
 secrets.json
+
+## Web (Vite React)
+web/node_modules/
+web/dist/
+web/dist-ssr/
+web/*.local
