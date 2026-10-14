@@ -155,6 +155,142 @@ export function ChevronRightIcon({ size = 20, className }: IconProps) {
   );
 }
 
+export function BuildingIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16" />
+      <path d="M14 8h5a1 1 0 0 1 1 1v12M2.5 21h19" />
+      <path d="M7 8h2M7 12h2M7 16h2M11 8h0M17 12h1M17 16h1" />
+    </svg>
+  );
+}
+
+export function UsersIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 20c.8-3.4 2.9-5 5.5-5s4.7 1.6 5.5 5" />
+      <circle cx="16.5" cy="9" r="2.4" />
+      <path d="M16 15.2c2.3.2 3.9 1.7 4.5 4.3" />
+    </svg>
+  );
+}
+
+export function PersonIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="12" cy="8" r="3.4" />
+      <path d="M5.5 20.5c1-3.8 3.4-5.7 6.5-5.7s5.5 1.9 6.5 5.7" />
+    </svg>
+  );
+}
+
+export function DoorIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path d="M5 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17" />
+      <path d="M2.5 21h19" />
+      <circle cx="13" cy="12.5" r="0.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function TvIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <rect x="3" y="5" width="18" height="12" rx="2" />
+      <path d="M9 21h6" />
+    </svg>
+  );
+}
+
+export function SearchIcon({ size = 22, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.8-3.8" />
+    </svg>
+  );
+}
+
+export function ClipboardCheckIcon({ size = 22, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <rect x="5" y="4.5" width="14" height="17" rx="2" />
+      <rect x="9" y="2.5" width="6" height="4" rx="1" />
+      <path d="m10 14 2 2 4-4.5" />
+    </svg>
+  );
+}
+
+export function UserCheckIcon({ size = 22, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="10" cy="8" r="3.4" />
+      <path d="M3.5 20.5c1-3.8 3.4-5.7 6.5-5.7 1.4 0 2.7.4 3.7 1.1" />
+      <path d="m15.5 18.5 2 2 4-4.5" />
+    </svg>
+  );
+}
+
+export function CheckCircleIcon({ size = 22, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12.5 2.5 2.5 5-5.5" />
+    </svg>
+  );
+}
+
+export function PinIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z" />
+      <circle cx="12" cy="10" r="2.4" />
+    </svg>
+  );
+}
+
+export function GlobeIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3Z" />
+    </svg>
+  );
+}
+
+export function HeadsetIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path d="M4 13a8 8 0 0 1 16 0" />
+      <rect x="3" y="12.5" width="4" height="7" rx="1.5" />
+      <rect x="17" y="12.5" width="4" height="7" rx="1.5" />
+      <path d="M19.5 19.5c-1 1.5-2.8 2-5 2" />
+    </svg>
+  );
+}
+
+export function CalendarPlusIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <rect x="3.5" y="5" width="17" height="16" rx="2" />
+      <path d="M3.5 10h17M8 3v4M16 3v4M12 13v6M9 16h6" />
+    </svg>
+  );
+}
+
+export function DotsIcon({ size = 20, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="8.5" cy="12" r="0.5" fill="currentColor" />
+      <circle cx="12" cy="12" r="0.5" fill="currentColor" />
+      <circle cx="15.5" cy="12" r="0.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function LibraryIcon({ size = 14, className }: IconProps) {
   return (
     <svg {...base(size, className)}>

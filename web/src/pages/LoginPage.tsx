@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState} from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { validateLoginInput } from "../lib/auth";
@@ -73,9 +73,7 @@ export default function LoginPage() {
           <hr className="rule" />
 
           <p className="lede">
-            Hệ thống xác thực tập trung phục vụ tra cứu tài nguyên số, mượn
-            trả ấn phẩm học thuật và đăng ký không gian tự học, phòng chuyên
-            đề tại Trường Đại học Công Thương TP.HCM.
+            Hệ thống quản lý đăng ký và khai thác phòng dùng chung tại Trường Đại học Công Thương Thành phố Hồ Chí Minh.
           </p>
 
           <div className="photo" role="img" aria-label="Không gian học tập HUIT">
@@ -113,12 +111,6 @@ export default function LoginPage() {
               <strong>Cán bộ &amp; Giảng viên:</strong> Đăng nhập thông qua
               tài khoản quản lý nhân sự tập trung hoặc Cổng SSO trường.
             </p>
-            <p>
-              <strong>Phân quyền Hệ thống:</strong> Vai trò Thủ thư, Quản trị
-              viên (Staff) được đồng bộ dữ liệu tự động từ Phòng Tổ chức -
-              Cán bộ. Người dùng thông thường không được tự cấp quyền nhân
-              viên.
-            </p>
           </div>
 
           <div className="contacts">
@@ -151,7 +143,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} noValidate>
             <label className="field">
               <span>
-                Mã số SV / Mã CBVC hoặc Email HUIT <b>*</b>
+                Email HUIT <b>*</b>
               </span>
               <div className="input-wrap">
                 <span className="input-icon">
@@ -160,7 +152,7 @@ export default function LoginPage() {
                 <input
                   type="text"
                   autoComplete="username"
-                  placeholder="VD: 2001230417 hoặc username@huit.edu.vn"
+                  placeholder="VD: username@huit.edu.vn"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                 />
