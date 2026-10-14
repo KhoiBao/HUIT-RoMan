@@ -9,6 +9,8 @@ import {
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
+import SchedulePage from "./pages/SchedulePage";
+import BookingPage from "./pages/BookingPage";
 import PlaceholderHome from "./pages/PlaceholderHome";
 
 function RequireAuth({ children }: { children: ReactElement }) {
@@ -38,7 +40,7 @@ export default function App() {
             path="/dat-phong"
             element={
               <RequireAuth>
-                <PlaceholderHome title="Đặt phòng" />
+                <BookingPage />
               </RequireAuth>
             }
           />
@@ -46,7 +48,7 @@ export default function App() {
             path="/lich-phong"
             element={
               <RequireAuth>
-                <PlaceholderHome title="Lịch phòng" />
+                <SchedulePage />
               </RequireAuth>
             }
           />
