@@ -1,7 +1,17 @@
 # HUIT-RoMan: Tài liệu Đặc tả API (API Documentation)
 
 > [!NOTE]
-> Đây là tài liệu liệt kê toàn bộ các API hiện có trong hệ thống, bao gồm Method, Route, Mục đích và Quyền hạn (Roles) cần thiết để truy cập. Tất cả API (ngoại trừ Auth) đều yêu cầu đính kèm JWT Token trong header.
+> Đây là tài liệu liệt kê toàn bộ các API hiện có trong hệ thống, bao gồm Method, Route, Mục đích và Quyền hạn (Roles) cần thiết để truy cập. Tất cả API (ngoại trừ Auth và 2 API public ghi rõ bên dưới) đều yêu cầu đính kèm JWT Token trong header.
+> Bảng map role backend ra 3 nhóm hiển thị: xem `docs/nghiep-vu.md`.
+> Format trả về chuẩn: `{ success, message, data }` (`ApiResponse`).
+
+---
+
+## 0. Quy ước chung
+
+- **Đăng nhập bằng email.** `POST /api/Auth/login` nhận body `{ cardCode, password }` — nhập **email `@huit.edu.vn`** vào field `cardCode` (backend tự tra cứu CardCode hoặc Email hoặc UserName).
+- **Lỗi nghiệp vụ** trả `400` kèm `{ success: false, message }`. Sai đăng nhập trả `401`. Thiếu quyền trả `403`.
+- Trạng thái đơn đặt phòng: `Chờ duyệt` → `Đã duyệt` / `Từ chối` / `Duyệt một phần` / `Đã hủy`. Vòng đời đầy đủ: `docs/nghiep-vu.md`.
 
 ---
 
@@ -182,3 +192,87 @@ Quản lý danh sách, danh mục và thông tin các loại thiết bị trong 
 ### `DELETE /api/Employees/{id}`
 - **Mô tả:** Xóa Nhân viên.
 - **Quyền hạn:** Cần đăng nhập.
+
+---
+
+## 8. Module Đặt phòng & Duyệt (Bookings)
+
+### `POST /api/Bookings`
+- **Mô tả:** Tạo đơn đặt phòng mới (trạng thái ban đầu `Chờ duyệt`). Phòng đang `Bảo trì` thì bị từ chối.
+- **Quyền hạn:** Cần đăng nhập.
+
+### `GET /api/Bookings`
+- **Mô tả:** Lấy tất cả đơn đặt phòng.
+- **Quyền hạn:** **Admin**, **Employee** (nhân sự).
+
+### `GET /api/Bookings/my`
+- **Mô tả:** Lấy đơn đặt phòng của chính mình.
+- **Quyền hạn:** Cần đăng nhập.
+
+### `GET /api/Bookings/{id}`
+- **Mô tả:** Xem chi tiết một đơn.
+- **Quyền hạn:** Cần đăng nhập.
+
+### `PATCH /api/Bookings/{id}/approve`
+- **Mô tả:** Duyệt hoặc từ chối cả đơn một lần (`{ "newStatus": "Đã duyệt" }` hoặc `"Từ chối"`).
+- **Quyền hạn:** **Admin**, **Employee**.
+
+### `PATCH /api/Bookings/details/{detailId}/approve`
+- **Mô tả:** Duyệt hoặc từ chối từng phòng trong đơn. Đơn tự chuyển `Đã duyệt` / `Từ chối` / `Duyệt một phần` theo kết quả chi tiết.
+- **Quyền hạn:** **Admin**, **Employee**.
+
+### `PATCH /api/Bookings/{id}/cancel`
+- **Mô tả:** Hủy đơn (chuyển `Đã hủy`).
+- **Quyền hạn:** Cần đăng nhập.
+
+### `GET /api/Bookings/rooms/{roomId}/schedule?date=YYYY-MM-DD[&startPeriodId=&endPeriodId=|&startTime=&endTime=]`
+- **Mô tả:** Xem lịch phòng theo ngày. Phòng đặt theo tiết thì truyền `startPeriodId/endPeriodId`, phòng theo giờ thì truyền `startTime/endTime` (`"07:00:00"`).
+- **Quyền hạn:** Công khai.
+
+### `GET /api/Bookings/periods`
+- **Mô tả:** Lấy danh sách tiết học.
+- **Quyền hạn:** Công khai.
+
+---
+
+## 9. Module Người dùng mở rộng (Users)
+
+Ngoài `GET /api/Users/students|lecturers` ở mục 7:
+
+### `GET /api/Users`
+- **Mô tả:** Lấy tất cả người dùng.
+- **Quyền hạn:** Chỉ **Admin**.
+
+### `GET /api/Users/{id}`
+- **Mô tả:** Xem chi tiết người dùng.
+- **Quyền hạn:** **Admin**, **Employee**.
+
+### `PUT /api/Users/{id}`
+- **Mô tả:** Cập nhật thông tin người dùng.
+- **Quyền hạn:** **Admin**, **Employee**.
+
+### `PATCH /api/Users/{id}/role`
+- **Mô tả:** Đổi role (`Student | Lecturer | Employee | Admin`).
+- **Quyền hạn:** Chỉ **Admin**.
+
+### `PATCH /api/Users/{id}/status?status=Active|Inactive|Suspended`
+- **Mô tả:** Khóa/mở tài khoản. `Inactive/Suspended` khóa đăng nhập ngay.
+- **Quyền hạn:** Chỉ **Admin**.
+
+---
+
+## 10. API Rooms mở rộng
+
+Ngoài CRUD ở mục 4:
+
+### `GET /api/Rooms/available`
+- **Mô tả:** Lấy phòng trống.
+- **Quyền hạn:** Cần đăng nhập.
+
+### `GET /api/Rooms/{id}/schedule`
+- **Mô tả:** Xem lịch một phòng.
+- **Quyền hạn:** Cần đăng nhập.
+
+### `PATCH /api/Rooms/{id}/status`
+- **Mô tả:** Đổi trạng thái phòng (ví dụ `Bảo trì` — phòng này không đặt được).
+- **Quyền hạn:** **Admin**, **Employee**.

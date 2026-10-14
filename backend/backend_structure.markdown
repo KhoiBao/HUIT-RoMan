@@ -1,5 +1,6 @@
 > Kiến trúc chốt theo General_Info: **N-Layer + Modular Monolith**.
-> Quy tắc code theo Developing_rules: controller thin, rule ở Business, DB ở Data Access, Domain không phụ thuộc API, soft-delete.
+> Quy tắc code theo Developing_rules: controller thin, rule ở Business, DB ở Data Access, Domain không phụ thuộc API.
+> Nghiệp vụ (role, vòng đời đơn): `docs/nghiep-vu.md` — không định nghĩa lại ở đây.
 
 ---
 
@@ -10,24 +11,26 @@ backend/
   HUIT-RoMan.sln
   src/
     API/                  # Layer 1 - Presentation
-      Program.cs          # AddControllers + AddDbContext + AddIdentity + Swagger
+      Program.cs          # AddControllers + CORS policy "Web" + AddDbContext + AddIdentity + JWT + Swagger
       appsettings.json    # ConnectionStrings:DefaultConnection -> PostgreSQL LibraryDb
-      Controllers/        # chỉ gọi Service, cấm new DbContext ở đây
-        HealthController.cs
+      Controllers/        # chỉ gọi Service, cấm new DbContext ở đây (10 controllers: Auth, Bookings,
+                          # Departments, Employees, Equipments, EquipmentCategories, Rooms, RoomTypes, Users, Health)
     Application/          # Layer 2 - Business
-      DependencyInjection.cs   # AddApplication(), sau này đăng ký Service ở đây
-      Common/
+      DependencyInjection.cs   # AddApplication() đăng ký Service
+      Common/             # IRepository, IUnitOfWork, IStoredProcedureService, ICurrentUserService, ApiResponse
       Modules/            # Modular Monolith = chia folder, chung 1 DB + 1 deploy
-        Identity/ Booking/ Room/ Usage/ Reporting/ Communication/
+        Identity/ Booking/ Room/         # đã có Service
+        Usage/ Reporting/ Communication/ # còn trống, làm sau
     Domain/               # Layer 4 - không ref project nào
-      *.cs                # 25 entities: User, Room, Booking, Equipment...
-      Common/BaseEntity.cs     # base soft-delete (IsDeleted)
+      *.cs                # entities: User, Room, Booking, Equipment...
     Infrastructure/       # Layer 3 - Data Access
       Persistence/
         ApplicationDbContext.cs   # IdentityDbContext<User, IdentityRole<int>, int>
-        Configurations/           # tách Fluent API ra khỏi DbContext khi lớn lên
-      Migrations/         # dotnet ef tạo ở đây (hiện đã có Initial)
-      Identity/ Repositories/     # để trống, làm tới Auth/CRUD thì code tiếp
+        ApplicationDbSeeder.cs    # seed roles + departments + 17 acc demo + apply StoredProcedures.sql
+        Configurations/           # còn trống, tách Fluent API ra khi DbContext lớn lên
+      Migrations/         # dotnet ef tạo ở đây
+      Repositories/       # Repository, UnitOfWork, StoredProcedureService
+      SQL/StoredProcedures.sql    # GetAvailableRooms, GetRoomSchedule, ... (một số proc chưa có code gọi)
 ```
 
 Chiều phụ thuộc: `API -> Application -> Domain <- Infrastructure`.
@@ -39,11 +42,10 @@ Chiều phụ thuộc: `API -> Application -> Domain <- Infrastructure`.
 |---|---|---|
 | `Identity` | User, Department, Employee, UserRestriction | Must |
 | `Room` | Room, RoomType, Equipment, EquipmentCategory, RoomEquipment, EquipmentConditionLog, MaintenanceRecord, UsageCondition, RoomTypeCondition | Must |
-| `Booking` | Booking, BookingDetail, ApprovalHistory | Must |
-| `Usage` | UsageSession (check-in/out) | Must |
-| `Staff` (làm sau) | Shift, ShiftLog | Should |
-| `Violation` (làm sau) | ViolationType, ViolationRecord, Feedback | Should/Could |
-| `Communication` (làm sau) | Notification, ChatConversation, ChatMessage | Could |
+| `Booking` | Booking, BookingDetail | Must |
+| `Usage` (trống) | UsageSession, Period, Shift, ShiftLog — check-in/out | Must, làm sau |
+| `Reporting` (trống) | Báo cáo/thống kê qua proc `GetBookingSummary` | Must, làm sau |
+| `Communication` (trống) | Notification, ChatConversation, ChatMessage, Feedback | Could, làm sau |
 
 Luồng chuẩn 1 tính năng: `Controller (API) -> Service (Application/Modules/X) -> DbContext/Repository (Infrastructure) -> PostgreSQL`.
 Module khác muốn dùng chéo thì gọi qua Service (`IRoomService.IsAvailable()`), không `.Include()` DbSet của module khác.
