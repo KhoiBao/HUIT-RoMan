@@ -1,6 +1,6 @@
-> Version: 0.1.0  
-> Status: Draft  
-> Last Updated: 12/09/2026
+> Version: 0.2.0
+> Status: Active
+> Last Updated: 14/10/2026
 
 ---
 
@@ -29,10 +29,10 @@ HCM.
 ## 3. Team Members
 
 | Member | Role |
-|---|---|---|
-| Nguyen Bao Khoi | PM / Tech Lead | TBD |
-| Nguyen Le Dang Khoa | Developer | TBD |
-| Nguyen Thi Anh Thu | Developer | TBD |
+|---|---|
+| Nguyen Bao Khoi | PM / Tech Lead |
+| Nguyen Le Dang Khoa | Developer |
+| Nguyen Thi Anh Thu | Developer |
 
 ---
 
@@ -60,23 +60,21 @@ HCM.
 ### Development Tools
 
 - Visual Studio Code
-- Android Studio
 - Git/GitHub
-- 
+- File `.bat` ở root repo (`setup`, `update-db`, `run-backend`, `run-web`)
 
 ### API
 
 - REST API
-- OpenAPI / Swagger
+- OpenAPI / Swagger (`http://localhost:5056/swagger`)
 
 ### Authentication
 
-- JWT
-- Refresh Token
+- JWT Bearer (login bằng email `@huit.edu.vn`, chưa có Refresh Token — xem `docs/nghiep-vu.md` mục 4)
 
 ### CI/CD
 
-- GitHub Actions
+- Chưa có (làm sau nếu còn thời gian)
 
 ---
 

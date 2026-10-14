@@ -1,26 +1,24 @@
 # Project Scope
 
-> Version: 0.1.0  
-> Status: Draft
+> Version: 0.2.0
+> Status: Active (cập nhật theo code ngày 14/10/2026)
 
 # 1. In Scope
 
 ## 1.1 Must Have
 
-First Prioritze
-
-- [ ] Authentication
-- [ ] Authorization
-- [ ] User management
-- [ ] Room management
-- [ ] Equipment management
-- [ ] Room booking / CRUD method
-- [ ] Room availability
-- [ ] Booking approval
-- [ ] Room usage management
-- [ ] Check-in / Check-out
-- [ ] Search
-- [ ] Reports / Statistics
+- [x] Authentication (login JWT bằng email — chưa có refresh/logout/register)
+- [x] Authorization (role Admin/Employee/Student/Lecturer, map ra 3 nhóm ở `docs/nghiep-vu.md`)
+- [x] User management
+- [x] Room management
+- [x] Equipment management
+- [x] Room booking / CRUD method
+- [x] Room availability
+- [x] Booking approval (cả đơn + từng chi tiết)
+- [ ] Room usage management (module `Usage` còn trống)
+- [ ] Check-in / Check-out (chưa làm)
+- [ ] Search (chưa có API tìm kiếm riêng)
+- [ ] Reports / Statistics (proc có sẵn, chưa nối API)
 
 ---
 
@@ -46,11 +44,10 @@ Later Prioritize
 
 ---
 
-# 3. Out of Scope
+# 3. Out of Scope (đồ án này không làm)
 
-Các chức năng team quyết định không thực hiện.
-
-- null
+- Tự đăng ký tài khoản (tài khoản do seeder tạo sẵn)
+- Mobile app (làm sau nếu còn thời gian)
 
 ---
 
@@ -58,18 +55,18 @@ Các chức năng team quyết định không thực hiện.
 
 | ID | Feature | Priority | Status | Notes |
 |---|---|---|---|---|
-| F-001 | Authentication | Must | Planned | |
-| F-002 | Authorization | Must | Planned | |
-| F-003 | Room Management | Must | Planned | |
-| F-004 | Booking | Must | Planned | |
-| F-005 | Approval | Must | Planned | |
-| F-006 | Check-in/out | Must | Planned | |
-| F-007 | Notification | Should | Planned | |
-| F-008 | Reports | Should | Planned | |
-| F-009 | Chat | Could |  |
-| F-010 | Feedback | Could |  |
+| F-001 | Authentication | Must | Partial | Login JWT bằng email; thiếu refresh/logout |
+| F-002 | Authorization | Must | Done | 4 role backend, map 3 nhóm hiển thị |
+| F-003 | Room Management | Must | Done | CRUD + equipments + status + available |
+| F-004 | Booking | Must | Done | CRUD + schedule + periods |
+| F-005 | Approval | Must | Done | Duyệt cả đơn + từng chi tiết |
+| F-006 | Check-in/out | Must | Planned | Module `Usage` còn trống |
+| F-007 | Notification | Should | Planned | Module `Communication` còn trống |
+| F-008 | Reports | Must | Planned | Proc có sẵn, chưa nối API |
+| F-009 | Chat | Could | Dropped | Ngoài phạm vi đồ án |
+| F-010 | Feedback | Could | Planned | Entity có sẵn, chưa API |
 
 
 # 6. Open Questions
 
-- [ ] null
+- [ ] Có giữ rule soft-delete không? Hiện code hard-delete toàn bộ (`Repository.Remove`), `BaseEntity.IsDeleted` không entity nào dùng — team cần chốt 1 trong 2 rồi docs theo.
