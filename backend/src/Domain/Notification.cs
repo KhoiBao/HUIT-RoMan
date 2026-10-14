@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Thông báo gửi đến người dùng.
     /// </summary>
     [Table("Notifications")]
-    public class Notification
+    public class Notification : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

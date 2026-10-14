@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Nhật ký tình trạng thiết bị trước và sau khi sử dụng.
     /// </summary>
     [Table("EquipmentConditionLogs")]
-    public class EquipmentConditionLog
+    public class EquipmentConditionLog : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

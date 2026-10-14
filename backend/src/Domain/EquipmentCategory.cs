@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Danh mục trang thiết bị.
     /// </summary>
     [Table("EquipmentCategories")]
-    public class EquipmentCategory
+    public class EquipmentCategory : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

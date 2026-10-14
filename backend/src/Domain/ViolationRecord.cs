@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Hồ sơ vi phạm của người dùng trong một phiên sử dụng.
     /// </summary>
     [Table("ViolationRecords")]
-    public class ViolationRecord
+    public class ViolationRecord : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Loại phòng (VD: Phòng họp, Phòng học nhóm, Hội trường).
     /// </summary>
     [Table("RoomTypes")]
-    public class RoomType
+    public class RoomType : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

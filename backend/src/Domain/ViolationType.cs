@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Danh mục các loại vi phạm (VD: Trả trễ, Làm hỏng tài sản).
     /// </summary>
     [Table("ViolationTypes")]
-    public class ViolationType
+    public class ViolationType : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

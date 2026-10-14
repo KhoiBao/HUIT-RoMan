@@ -9,7 +9,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Đại diện cho nhân viên quản lý hoặc vận hành.
     /// </summary>
     [Table("Employees")]
-    public class Employee
+    public class Employee : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }
@@ -24,7 +24,6 @@ namespace HUIT_RoMan.Domain.Entities
         public DateTime? HireDate { get; set; }
         public string Status { get; set; }
         
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         [ForeignKey("User")]
         public int UserId { get; set; }

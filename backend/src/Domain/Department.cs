@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Đại diện cho một phòng ban trong hệ thống.
     /// </summary>
     [Table("Departments")]
-    public class Department
+    public class Department : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

@@ -9,7 +9,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Dùng cho các loại phòng mượn theo tiết học cố định (VD: Phòng Lý Thuyết, Phòng Thực Hành).
     /// </summary>
     [Table("Periods")]
-    public class Period
+    public class Period : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

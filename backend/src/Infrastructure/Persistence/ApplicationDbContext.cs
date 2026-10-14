@@ -1,7 +1,9 @@
+using HUIT_RoMan.Domain.Common;
 using HUIT_RoMan.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace HUIT_RoMan.Infrastructure.Persistence
 {
@@ -58,6 +60,18 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             foreach (var relationship in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()))
             {
                 relationship.DeleteBehavior = DeleteBehavior.Restrict;
+            }
+
+            // Xóa mềm: mọi entity ISoftDelete tự loại bản ghi IsDeleted khỏi query
+            foreach (var clrType in modelBuilder.Model.GetEntityTypes()
+                         .Select(t => t.ClrType)
+                         .Where(t => typeof(ISoftDelete).IsAssignableFrom(t)))
+            {
+                var param = Expression.Parameter(clrType, "e");
+                var body = Expression.Equal(
+                    Expression.Property(param, nameof(ISoftDelete.IsDeleted)),
+                    Expression.Constant(false));
+                modelBuilder.Entity(clrType).HasQueryFilter(Expression.Lambda(body, param));
             }
         }
     }

@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Liên kết giữa Phòng và Thiết bị (Phòng có những thiết bị gì).
     /// </summary>
     [Table("RoomEquipments")]
-    public class RoomEquipment
+    public class RoomEquipment : Common.BaseEntity
     {
         [Key, Column(Order = 0)]
         [ForeignKey("Room")]

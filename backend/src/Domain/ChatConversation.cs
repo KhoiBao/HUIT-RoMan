@@ -9,7 +9,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Cuộc hội thoại hỗ trợ trực tuyến.
     /// </summary>
     [Table("ChatConversations")]
-    public class ChatConversation
+    public class ChatConversation : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

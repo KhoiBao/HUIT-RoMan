@@ -9,7 +9,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Trang thiết bị trong thư viện.
     /// </summary>
     [Table("Equipments")]
-    public class Equipment
+    public class Equipment : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

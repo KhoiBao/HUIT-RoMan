@@ -9,7 +9,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Đơn đặt phòng tổng thể.
     /// </summary>
     [Table("Bookings")]
-    public class Booking
+    public class Booking : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }
@@ -29,7 +29,6 @@ namespace HUIT_RoMan.Domain.Entities
         
         public string Note { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         [ForeignKey("User")]
         public int UserId { get; set; }

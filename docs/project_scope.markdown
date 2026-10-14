@@ -69,4 +69,4 @@ Later Prioritize
 
 # 6. Open Questions
 
-- [ ] Có giữ rule soft-delete không? Hiện code hard-delete toàn bộ (`Repository.Remove`), `BaseEntity.IsDeleted` không entity nào dùng — team cần chốt 1 trong 2 rồi docs theo.
+- [x] Soft-delete: GIỮ. Đã triển khai (migration `AddSoftDelete`, `ISoftDelete` + global filter + `Repository.Remove` xóa mềm). Chi tiết ở `docs/nghiep-vu.md` mục 5.

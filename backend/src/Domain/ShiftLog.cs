@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Nhật ký hoạt động trong ca làm việc.
     /// </summary>
     [Table("ShiftLogs")]
-    public class ShiftLog
+    public class ShiftLog : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

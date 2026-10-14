@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Tin nhắn trong một cuộc hội thoại.
     /// </summary>
     [Table("ChatMessages")]
-    public class ChatMessage
+    public class ChatMessage : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

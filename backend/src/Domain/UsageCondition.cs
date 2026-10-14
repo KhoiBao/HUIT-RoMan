@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Các điều kiện, quy định sử dụng.
     /// </summary>
     [Table("UsageConditions")]
-    public class UsageCondition
+    public class UsageCondition : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

@@ -7,7 +7,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Cấu hình điều kiện sử dụng cho từng loại phòng.
     /// </summary>
     [Table("RoomTypeConditions")]
-    public class RoomTypeCondition
+    public class RoomTypeCondition : Common.BaseEntity
     {
         [Key, Column(Order = 0)]
         [ForeignKey("RoomType")]

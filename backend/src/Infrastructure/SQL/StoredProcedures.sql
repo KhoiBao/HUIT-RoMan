@@ -29,6 +29,7 @@ BEGIN
         SELECT 1
         FROM   "BookingDetails" bd
         WHERE  bd."RoomId"  = p_room_id
+          AND  bd."IsDeleted" = FALSE
           AND  bd."Status"  NOT IN ('Từ chối', 'Đã hủy')
           AND  bd."StartAt" < p_end_at
           AND  bd."EndAt"   > p_start_at
@@ -85,6 +86,8 @@ BEGIN
     LEFT JOIN "Periods"    sp ON sp."Id" = bd."StartPeriodId"
     LEFT JOIN "Periods"    ep ON ep."Id" = bd."EndPeriodId"
     WHERE bd."RoomId"  = p_room_id
+      AND bd."IsDeleted" = FALSE
+      AND b."IsDeleted"  = FALSE
       AND bd."Status"  NOT IN ('Từ chối', 'Đã hủy')
       AND bd."StartAt" < p_window_end
       AND bd."EndAt"   > p_window_start
@@ -127,12 +130,15 @@ BEGIN
     FROM  "Rooms"     r
     JOIN  "RoomTypes" rt ON rt."Id" = r."RoomTypeId"
     WHERE r."Status" IN ('Trống', 'Available')
+      AND r."IsDeleted"  = FALSE
+      AND rt."IsDeleted" = FALSE
       AND r."Capacity" >= p_min_capacity
       AND (p_room_type_id IS NULL OR r."RoomTypeId" = p_room_type_id)
       AND NOT EXISTS (
           SELECT 1
           FROM   "BookingDetails" bd
           WHERE  bd."RoomId"  = r."Id"
+            AND  bd."IsDeleted" = FALSE
             AND  bd."Status"  NOT IN ('Từ chối', 'Đã hủy')
             AND  bd."StartAt" < p_window_end
             AND  bd."EndAt"   > p_window_start
@@ -154,7 +160,8 @@ BEGIN
     UPDATE "Bookings"
     SET    "Status"          = p_decision,
            "RejectionReason" = p_rejection_reason
-    WHERE  "Id" = p_booking_id;
+    WHERE  "Id" = p_booking_id
+      AND  "IsDeleted" = FALSE;
 
     UPDATE "BookingDetails"
     SET    "Status"          = p_decision,
@@ -215,8 +222,9 @@ BEGIN
         COUNT(DISTINCT bd."RoomId")
             FILTER (WHERE b."Status" = 'Đã duyệt')                AS total_rooms_used
     FROM  "Bookings"      b
-    LEFT JOIN "BookingDetails" bd ON bd."BookingId" = b."Id"
-    WHERE EXTRACT(YEAR  FROM b."CreatedAt") = p_year
+    LEFT JOIN "BookingDetails" bd ON bd."BookingId" = b."Id" AND bd."IsDeleted" = FALSE
+    WHERE b."IsDeleted" = FALSE
+      AND EXTRACT(YEAR  FROM b."CreatedAt") = p_year
       AND (p_month IS NULL OR EXTRACT(MONTH FROM b."CreatedAt") = p_month);
 END;
 $$ LANGUAGE plpgsql STABLE;
@@ -272,10 +280,14 @@ CREATE OR REPLACE FUNCTION fn_check_user_booking_eligibility(
 ) RETURNS BOOLEAN AS $$
 DECLARE
     v_status TEXT;
+    v_is_deleted BOOLEAN;
     v_has_restriction BOOLEAN;
 BEGIN
-    -- Kiểm tra trạng thái User
-    SELECT "Status" INTO v_status FROM "AspNetUsers" WHERE "Id" = p_user_id;
+    -- Kiểm tra trạng thái User (tài khoản đã xóa mềm coi như không hợp lệ)
+    SELECT "Status", "IsDeleted" INTO v_status, v_is_deleted FROM "AspNetUsers" WHERE "Id" = p_user_id;
+    IF v_status IS NULL OR v_is_deleted THEN
+        RETURN FALSE;
+    END IF;
     IF v_status <> 'Hoạt động' THEN
         RETURN FALSE;
     END IF;
@@ -314,6 +326,7 @@ BEGIN
     SELECT "BookingDetailId" INTO v_booking_detail_id
     FROM "UsageSessions"
     WHERE "Id" = p_usage_session_id
+      AND "IsDeleted" = FALSE
     FOR UPDATE;
 
     IF v_booking_detail_id IS NULL THEN

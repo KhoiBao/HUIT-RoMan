@@ -10,7 +10,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Đại diện cho người dùng hệ thống (Sinh viên, Giảng viên, v.v.).
     /// </summary>
     [Table("Users")]
-    public class User : IdentityUser<int>
+    public class User : IdentityUser<int>, Common.ISoftDelete
     {
 
         [Required]
@@ -22,6 +22,8 @@ namespace HUIT_RoMan.Domain.Entities
         public string FullName { get; set; }
 
         public string Status { get; set; }
+
+        public bool IsDeleted { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }

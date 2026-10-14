@@ -14,5 +14,6 @@ namespace HUIT_RoMan.Application.Common.Interfaces
         Task AddAsync(T entity);
         void Update(T entity);
         void Remove(T entity);
+        void HardRemove(T entity);
     }
 }

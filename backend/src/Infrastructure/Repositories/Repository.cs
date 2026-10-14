@@ -74,6 +74,21 @@ namespace HUIT_RoMan.Infrastructure.Repositories
 
         public void Remove(T entity)
         {
+            // Xóa mềm theo Developing_rules: chỉ set IsDeleted, không xóa dòng.
+            if (entity is HUIT_RoMan.Domain.Common.ISoftDelete soft)
+            {
+                soft.IsDeleted = true;
+                soft.UpdatedAt = DateTime.UtcNow;
+                _context.Set<T>().Update(entity);
+            }
+            else
+            {
+                _context.Set<T>().Remove(entity);
+            }
+        }
+
+        public void HardRemove(T entity)
+        {
             _context.Set<T>().Remove(entity);
         }
     }

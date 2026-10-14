@@ -9,7 +9,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Phiên sử dụng phòng thực tế.
     /// </summary>
     [Table("UsageSessions")]
-    public class UsageSession
+    public class UsageSession : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Ghi nhận việc hạn chế quyền của người dùng (VD: Cấm mượn phòng trong 1 tháng).
     /// </summary>
     [Table("UserRestrictions")]
-    public class UserRestriction
+    public class UserRestriction : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }
@@ -21,7 +21,6 @@ namespace HUIT_RoMan.Domain.Entities
         public DateTime StartAt { get; set; }
         public DateTime? EndAt { get; set; }
         public string Status { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         [ForeignKey("User")]
         public int UserId { get; set; }

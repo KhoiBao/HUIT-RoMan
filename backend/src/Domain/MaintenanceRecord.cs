@@ -8,7 +8,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Hồ sơ bảo trì thiết bị.
     /// </summary>
     [Table("MaintenanceRecords")]
-    public class MaintenanceRecord
+    public class MaintenanceRecord : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

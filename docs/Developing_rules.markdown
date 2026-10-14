@@ -10,6 +10,7 @@
 - Avoid unnecessary complexity.
 - Prefer simple and maintainable solutions.
 - **Every feature must be reviewed before merging.**
+- **Do not hard-delete, always soft-delete.** Mọi entity kế thừa `BaseEntity` (riêng `User` implement `ISoftDelete`); `Repository.Remove` chỉ set `IsDeleted = true`; query EF tự loại bản ghi đã xóa qua global filter. Cần xóa thật thì dùng `HardRemove` (phải ghi lý do trong PR).
 - Module khác muốn dùng chéo thì gọi qua Service, không `.Include()` DbSet của module khác.
 - Thêm tính năng theo đúng 5 bước ở `backend/backend_structure.markdown` mục 4.
 

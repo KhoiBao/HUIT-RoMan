@@ -53,3 +53,11 @@ Lưu ý:
 - Pass chung: `Huit@123`. Tài khoản do seeder (`ApplicationDbSeeder`) tạo sẵn khi backend chạy lần đầu.
 - Không có đăng ký tự do. Khóa tài khoản: `PATCH /api/Users/{id}/status?status=Suspended` (chỉ Admin).
 - Danh sách đầy đủ: `backend/account.md`.
+
+## 5. Xóa mềm (soft-delete) — bắt buộc
+
+- Cấm hard-delete. Mọi entity kế thừa `BaseEntity`, riêng `User` implement `ISoftDelete` (vì đã kế thừa `IdentityUser<int>`).
+- `Repository.Remove` chỉ set `IsDeleted = true` + `UpdatedAt`; `ApplicationDbContext` gắn global filter nên mọi query EF tự ẩn bản ghi đã xóa.
+- Stored procedure SQL cũng lọc `IsDeleted = FALSE` (SQL bypass EF filter).
+- Muốn xóa thật dùng `Repository.HardRemove` và phải ghi lý do trong PR.
+- Hệ quả: email của tài khoản đã xóa mềm vẫn chiếm unique index — muốn dùng lại email đó thì Admin phải mở lại hoặc xóa thật trong DB.

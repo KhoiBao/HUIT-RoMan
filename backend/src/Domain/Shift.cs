@@ -9,7 +9,7 @@ namespace HUIT_RoMan.Domain.Entities
     /// Đại diện cho ca làm việc của nhân viên.
     /// </summary>
     [Table("Shifts")]
-    public class Shift
+    public class Shift : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }

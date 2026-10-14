@@ -8,14 +8,13 @@ namespace HUIT_RoMan.Domain.Entities
     /// Đánh giá, phản hồi sau khi sử dụng phòng.
     /// </summary>
     [Table("Feedbacks")]
-    public class Feedback
+    public class Feedback : Common.BaseEntity
     {
         [Key]
         public int Id { get; set; }
 
         public int Rating { get; set; } // Số sao (1-5)
         public string Comment { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         [ForeignKey("User")]
         public int UserId { get; set; }
