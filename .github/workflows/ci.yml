@@ -1,0 +1,59 @@
+name: CI
+
+# Chạy cho nhánh main và test: khi push trực tiếp hoặc mở PR vào 2 nhánh này.
+on:
+  push:
+    branches: [main, test]
+  pull_request:
+    branches: [main, test]
+
+jobs:
+  backend:
+    name: Backend (.NET 8)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore HUIT-RoMan.sln
+
+      - name: Build
+        run: dotnet build HUIT-RoMan.sln --no-restore --nologo -v q
+
+      - name: Validate EF model (gen migration SQL, không cần DB)
+        run: |
+          dotnet tool install --global dotnet-ef --version 8.*
+          dotnet ef migrations script --project src/Infrastructure --startup-project src/API --no-build --output /tmp/migrations.sql
+
+  web:
+    name: Web (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
