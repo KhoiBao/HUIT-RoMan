@@ -7,6 +7,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import PlaceholderHome from "./pages/PlaceholderHome";
 
@@ -29,7 +30,23 @@ export default function App() {
             path="/home"
             element={
               <RequireAuth>
-                <PlaceholderHome title="Trang người dùng" />
+                <HomePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/dat-phong"
+            element={
+              <RequireAuth>
+                <PlaceholderHome title="Đặt phòng" />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/lich-phong"
+            element={
+              <RequireAuth>
+                <PlaceholderHome title="Lịch phòng" />
               </RequireAuth>
             }
           />

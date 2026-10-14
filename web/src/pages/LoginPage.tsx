@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { getHomePathForRole, validateLoginInput } from "../lib/auth";
+import { validateLoginInput } from "../lib/auth";
 import {
   ArrowRightIcon,
   BankIcon,
@@ -43,10 +43,8 @@ export default function LoginPage() {
     setFieldError(null);
     setLoading(true);
     try {
-      const authed = await login(identifier, password, remember);
-      navigate(location.state?.from ?? getHomePathForRole(authed?.role), {
-        replace: true,
-      });
+      await login(identifier, password, remember);
+      navigate(location.state?.from ?? "/home", { replace: true });
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Đăng nhập thất bại");
     } finally {
@@ -63,8 +61,12 @@ export default function LoginPage() {
               <BankIcon />
             </div>
             <div>
-              <div className="brand-eyebrow">HUIT LIBRARY PORTAL</div>
-              <div className="brand-title">Cổng Dịch Vụ Tài Khoản Thư Viện</div>
+              <div className="brand-eyebrow">HUIT • ROOM MANAGEMENT</div>
+              <div className="brand-title">RoMan</div>
+              <div className="brand-sub">
+                Hệ thống quản lý đăng ký và khai thác phòng dùng chung tại
+                Trường Đại học Công Thương Thành phố Hồ Chí Minh
+              </div>
             </div>
           </div>
 
@@ -76,7 +78,7 @@ export default function LoginPage() {
             đề tại Trường Đại học Công Thương TP.HCM.
           </p>
 
-          <div className="photo" role="img" aria-label="Không gian thư viện HUIT">
+          <div className="photo" role="img" aria-label="Không gian học tập HUIT">
             <svg className="photo-art" viewBox="0 0 400 180" aria-hidden="true">
               <g fill="none" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="3">
                 <path d="M40 150V60l30-12v102" />
@@ -123,14 +125,14 @@ export default function LoginPage() {
             <div className="contact-row">
               <PhoneIcon />
               <span>
-                Tổng đài Thư viện: <strong>(028) 3816 1673</strong> (Số nội
-                bộ: 124)
+                Tổng đài hỗ trợ: <strong>(028) 3816 1673</strong> (Số nội bộ:
+                124)
               </span>
             </div>
             <div className="contact-row">
               <MailIcon />
               <span>
-                Bộ phận Kỹ thuật số: <strong>thuvien@huit.edu.vn</strong>
+                Hỗ trợ kỹ thuật: <strong>thuvien@huit.edu.vn</strong>
               </span>
             </div>
             <div className="contact-row">
@@ -141,7 +143,7 @@ export default function LoginPage() {
         </aside>
 
         <section className="login-card">
-          <h1>Đăng nhập Cổng Thư viện HUIT</h1>
+          <h1>Đăng nhập RoMan</h1>
           <p className="login-sub">
             Sử dụng tài khoản Sinh viên / Giảng viên / Cán bộ viên chức
           </p>
