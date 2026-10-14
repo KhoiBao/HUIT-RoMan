@@ -1,32 +1,50 @@
-# React + TypeScript + Vite
+# RoMan Web — React + TypeScript + Vite
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Giao diện hệ thống quản lý phòng dùng chung (HUIT). Nghiệp vụ và phân quyền: `docs/nghiep-vu.md`.
 
-Currently, two official plugins are available:
+## Chạy
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bat
+run-web.bat        :: Web http://localhost:5173 (tự npm install nếu thiếu)
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Chạy tay:
+
+```powershell
+cd web
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # build production
+npm test         # vitest
+```
+
+Bắt buộc chạy backend trước (`run-backend.bat`, API `http://localhost:5056`). Địa chỉ API đổi ở `.env.development` (`VITE_API_URL`).
+
+## Đăng nhập
+
+- Chỉ có **đăng nhập**, không có đăng ký. Form nhập **email `@huit.edu.vn`** + mật khẩu.
+- Tài khoản demo (pass `Huit@123`): `backend/account.md`.
+- Sau login, điều hướng theo role: `Admin` → `/admin`, `Employee` → `/staff`, còn lại → `/home`.
+
+## Cấu trúc `src/`
+
+```text
+src/
+  lib/
+    api.ts    # axios instance + interceptor gắn JWT từ localStorage
+    auth.ts   # validateLoginInput, buildLoginPayload, mapRoleToGroup, getHomePathForRole (+ auth.test.ts)
+  auth/
+    AuthContext.tsx  # login/logout, lưu token + user vào localStorage
+  pages/
+    LoginPage.tsx       # trang đăng nhập duy nhất
+    PlaceholderHome.tsx # khung chờ nghiệp vụ từng nhóm
+  App.tsx     # BrowserRouter + RequireAuth + routes
+```
+
+## Quy ước khi thêm trang mới (clean code)
+
+1. Logic thuần (validate, map role, gọi API) viết trong `src/lib/`, kèm test trong `*.test.ts` — không viết logic trong component.
+2. Component chỉ hiển thị + gọi hàm từ `lib`/`auth`. UI copy tiếng Việt, tên biến/hàm tiếng Anh.
+3. Không hardcode URL API — dùng instance `api` từ `src/lib/api.ts`.
+4. Route cần đăng nhập bọc trong `<RequireAuth>`. Không tự chế cơ chế auth mới.
+5. Thêm route theo nhóm: trang quản trị vào `/admin`, nhân sự vào `/staff`, người dùng vào `/home`.
