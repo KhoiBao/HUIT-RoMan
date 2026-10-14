@@ -8,7 +8,6 @@ import {
   ClockIcon,
   EyeIcon,
   EyeOffIcon,
-  FingerprintIcon,
   IdCardIcon,
   InfoIcon,
   LibraryIcon,
@@ -146,23 +145,6 @@ export default function LoginPage() {
           <p className="login-sub">
             Sử dụng tài khoản Sinh viên / Giảng viên / Cán bộ viên chức
           </p>
-
-          <button
-            type="button"
-            className="sso-btn"
-            onClick={() =>
-              setNotice(
-                "Đăng nhập SSO chưa hỗ trợ trong phạm vi đồ án. Vui lòng dùng tài khoản thư viện bên dưới.",
-              )
-            }
-          >
-            <FingerprintIcon />
-            Đăng nhập nhanh một chạm qua cổng SSO HUIT
-          </button>
-
-          <div className="or">
-            <span>HOẶC SỬ DỤNG TÀI KHOẢN THƯ VIỆN</span>
-          </div>
 
           <form onSubmit={handleSubmit} noValidate>
             <label className="field">

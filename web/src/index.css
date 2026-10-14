@@ -209,45 +209,6 @@ body {
   color: var(--muted);
 }
 
-.sso-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 12px;
-  font-size: 14.5px;
-  font-weight: 600;
-  color: var(--secondary);
-  background: #fff;
-  border: 1px solid #c4cfdd;
-  border-radius: 9px;
-  cursor: pointer;
-}
-
-.sso-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.or {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 20px 0;
-  color: #8a94a6;
-  font-size: 12px;
-  letter-spacing: 1px;
-  font-weight: 600;
-}
-
-.or::before,
-.or::after {
-  content: "";
-  flex: 1;
-  border-top: 1px solid var(--line);
-}
-
 .field {
   display: block;
   margin-bottom: 16px;

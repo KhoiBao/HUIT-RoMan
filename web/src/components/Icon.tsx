@@ -38,20 +38,6 @@ export function LoginIcon({ size = 18, className }: IconProps) {
   );
 }
 
-export function FingerprintIcon({ size = 18, className }: IconProps) {
-  return (
-    <svg {...base(size, className)}>
-      <path d="M12 11.5c-2.2 0-3.5 1.6-3.5 4 0 1.5-.3 3-.8 4.5" />
-      <path d="M12 11.5c2.2 0 3.5 1.6 3.5 4 0 2-.4 3.8-1.2 5.3" />
-      <path d="M12 8.5c-3.6 0-6 2.6-6 6.5 0 1.2-.2 2.4-.5 3.5" />
-      <path d="M12 8.5c3.6 0 6 2.6 6 6.5 0 1.7-.3 3.3-.9 4.7" />
-      <path d="M12 5.5c-5 0-8.5 3.6-8.5 9 0 .9.1 1.8.2 2.7" />
-      <path d="M12 5.5c5 0 8.5 3.6 8.5 9" />
-      <path d="M12 14.5v3" />
-    </svg>
-  );
-}
-
 export function IdCardIcon({ size = 18, className }: IconProps) {
   return (
     <svg {...base(size, className)}>
