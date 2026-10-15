@@ -1,6 +1,15 @@
 import { useState, useEffect } from "react";
 import { api } from "../../lib/api";
-import { SearchIcon, AlertTriangleIcon, LockIcon } from "../Icon";
+import {
+  SearchIcon,
+  AlertTriangleIcon,
+  LockIcon,
+  GraduationCapIcon,
+  UsersIcon,
+  RefreshCwIcon,
+  CheckIcon,
+  XIcon,
+} from "../Icon";
 
 export interface UserItem {
   id: number;
@@ -32,7 +41,7 @@ export default function AdminUsersTab({ onNotify }: Props) {
   const [editFullName, setEditFullName] = useState<string>("");
   const [editEmail, setEditEmail] = useState<string>("");
   const [editPhone, setEditPhone] = useState<string>("");
-  const [editStatus, setEditStatus] = useState<string>("Active");
+  const [editStatus, setEditStatus] = useState<string>("Hoạt động");
   const [editRole, setEditRole] = useState<string>("Student");
 
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -75,7 +84,7 @@ export default function AdminUsersTab({ onNotify }: Props) {
     setEditFullName(u.fullName || "");
     setEditEmail(u.email || "");
     setEditPhone(u.phoneNumber || "");
-    setEditStatus(u.status || "Active");
+    setEditStatus(u.status === "Active" ? "Hoạt động" : u.status || "Hoạt động");
     setEditRole(u.role || "Student");
   };
 
@@ -120,8 +129,13 @@ export default function AdminUsersTab({ onNotify }: Props) {
 
   // Toggle account lock
   const handleToggleLock = async (u: UserItem) => {
-    const isLocked = u.status === "Suspended" || u.status === "Inactive";
-    const nextStatus = isLocked ? "Active" : "Suspended";
+    const isLocked =
+      u.status === "Đình chỉ" ||
+      u.status === "Không hoạt động" ||
+      u.status === "Suspended" ||
+      u.status === "Inactive" ||
+      u.status === "Khóa";
+    const nextStatus = isLocked ? "Hoạt động" : "Đình chỉ";
     const actionName = isLocked ? "Mở khóa tài khoản" : "Khóa tài khoản";
 
     if (
@@ -145,11 +159,29 @@ export default function AdminUsersTab({ onNotify }: Props) {
     }
   };
 
+  const formatRole = (role?: string) => {
+    switch (role) {
+      case "Student":
+        return "Sinh viên";
+      case "Lecturer":
+        return "Giảng viên";
+      case "Employee":
+        return "Nhân viên / Thủ thư";
+      case "Admin":
+        return "Quản trị viên";
+      default:
+        return role || "Người dùng";
+    }
+  };
+
   return (
     <div className="admin-subtab-container">
       <div className="admin-subtab-header">
         <div>
-          <h2 className="admin-subtab-title">🎓 Quản lý Sinh viên & Giảng viên</h2>
+          <h2 className="admin-subtab-title flex items-center gap-2">
+            <GraduationCapIcon size={24} className="icon-blue-glow inline-block" />
+            <span>Quản lý Sinh viên &amp; Giảng viên</span>
+          </h2>
           <p className="admin-subtab-subtitle">
             Tra cứu tài khoản người dùng, quản lý quyền hạn và điều phối trạng thái truy cập hệ thống.
           </p>
@@ -157,11 +189,12 @@ export default function AdminUsersTab({ onNotify }: Props) {
 
         <button
           type="button"
-          className="admin-btn-refresh"
+          className="admin-btn-refresh flex items-center gap-1.5"
           onClick={fetchUsers}
           disabled={loading}
         >
-          {loading ? "Đang tải..." : "🔄 Làm mới"}
+          <RefreshCwIcon size={14} className={loading ? "animate-spin" : ""} />
+          <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
         </button>
       </div>
 
@@ -170,30 +203,33 @@ export default function AdminUsersTab({ onNotify }: Props) {
         <div className="admin-status-filters">
           <button
             type="button"
-            className={`filter-pill-btn ${
+            className={`filter-pill-btn flex items-center gap-1.5 ${
               userType === "students" ? "active-pill" : ""
             }`}
             onClick={() => setUserType("students")}
           >
-            👨‍🎓 Danh sách Sinh viên
+            <GraduationCapIcon size={15} />
+            <span>Danh sách Sinh viên</span>
           </button>
           <button
             type="button"
-            className={`filter-pill-btn ${
+            className={`filter-pill-btn flex items-center gap-1.5 ${
               userType === "lecturers" ? "active-pill" : ""
             }`}
             onClick={() => setUserType("lecturers")}
           >
-            👨‍🏫 Danh sách Giảng viên
+            <UsersIcon size={15} />
+            <span>Danh sách Giảng viên</span>
           </button>
           <button
             type="button"
-            className={`filter-pill-btn ${
+            className={`filter-pill-btn flex items-center gap-1.5 ${
               userType === "all" ? "active-pill" : ""
             }`}
             onClick={() => setUserType("all")}
           >
-            👥 Tất cả người dùng
+            <UsersIcon size={15} />
+            <span>Tất cả người dùng</span>
           </button>
         </div>
 
@@ -235,7 +271,12 @@ export default function AdminUsersTab({ onNotify }: Props) {
             <tbody>
               {filteredUsers.map((u) => {
                 const isLocked =
-                  u.status === "Suspended" || u.status === "Inactive";
+                  u.status === "Suspended" ||
+                  u.status === "Inactive" ||
+                  u.status === "Khóa" ||
+                  u.status === "Đã khóa" ||
+                  u.status === "Ngừng kích hoạt";
+
                 return (
                   <tr key={u.id}>
                     <td>
@@ -245,15 +286,25 @@ export default function AdminUsersTab({ onNotify }: Props) {
                     <td className="text-xs text-muted">{u.email}</td>
                     <td className="text-xs">{u.phoneNumber || "—"}</td>
                     <td>
-                      <span className="tag-role-pill">{u.role}</span>
+                      <span className="tag-role-pill">{formatRole(u.role)}</span>
                     </td>
                     <td>
                       <span
-                        className={`admin-status-pill ${
+                        className={`admin-status-pill flex items-center gap-1 ${
                           isLocked ? "pill-rejected" : "pill-approved"
                         }`}
                       >
-                        {isLocked ? "🔒 Đã khóa" : "● Hoạt động"}
+                        {isLocked ? (
+                          <>
+                            <LockIcon size={12} />
+                            <span>Đã khóa</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckIcon size={12} />
+                            <span>Hoạt động</span>
+                          </>
+                        )}
                       </span>
                     </td>
                     <td>
@@ -299,7 +350,7 @@ export default function AdminUsersTab({ onNotify }: Props) {
                 className="modal-close-btn"
                 onClick={() => setEditingUser(null)}
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
 
@@ -355,10 +406,10 @@ export default function AdminUsersTab({ onNotify }: Props) {
                       value={editRole}
                       onChange={(e) => setEditRole(e.target.value)}
                     >
-                      <option value="Student">Sinh viên (Student)</option>
-                      <option value="Lecturer">Giảng viên (Lecturer)</option>
-                      <option value="Employee">Nhân viên / Thủ thư (Employee)</option>
-                      <option value="Admin">Quản trị viên (Admin)</option>
+                      <option value="Student">Sinh viên</option>
+                      <option value="Lecturer">Giảng viên</option>
+                      <option value="Employee">Nhân viên / Thủ thư</option>
+                      <option value="Admin">Quản trị viên</option>
                     </select>
                   </div>
 
@@ -369,9 +420,9 @@ export default function AdminUsersTab({ onNotify }: Props) {
                       value={editStatus}
                       onChange={(e) => setEditStatus(e.target.value)}
                     >
-                      <option value="Active">Hoạt động (Active)</option>
-                      <option value="Suspended">Khóa tài khoản (Suspended)</option>
-                      <option value="Inactive">Ngừng kích hoạt (Inactive)</option>
+                      <option value="Hoạt động">Hoạt động</option>
+                      <option value="Đình chỉ">Khóa tài khoản</option>
+                      <option value="Không hoạt động">Ngừng kích hoạt</option>
                     </select>
                   </div>
                 </div>
@@ -387,10 +438,17 @@ export default function AdminUsersTab({ onNotify }: Props) {
                 </button>
                 <button
                   type="submit"
-                  className="btn-confirm-save"
+                  className="btn-confirm-save flex items-center gap-1.5"
                   disabled={submitting}
                 >
-                  {submitting ? "Đang lưu..." : "✓ Lưu thay đổi"}
+                  {submitting ? (
+                    "Đang lưu..."
+                  ) : (
+                    <>
+                      <CheckIcon size={15} />
+                      <span>Lưu thay đổi</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

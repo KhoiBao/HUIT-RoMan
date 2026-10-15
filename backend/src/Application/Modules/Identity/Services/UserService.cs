@@ -114,6 +114,10 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<bool>> SetStatusAsync(int id, string status)
         {
+            if (status == "Active") status = "Hoạt động";
+            else if (status == "Inactive") status = "Không hoạt động";
+            else if (status == "Suspended") status = "Đình chỉ";
+
             var allowedStatuses = new[] { "Hoạt động", "Không hoạt động", "Đình chỉ" };
             if (!allowedStatuses.Contains(status))
                 return ApiResponse<bool>.ErrorResponse(

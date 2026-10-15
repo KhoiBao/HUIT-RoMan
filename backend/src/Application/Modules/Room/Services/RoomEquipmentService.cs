@@ -66,7 +66,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                     RoomId = roomId,
                     EquipmentId = request.EquipmentId,
                     Quantity = request.Quantity,
-                    Status = request.Status ?? "Good"
+                    Status = string.IsNullOrWhiteSpace(request.Status) || request.Status == "Good" || request.Status == "Active" ? "Hoạt động tốt" : request.Status
                 };
                 await _roomEquipmentRepo.AddAsync(newRe);
             }

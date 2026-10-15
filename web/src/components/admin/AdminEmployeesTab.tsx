@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { api } from "../../lib/api";
-import { PlusIcon, SearchIcon, AlertTriangleIcon } from "../Icon";
+import {
+  PlusIcon,
+  SearchIcon,
+  AlertTriangleIcon,
+  BriefcaseIcon,
+  RefreshCwIcon,
+  XIcon,
+  CheckIcon,
+} from "../Icon";
 
 export interface EmployeeItem {
   id: number;
@@ -49,7 +57,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
   // Modal edit
   const [editingEmp, setEditingEmp] = useState<EmployeeItem | null>(null);
   const [editPosition, setEditPosition] = useState<string>("");
-  const [editStatus, setEditStatus] = useState<string>("Active");
+  const [editStatus, setEditStatus] = useState<string>("Hoạt động");
   const [editDeptId, setEditDeptId] = useState<number | "">("");
 
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -122,7 +130,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
   const openEdit = (emp: EmployeeItem) => {
     setEditingEmp(emp);
     setEditPosition(emp.position || "Thủ thư");
-    setEditStatus(emp.status || "Active");
+    setEditStatus(emp.status === "Active" ? "Hoạt động" : emp.status || "Hoạt động");
     setEditDeptId(emp.departmentId || "");
   };
 
@@ -178,7 +186,9 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
     <div className="admin-subtab-container">
       <div className="admin-subtab-header">
         <div>
-          <h2 className="admin-subtab-title">👔 Quản lý danh mục nhân viên & Thủ thư</h2>
+          <h2 className="admin-subtab-title">
+            <BriefcaseIcon size={24} className="icon-blue-glow" /> Quản lý danh mục nhân viên &amp; Thủ thư
+          </h2>
           <p className="admin-subtab-subtitle">
             Cấp quyền nhân sự quản lý, phân bổ vị trí trực thư viện và phòng máy.
           </p>
@@ -191,7 +201,8 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
             onClick={fetchEmployees}
             disabled={loading}
           >
-            {loading ? "Đang tải..." : "🔄 Làm mới"}
+            <RefreshCwIcon size={14} />
+            <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
           </button>
           <button
             type="button"
@@ -252,15 +263,23 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                   <td className="text-xs text-muted">{e.email}</td>
                   <td>{e.departmentName || "Thư viện HUIT"}</td>
                   <td>
-                    <span
-                      className={`admin-status-pill ${
-                        e.status === "Active" || e.status === "Hoạt động"
-                          ? "pill-approved"
-                          : "pill-rejected"
-                      }`}
-                    >
-                      {e.status || "Active"}
-                    </span>
+                    {(() => {
+                      const isWorking =
+                        e.status === "Active" ||
+                        e.status === "Hoạt động" ||
+                        e.status === "Đang làm việc" ||
+                        !e.status;
+                      return (
+                        <span
+                          className={`admin-status-pill flex items-center gap-1 ${
+                            isWorking ? "pill-approved" : "pill-rejected"
+                          }`}
+                        >
+                          <CheckIcon size={12} />
+                          <span>{isWorking ? "Đang làm việc" : "Tạm nghỉ"}</span>
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td>
                     <div className="table-action-btns">
@@ -276,7 +295,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                         className="btn-action-icon btn-action-delete"
                         onClick={() => handleDelete(e)}
                       >
-                        ✕
+                        <XIcon size={14} />
                       </button>
                     </div>
                   </td>
@@ -298,7 +317,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                 className="modal-close-btn"
                 onClick={() => setShowCreateModal(false)}
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
 
@@ -346,10 +365,17 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                 </button>
                 <button
                   type="submit"
-                  className="btn-confirm-save"
+                  className="btn-confirm-save flex items-center gap-1.5"
                   disabled={submitting}
                 >
-                  {submitting ? "Đang xử lý..." : "✓ Xác nhận cấp quyền"}
+                  {submitting ? (
+                    "Đang xử lý..."
+                  ) : (
+                    <>
+                      <CheckIcon size={15} />
+                      <span>Xác nhận cấp quyền</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -370,7 +396,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                 className="modal-close-btn"
                 onClick={() => setEditingEmp(null)}
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
 
@@ -410,8 +436,8 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                     value={editStatus}
                     onChange={(e) => setEditStatus(e.target.value)}
                   >
-                    <option value="Active">Đang làm việc (Active)</option>
-                    <option value="Inactive">Tạm nghỉ (Inactive)</option>
+                    <option value="Hoạt động">Đang làm việc</option>
+                    <option value="Không hoạt động">Tạm nghỉ</option>
                   </select>
                 </div>
               </div>
@@ -426,10 +452,17 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                 </button>
                 <button
                   type="submit"
-                  className="btn-confirm-save"
+                  className="btn-confirm-save flex items-center gap-1.5"
                   disabled={submitting}
                 >
-                  {submitting ? "Đang lưu..." : "✓ Lưu thay đổi"}
+                  {submitting ? (
+                    "Đang lưu..."
+                  ) : (
+                    <>
+                      <CheckIcon size={15} />
+                      <span>Lưu thay đổi</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

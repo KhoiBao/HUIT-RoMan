@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { isStaffRole } from "../lib/auth";
-import { PlusIcon } from "./Icon";
+import { PlusIcon, LogOutIcon } from "./Icon";
 import UserProfileModal from "./UserProfileModal";
 
 
@@ -138,7 +138,7 @@ export default function SiteHeader() {
                   logout();
                 }}
               >
-                ✕
+                <LogOutIcon size={14} />
               </button>
             </div>
           </div>

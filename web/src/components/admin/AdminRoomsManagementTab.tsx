@@ -7,6 +7,10 @@ import {
   TvIcon,
   AlertTriangleIcon,
   WrenchIcon,
+  CheckIcon,
+  ClockIcon,
+  RefreshCwIcon,
+  XIcon,
 } from "../Icon";
 import AdminEquipmentsModal from "./AdminEquipmentsModal";
 
@@ -250,11 +254,23 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Available":
-        return <span className="admin-status-pill pill-approved">● Sẵn sàng (Trống)</span>;
+        return (
+          <span className="admin-status-pill pill-approved">
+            <CheckIcon size={12} className="mr-1 inline-block" /> Sẵn sàng (Trống)
+          </span>
+        );
       case "InUse":
-        return <span className="admin-status-pill pill-inuse">● Đang sử dụng</span>;
+        return (
+          <span className="admin-status-pill pill-inuse">
+            <ClockIcon size={12} className="mr-1 inline-block" /> Đang sử dụng
+          </span>
+        );
       case "Maintenance":
-        return <span className="admin-status-pill pill-maintenance">● Đang bảo trì</span>;
+        return (
+          <span className="admin-status-pill pill-maintenance">
+            <WrenchIcon size={12} className="mr-1 inline-block" /> Đang bảo trì
+          </span>
+        );
       default:
         return <span className="admin-status-pill">{status}</span>;
     }
@@ -266,10 +282,10 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
       <div className="admin-subtab-header">
         <div>
           <h2 className="admin-subtab-title">
-            <DoorIcon size={24} className="icon-blue-glow" /> Quản lý danh mục phòng & Thiết bị
+            <DoorIcon size={24} className="icon-blue-glow" /> Quản lý danh mục phòng học
           </h2>
           <p className="admin-subtab-subtitle">
-            Cấu hình danh mục phòng học, hội trường, phòng nhóm và phân bổ trang thiết bị.
+            Cấu hình danh mục phòng học, hội trường, phòng nhóm và quản lý trạng thái vận hành.
           </p>
         </div>
 
@@ -280,7 +296,8 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
             onClick={fetchData}
             disabled={loading}
           >
-            {loading ? "Đang tải..." : "🔄 Làm mới"}
+            <RefreshCwIcon size={14} />
+            <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
           </button>
           <button
             type="button"
@@ -308,7 +325,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
               className="search-clear-btn"
               onClick={() => setSearchTerm("")}
             >
-              ✕
+              <XIcon size={14} />
             </button>
           )}
         </div>
@@ -438,7 +455,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                         title="Xóa mềm phòng"
                         onClick={() => handleDeleteRoom(r)}
                       >
-                        ✕
+                        <XIcon size={14} />
                       </button>
                     </div>
                   </td>
@@ -473,7 +490,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                 className="modal-close-btn"
                 onClick={() => setModalMode(null)}
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
 
@@ -631,14 +648,22 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                 </button>
                 <button
                   type="submit"
-                  className="btn-confirm-save"
+                  className="btn-confirm-save flex items-center gap-1.5"
                   disabled={submitting}
                 >
-                  {submitting
-                    ? "Đang lưu..."
-                    : modalMode === "create"
-                    ? "✓ Thêm phòng"
-                    : "✓ Lưu thay đổi"}
+                  {submitting ? (
+                    "Đang lưu..."
+                  ) : modalMode === "create" ? (
+                    <>
+                      <CheckIcon size={15} />
+                      <span>Thêm phòng</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckIcon size={15} />
+                      <span>Lưu thay đổi</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

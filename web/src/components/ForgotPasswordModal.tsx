@@ -7,6 +7,7 @@ import {
   AlertTriangleIcon,
   EyeIcon,
   EyeOffIcon,
+  XIcon,
 } from "./Icon";
 
 interface ForgotPasswordModalProps {
@@ -140,7 +141,7 @@ export default function ForgotPasswordModal({
             className="modal-close-btn"
             onClick={handleClose}
           >
-            ✕
+            <XIcon size={16} />
           </button>
         </div>
 

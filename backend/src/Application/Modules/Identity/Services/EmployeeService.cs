@@ -97,7 +97,12 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
                 e.Position = request.Position;
 
             if (!string.IsNullOrWhiteSpace(request.Status))
-                e.Status = request.Status;
+            {
+                var st = request.Status;
+                if (st == "Active") st = "Hoạt động";
+                else if (st == "Inactive") st = "Không hoạt động";
+                e.Status = st;
+            }
 
             if (e.User != null && request.DepartmentId.HasValue)
             {

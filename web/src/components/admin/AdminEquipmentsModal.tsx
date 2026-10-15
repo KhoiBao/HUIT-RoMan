@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../../lib/api";
-import { TvIcon, PlusIcon, AlertTriangleIcon } from "../Icon";
+import { TvIcon, PlusIcon, AlertTriangleIcon, XIcon, CheckIcon } from "../Icon";
 
 export interface RoomEquipmentItem {
   roomId: number;
@@ -24,6 +24,24 @@ export interface EquipmentCategory {
   id: number;
   name: string;
   description: string;
+}
+
+function formatEquipStatus(status?: string): string {
+  if (!status) return "Hoạt động tốt";
+  const s = status.trim().toLowerCase();
+  if (s === "active" || s === "hoạt động" || s === "hoạt động tốt" || s === "available" || s === "sẵn sàng") {
+    return "Hoạt động tốt";
+  }
+  if (s.includes("maintenance") || s.includes("bảo trì")) {
+    return "Đang bảo trì";
+  }
+  if (s.includes("broken") || s.includes("hỏng")) {
+    return "Hỏng hóc";
+  }
+  if (s.includes("disposed") || s.includes("thanh lý")) {
+    return "Đã thanh lý";
+  }
+  return status;
 }
 
 interface Props {
@@ -194,7 +212,7 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
             </p>
           </div>
           <button type="button" className="modal-close-btn" onClick={onClose}>
-            ✕
+            <XIcon size={16} />
           </button>
         </div>
 
@@ -297,10 +315,17 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                     </button>
                     <button
                       type="submit"
-                      className="btn-confirm-save btn-sm"
+                      className="btn-confirm-save btn-sm flex items-center gap-1.5"
                       disabled={submitting}
                     >
-                      {submitting ? "Đang lưu..." : "✓ Xác nhận gán thiết bị"}
+                      {submitting ? (
+                        "Đang lưu..."
+                      ) : (
+                        <>
+                          <CheckIcon size={14} />
+                          <span>Xác nhận gán thiết bị</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -344,25 +369,27 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                           </td>
                           <td>
                             <span
-                              className={`admin-status-pill ${
+                              className={`admin-status-pill flex items-center gap-1 ${
                                 eq.status.includes("Hỏng") || eq.status.includes("bảo trì")
                                   ? "pill-rejected"
                                   : "pill-approved"
                               }`}
                             >
-                              {eq.status || "Hoạt động tốt"}
+                              <CheckIcon size={12} />
+                              <span>{formatEquipStatus(eq.status)}</span>
                             </span>
                           </td>
                           <td>
                             <button
                               type="button"
-                              className="btn-danger-outline btn-xs"
+                              className="btn-danger-outline btn-xs flex items-center gap-1"
                               onClick={() =>
                                 handleRemoveEquipment(eq.equipmentId, eq.equipmentName)
                               }
                               title="Thu hồi thiết bị khỏi phòng"
                             >
-                              ✕ Thu hồi
+                              <XIcon size={12} />
+                              <span>Thu hồi</span>
                             </button>
                           </td>
                         </tr>
@@ -432,10 +459,17 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
 
                     <button
                       type="submit"
-                      className="btn-confirm-save w-full"
+                      className="btn-confirm-save w-full flex items-center justify-center gap-1.5"
                       disabled={submitting}
                     >
-                      {submitting ? "Đang lưu..." : "✓ Lưu vào kho thiết bị"}
+                      {submitting ? (
+                        "Đang lưu..."
+                      ) : (
+                        <>
+                          <CheckIcon size={15} />
+                          <span>Lưu vào kho thiết bị</span>
+                        </>
+                      )}
                     </button>
                   </form>
                 </div>
@@ -464,8 +498,9 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                             <td className="font-semibold">{w.name}</td>
                             <td className="text-muted text-xs">{w.description || "—"}</td>
                             <td>
-                              <span className="admin-status-pill pill-approved">
-                                {w.status || "Active"}
+                              <span className="admin-status-pill pill-approved flex items-center gap-1">
+                                <CheckIcon size={12} />
+                                <span>{formatEquipStatus(w.status)}</span>
                               </span>
                             </td>
                           </tr>

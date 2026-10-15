@@ -8,6 +8,14 @@ import {
   ClockIcon,
   UsersIcon,
   DoorIcon,
+  CalendarIcon,
+  ClipboardListIcon,
+  RefreshCwIcon,
+  HourglassIcon,
+  CheckIcon,
+  XIcon,
+  ZapIcon,
+  SlashIcon,
 } from "../Icon";
 
 export interface BookingDetail {
@@ -225,19 +233,35 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Chờ duyệt":
-        return <span className="admin-status-pill pill-pending">⏳ Chờ duyệt</span>;
+        return (
+          <span className="admin-status-pill pill-pending">
+            <HourglassIcon size={12} className="mr-1 inline-block" /> Chờ duyệt
+          </span>
+        );
       case "Đã duyệt":
-        return <span className="admin-status-pill pill-approved">✓ Đã duyệt</span>;
+        return (
+          <span className="admin-status-pill pill-approved">
+            <CheckIcon size={12} className="mr-1 inline-block" /> Đã duyệt
+          </span>
+        );
       case "Duyệt một phần":
         return (
           <span className="admin-status-pill pill-partial">
-            ⚡ Duyệt một phần
+            <ZapIcon size={12} className="mr-1 inline-block" /> Duyệt một phần
           </span>
         );
       case "Từ chối":
-        return <span className="admin-status-pill pill-rejected">✕ Từ chối</span>;
+        return (
+          <span className="admin-status-pill pill-rejected">
+            <XIcon size={12} className="mr-1 inline-block" /> Từ chối
+          </span>
+        );
       case "Đã hủy":
-        return <span className="admin-status-pill pill-cancelled">⊘ Đã hủy</span>;
+        return (
+          <span className="admin-status-pill pill-cancelled">
+            <SlashIcon size={12} className="mr-1 inline-block" /> Đã hủy
+          </span>
+        );
       default:
         return <span className="admin-status-pill">{status}</span>;
     }
@@ -278,7 +302,8 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
           disabled={loading}
           title="Tải lại dữ liệu mới nhất từ máy chủ"
         >
-          {loading ? "Đang tải..." : "🔄 Làm mới dữ liệu"}
+          <RefreshCwIcon size={14} />
+          <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
         </button>
       </div>
 
@@ -294,7 +319,9 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
           }`}
           onClick={() => setStatusFilter("Chờ duyệt")}
         >
-          <span className="stat-label color-amber">⏳ Cần duyệt ngay</span>
+          <span className="stat-label color-amber">
+            <HourglassIcon size={12} className="mr-1 inline-block" /> Cần duyệt ngay
+          </span>
           <span className="stat-val color-amber">{stats.pending}</span>
         </div>
         <div
@@ -303,7 +330,9 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
           }`}
           onClick={() => setStatusFilter("Đã duyệt")}
         >
-          <span className="stat-label color-green">✓ Đã chấp thuận</span>
+          <span className="stat-label color-green">
+            <CheckIcon size={12} className="mr-1 inline-block" /> Đã chấp thuận
+          </span>
           <span className="stat-val color-green">{stats.approved}</span>
         </div>
         <div
@@ -312,7 +341,9 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
           }`}
           onClick={() => setStatusFilter("Từ chối")}
         >
-          <span className="stat-label color-red">✕ Đã từ chối</span>
+          <span className="stat-label color-red">
+            <XIcon size={12} className="mr-1 inline-block" /> Đã từ chối
+          </span>
           <span className="stat-val color-red">{stats.rejected}</span>
         </div>
       </div>
@@ -333,7 +364,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
               className="search-clear-btn"
               onClick={() => setSearchTerm("")}
             >
-              ✕
+              <XIcon size={14} />
             </button>
           )}
         </div>
@@ -341,10 +372,10 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
         <div className="admin-status-filters">
           {[
             { id: "ALL", label: "Tất cả" },
-            { id: "Chờ duyệt", label: "⏳ Chờ duyệt" },
-            { id: "Đã duyệt", label: "✓ Đã duyệt" },
-            { id: "Từ chối", label: "✕ Từ chối" },
-            { id: "Đã hủy", label: "⊘ Đã hủy" },
+            { id: "Chờ duyệt", label: "Chờ duyệt" },
+            { id: "Đã duyệt", label: "Đã duyệt" },
+            { id: "Từ chối", label: "Từ chối" },
+            { id: "Đã hủy", label: "Đã hủy" },
           ].map((item) => (
             <button
               key={item.id}
@@ -447,7 +478,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                           disabled={submittingAction}
                           title="Từ chối đơn đăng ký"
                         >
-                          ✕ Từ chối
+                          <XIcon size={14} /> Từ chối
                         </button>
                       </>
                     )}
@@ -459,7 +490,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                         setExpandedId(isExpanded ? null : b.id)
                       }
                     >
-                      {isExpanded ? "Thu gọn ▲" : `Xem chi tiết (${b.details.length} phòng) ▼`}
+                      {isExpanded ? "Thu gọn" : `Xem chi tiết (${b.details.length} phòng)`}
                     </button>
                   </div>
                 </div>
@@ -487,20 +518,24 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                           <div className="subcard-times">
                             {detail.startPeriodName ? (
                               <p className="subcard-time-line">
-                                📅 <strong>Tiết học:</strong> {detail.startPeriodName} đến{" "}
+                                <CalendarIcon size={14} className="mr-1 inline-block text-slate-500" />{" "}
+                                <strong>Tiết học:</strong> {detail.startPeriodName} đến{" "}
                                 {detail.endPeriodName || detail.startPeriodName}
                               </p>
                             ) : null}
                             <p className="subcard-time-line">
-                              ⏰ <strong>Khung giờ:</strong> {formatDateTime(detail.startAt)} ➔{" "}
+                              <ClockIcon size={14} className="mr-1 inline-block text-slate-500" />{" "}
+                              <strong>Khung giờ:</strong> {formatDateTime(detail.startAt)} đến{" "}
                               {formatDateTime(detail.endAt)}
                             </p>
                             <p className="subcard-time-line">
-                              👥 <strong>Số lượng:</strong> {detail.guestCount} người
+                              <UsersIcon size={14} className="mr-1 inline-block text-slate-500" />{" "}
+                              <strong>Số lượng:</strong> {detail.guestCount} người
                             </p>
                             {detail.purpose && (
                               <p className="subcard-time-line">
-                                📝 <strong>Mục đích phòng:</strong> {detail.purpose}
+                                <ClipboardListIcon size={14} className="mr-1 inline-block text-slate-500" />{" "}
+                                <strong>Mục đích phòng:</strong> {detail.purpose}
                               </p>
                             )}
                           </div>
@@ -516,7 +551,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                                 }
                                 disabled={submittingAction}
                               >
-                                ✓ Duyệt phòng này
+                                <CheckIcon size={12} className="mr-1 inline-block" /> Duyệt phòng này
                               </button>
                               <button
                                 type="button"
@@ -530,7 +565,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                                 }
                                 disabled={submittingAction}
                               >
-                                ✕ Từ chối
+                                <XIcon size={12} className="mr-1 inline-block" /> Từ chối
                               </button>
                             </div>
                           )}
@@ -551,14 +586,14 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
           <div className="admin-modal-content">
             <div className="modal-header">
               <h3 className="modal-title color-red">
-                ✕ Từ chối {rejectTarget.title}
+                <XIcon size={18} className="mr-1" /> Từ chối {rejectTarget.title}
               </h3>
               <button
                 type="button"
                 className="modal-close-btn"
                 onClick={() => setRejectTarget(null)}
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
 

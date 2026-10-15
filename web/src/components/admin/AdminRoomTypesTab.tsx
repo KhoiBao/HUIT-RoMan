@@ -1,6 +1,16 @@
 import { useState, useEffect } from "react";
 import { api } from "../../lib/api";
-import { PlusIcon, SearchIcon, AlertTriangleIcon } from "../Icon";
+import {
+  PlusIcon,
+  SearchIcon,
+  AlertTriangleIcon,
+  TagIcon,
+  RefreshCwIcon,
+  CalendarIcon,
+  ClockIcon,
+  XIcon,
+  CheckIcon,
+} from "../Icon";
 
 export interface RoomTypeItem {
   id: number;
@@ -145,7 +155,9 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
     <div className="admin-subtab-container">
       <div className="admin-subtab-header">
         <div>
-          <h2 className="admin-subtab-title">🏷️ Quản lý danh mục loại phòng</h2>
+          <h2 className="admin-subtab-title">
+            <TagIcon size={24} className="icon-blue-glow" /> Quản lý danh mục loại phòng
+          </h2>
           <p className="admin-subtab-subtitle">
             Cấu hình phân loại phòng (Phòng học lý thuyết, thực hành, hội trường, học nhóm) và quy cách mượn.
           </p>
@@ -158,7 +170,8 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
             onClick={fetchTypes}
             disabled={loading}
           >
-            {loading ? "Đang tải..." : "🔄 Làm mới"}
+            <RefreshCwIcon size={14} />
+            <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
           </button>
           <button
             type="button"
@@ -218,9 +231,13 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
                   </td>
                   <td>
                     {t.isBookingByPeriod ? (
-                      <span className="badge-period">📅 Theo Tiết học cố định</span>
+                      <span className="badge-period">
+                        <CalendarIcon size={12} className="mr-1 inline-block" /> Theo Tiết học cố định
+                      </span>
                     ) : (
-                      <span className="badge-hour">⏰ Theo Khung giờ tự do</span>
+                      <span className="badge-hour">
+                        <ClockIcon size={12} className="mr-1 inline-block" /> Theo Khung giờ tự do
+                      </span>
                     )}
                   </td>
                   <td>
@@ -237,7 +254,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
                         className="btn-action-icon btn-action-delete"
                         onClick={() => handleDelete(t)}
                       >
-                        ✕
+                        <XIcon size={14} />
                       </button>
                     </div>
                   </td>
@@ -263,7 +280,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
                 className="modal-close-btn"
                 onClick={() => setModalMode(null)}
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
 
@@ -312,7 +329,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
                           setFormData({ ...formData, isBookingByPeriod: false })
                         }
                       />
-                      <span>⏰ Theo khung giờ tự do (Khuyên dùng cho phòng Thư viện)</span>
+                      <span>Theo khung giờ tự do (Khuyên dùng cho phòng Thư viện)</span>
                     </label>
                     <label className="radio-label">
                       <input
@@ -323,7 +340,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
                           setFormData({ ...formData, isBookingByPeriod: true })
                         }
                       />
-                      <span>📅 Theo tiết học cố định (Tiết 1-12)</span>
+                      <span>Theo tiết học cố định (Tiết 1-12)</span>
                     </label>
                   </div>
                 </div>
@@ -352,10 +369,17 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
                 </button>
                 <button
                   type="submit"
-                  className="btn-confirm-save"
+                  className="btn-confirm-save flex items-center gap-1.5"
                   disabled={submitting}
                 >
-                  {submitting ? "Đang lưu..." : "✓ Lưu loại phòng"}
+                  {submitting ? (
+                    "Đang lưu..."
+                  ) : (
+                    <>
+                      <CheckIcon size={15} />
+                      <span>Lưu loại phòng</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

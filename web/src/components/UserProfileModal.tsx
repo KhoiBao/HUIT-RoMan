@@ -7,6 +7,7 @@ import {
   ShieldCheckIcon,
   BuildingIcon,
   AlertTriangleIcon,
+  XIcon,
 } from "./Icon";
 
 
@@ -157,7 +158,7 @@ export default function UserProfileModal({
               className="modal-close-btn text-white"
               onClick={onClose}
             >
-              ✕
+              <XIcon size={16} />
             </button>
           </div>
 
@@ -175,7 +176,12 @@ export default function UserProfileModal({
                   <ShieldCheckIcon size={13} /> {displayRole}
                 </span>
                 <span className="profile-status-pill">
-                  <span className="live-dot" /> {profile?.status || "Hoạt động"}
+                  <span className="live-dot" />{" "}
+                  {profile?.status === "Active"
+                    ? "Hoạt động"
+                    : profile?.status === "Suspended" || profile?.status === "Inactive"
+                    ? "Đã khóa"
+                    : profile?.status || "Hoạt động"}
                 </span>
               </div>
             </div>

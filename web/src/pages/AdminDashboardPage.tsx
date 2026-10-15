@@ -3,6 +3,7 @@ import SiteHeader from "../components/SiteHeader";
 import { api } from "../lib/api";
 import AdminBookingApprovalTab from "../components/admin/AdminBookingApprovalTab";
 import AdminRoomsManagementTab from "../components/admin/AdminRoomsManagementTab";
+import AdminEquipmentsManagementTab from "../components/admin/AdminEquipmentsManagementTab";
 import AdminRoomTypesTab from "../components/admin/AdminRoomTypesTab";
 import AdminEmployeesTab from "../components/admin/AdminEmployeesTab";
 import AdminUsersTab from "../components/admin/AdminUsersTab";
@@ -24,11 +25,16 @@ import {
   PlusIcon,
   SearchIcon,
   TvIcon,
+  TagIcon,
+  BriefcaseIcon,
+  GraduationCapIcon,
+  XIcon,
 } from "../components/Icon";
 
 export type AdminTabType =
   | "approvals"
   | "rooms"
+  | "equipments"
   | "roomTypes"
   | "employees"
   | "users"
@@ -581,7 +587,7 @@ export default function AdminDashboardPage() {
             className="toast-close-btn"
             onClick={() => setToastMsg(null)}
           >
-            ✕
+            <XIcon size={14} />
           </button>
         </div>
       )}
@@ -626,7 +632,7 @@ export default function AdminDashboardPage() {
                 <FilterIcon size={16} />
                 <span>Bộ lọc nâng cao</span>
                 {(filterStatus !== "ALL" || filterSearch) && (
-                  <span className="filter-count-badge">●</span>
+                  <span className="filter-count-badge" />
                 )}
               </button>
 
@@ -667,7 +673,18 @@ export default function AdminDashboardPage() {
             onClick={() => setActiveTab("rooms")}
           >
             <DoorIcon size={18} />
-            <span>Quản lý phòng &amp; Thiết bị</span>
+            <span>Quản lý phòng</span>
+          </button>
+
+          <button
+            type="button"
+            className={`admin-nav-tab-item ${
+              activeTab === "equipments" ? "active-tab" : ""
+            }`}
+            onClick={() => setActiveTab("equipments")}
+          >
+            <TvIcon size={18} />
+            <span>Quản lý thiết bị</span>
           </button>
 
           <button
@@ -677,7 +694,8 @@ export default function AdminDashboardPage() {
             }`}
             onClick={() => setActiveTab("roomTypes")}
           >
-            <span>🏷️ Loại phòng</span>
+            <TagIcon size={18} />
+            <span>Loại phòng</span>
           </button>
 
           <button
@@ -687,7 +705,7 @@ export default function AdminDashboardPage() {
             }`}
             onClick={() => setActiveTab("employees")}
           >
-            <UsersIcon size={18} />
+            <BriefcaseIcon size={18} />
             <span>Nhân sự / Thủ thư</span>
           </button>
 
@@ -698,7 +716,8 @@ export default function AdminDashboardPage() {
             }`}
             onClick={() => setActiveTab("users")}
           >
-            <span>🎓 Sinh viên &amp; Giảng viên</span>
+            <GraduationCapIcon size={18} />
+            <span>Sinh viên &amp; Giảng viên</span>
           </button>
 
           <button
@@ -720,6 +739,10 @@ export default function AdminDashboardPage() {
 
         {activeTab === "rooms" && (
           <AdminRoomsManagementTab onNotify={showToast} />
+        )}
+
+        {activeTab === "equipments" && (
+          <AdminEquipmentsManagementTab onNotify={showToast} />
         )}
 
         {activeTab === "roomTypes" && (
@@ -1123,7 +1146,7 @@ export default function AdminDashboardPage() {
                   title="Đóng / Bỏ chọn"
                   onClick={() => setSelectedRoomCode("")}
                 >
-                  ✕
+                  <XIcon size={16} />
                 </button>
               </div>
 
@@ -1384,7 +1407,7 @@ export default function AdminDashboardPage() {
                 className="modal-close-btn"
                 onClick={() => setShowManualModal(false)}
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
 
@@ -1532,7 +1555,7 @@ export default function AdminDashboardPage() {
                 className="modal-close-btn"
                 onClick={() => setShowFilterModal(false)}
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
 
@@ -1601,7 +1624,7 @@ export default function AdminDashboardPage() {
                 className="modal-close-btn"
                 onClick={() => setShowSurveyModal(false)}
               >
-                ✕
+                <XIcon size={16} />
               </button>
             </div>
 
