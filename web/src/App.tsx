@@ -7,17 +7,31 @@ import {
   useLocation,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { isStaffRole } from "./lib/auth";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import SchedulePage from "./pages/SchedulePage";
 import BookingPage from "./pages/BookingPage";
-import PlaceholderHome from "./pages/PlaceholderHome";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
+import ForbiddenPage from "./pages/ForbiddenPage";
 
 function RequireAuth({ children }: { children: ReactElement }) {
   const { token } = useAuth();
   const location = useLocation();
   if (!token) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  return children;
+}
+
+function RequireStaff({ children }: { children: ReactElement }) {
+  const { token, user } = useAuth();
+  const location = useLocation();
+  if (!token) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  if (!isStaffRole(user?.role)) {
+    return <ForbiddenPage />;
   }
   return children;
 }
@@ -55,17 +69,17 @@ export default function App() {
           <Route
             path="/staff"
             element={
-              <RequireAuth>
-                <PlaceholderHome title="Trang nhân sự" />
-              </RequireAuth>
+              <RequireStaff>
+                <AdminDashboardPage />
+              </RequireStaff>
             }
           />
           <Route
             path="/admin"
             element={
-              <RequireAuth>
-                <PlaceholderHome title="Trang quản trị" />
-              </RequireAuth>
+              <RequireStaff>
+                <AdminDashboardPage />
+              </RequireStaff>
             }
           />
           <Route path="/" element={<Navigate to="/login" replace />} />
@@ -75,3 +89,4 @@ export default function App() {
     </AuthProvider>
   );
 }
+

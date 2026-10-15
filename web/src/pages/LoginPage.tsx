@@ -15,6 +15,7 @@ import {
   MailIcon,
   PhoneIcon,
 } from "../components/Icon";
+import ForgotPasswordModal from "../components/ForgotPasswordModal";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -24,6 +25,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -201,11 +204,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 className="link-btn"
-                onClick={() =>
-                  setNotice(
-                    "Chức năng quên mật khẩu chưa hỗ trợ trong đồ án. Liên hệ quản trị viên để đặt lại mật khẩu.",
-                  )
-                }
+                onClick={() => setShowForgotModal(true)}
               >
                 Quên mật khẩu?
               </button>
@@ -218,6 +217,22 @@ export default function LoginPage() {
           </form>
         </section>
       </div>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={showForgotModal}
+        onClose={() => setShowForgotModal(false)}
+        onSuccess={(id) => {
+          setIdentifier(id);
+          setPassword("");
+          setFieldError(null);
+          setServerError(null);
+          setNotice(
+            "Đặt lại mật khẩu thành công! Vui lòng nhập mật khẩu mới vừa đổi để đăng nhập."
+          );
+        }}
+      />
     </div>
   );
 }
+

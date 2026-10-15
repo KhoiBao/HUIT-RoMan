@@ -71,6 +71,21 @@ export function saveSession(
   }
 }
 
+export function isStaffRole(role?: string | null): boolean {
+  if (!role) return false;
+  const normalized = role.trim().toLowerCase();
+  return (
+    normalized === "admin" ||
+    normalized === "employee" ||
+    normalized === "quan-tri" ||
+    normalized === "nhan-su" ||
+    normalized === "thủ thư" ||
+    normalized === "quản lý phòng" ||
+    normalized === "quản trị viên" ||
+    normalized === "nhân viên"
+  );
+}
+
 export function mapRoleToGroup(role?: string | null): RoleGroup {
   if (role === "Admin") return "quan-tri";
   if (role === "Employee") return "nhan-su";
@@ -83,3 +98,4 @@ export function getHomePathForRole(role?: string | null): string {
   if (group === "nhan-su") return "/staff";
   return "/home";
 }
+

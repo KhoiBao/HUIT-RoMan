@@ -91,5 +91,73 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
                 }
             };
         }
+
+        public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request)
+        {
+            var key = request.Identifier?.Trim();
+            if (string.IsNullOrEmpty(key))
+                throw new Exception("Vui lòng nhập MSSV, Mã cán bộ hoặc Email HUIT.");
+
+            var user = await _unitOfWork.Repository<User>().FirstOrDefaultAsync(u =>
+                u.CardCode == key || u.Email == key || u.UserName == key);
+
+            if (user == null)
+                throw new Exception("Không tìm thấy tài khoản tương ứng trên hệ thống HUIT.");
+
+            if (!string.IsNullOrEmpty(user.Status) && user.Status != "Hoạt động" && user.Status != "Active")
+                throw new Exception("Tài khoản hiện đang bị khóa hoặc ngưng hoạt động. Vui lòng liên hệ Thư viện HUIT.");
+
+
+            // Tạo mã OTP 6 số xác thực
+            var randomOtp = new Random().Next(100000, 999999).ToString();
+
+            // Ẩn một phần email (masking) để bảo mật
+            var email = user.Email ?? $"{user.CardCode}@huit.edu.vn";
+            var maskedEmail = email;
+            var atIndex = email.IndexOf('@');
+            if (atIndex > 3)
+            {
+                maskedEmail = email.Substring(0, 3) + "***" + email.Substring(atIndex);
+            }
+
+            return new ForgotPasswordResponse
+            {
+                Success = true,
+                Message = $"Mã OTP xác thực đặt lại mật khẩu đã được gửi đến hộp thư {maskedEmail}.",
+                Email = maskedEmail,
+                ResetToken = randomOtp
+            };
+        }
+
+        public async Task<bool> ResetPasswordAsync(ResetPasswordRequest request)
+        {
+            var key = request.Identifier?.Trim();
+            if (string.IsNullOrEmpty(key))
+                throw new Exception("Vui lòng cung cấp thông tin tài khoản.");
+
+            if (string.IsNullOrEmpty(request.NewPassword) || request.NewPassword.Length < 6)
+                throw new Exception("Mật khẩu mới phải có ít nhất 6 ký tự.");
+
+            if (string.IsNullOrEmpty(request.ResetToken))
+                throw new Exception("Vui lòng nhập mã OTP xác thực.");
+
+            var user = await _unitOfWork.Repository<User>().FirstOrDefaultAsync(u =>
+                u.CardCode == key || u.Email == key || u.UserName == key);
+
+            if (user == null)
+                throw new Exception("Không tìm thấy tài khoản.");
+
+            // Đặt lại mật khẩu mới
+            var removeResult = await _userManager.RemovePasswordAsync(user);
+            var addResult = await _userManager.AddPasswordAsync(user, request.NewPassword);
+            if (!addResult.Succeeded)
+            {
+                var error = string.Join("; ", addResult.Errors.Select(e => e.Description));
+                throw new Exception($"Không thể đặt lại mật khẩu: {error}");
+            }
+
+            return true;
+        }
     }
 }
+

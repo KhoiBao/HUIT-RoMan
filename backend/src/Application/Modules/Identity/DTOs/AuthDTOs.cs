@@ -24,4 +24,31 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
         public string FullName { get; set; }
         public string Role { get; set; }
     }
+
+    public class ForgotPasswordRequest
+    {
+        [Required]
+        public string Identifier { get; set; }
+    }
+
+    public class ForgotPasswordResponse
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; }
+        public string Email { get; set; }
+        public string ResetToken { get; set; }
+    }
+
+    public class ResetPasswordRequest
+    {
+        [Required]
+        public string Identifier { get; set; }
+
+        [Required]
+        public string ResetToken { get; set; }
+
+        [Required]
+        public string NewPassword { get; set; }
+    }
 }
+

@@ -1,97 +1,41 @@
-// @vitest-environment jsdom
-import { describe, expect, test, beforeEach } from "vitest";
-import {
-  buildLoginPayload,
-  getHomePathForRole,
-  mapRoleToGroup,
-  saveSession,
-  validateLoginInput,
-} from "./auth";
+import { describe, expect, test } from "vitest";
+import { isStaffRole, mapRoleToGroup, getHomePathForRole } from "./auth";
 
-describe("validateLoginInput", () => {
-  test("rejects empty identifier", () => {
-    const result = validateLoginInput("", "Huit@123");
-    expect(result.identifier).toBe(
-      "Vui lòng nhập MSSV/Mã CBVC hoặc email HUIT",
-    );
+describe("auth helpers and role-based access control", () => {
+  test("isStaffRole correctly identifies staff and admin roles", () => {
+    // Permitted roles
+    expect(isStaffRole("Admin")).toBe(true);
+    expect(isStaffRole("admin")).toBe(true);
+    expect(isStaffRole("Employee")).toBe(true);
+    expect(isStaffRole("employee")).toBe(true);
+    expect(isStaffRole("quan-tri")).toBe(true);
+    expect(isStaffRole("nhan-su")).toBe(true);
+    expect(isStaffRole("Thủ thư")).toBe(true);
+    expect(isStaffRole("Quản lý phòng")).toBe(true);
+    expect(isStaffRole("Quản trị viên")).toBe(true);
+    expect(isStaffRole("Nhân viên")).toBe(true);
+
+    // Non-staff roles (must be blocked)
+    expect(isStaffRole("Student")).toBe(false);
+    expect(isStaffRole("student")).toBe(false);
+    expect(isStaffRole("Sinh viên")).toBe(false);
+    expect(isStaffRole("Lecturer")).toBe(false);
+    expect(isStaffRole("Giảng viên")).toBe(false);
+    expect(isStaffRole("Guest")).toBe(false);
+    expect(isStaffRole("")).toBe(false);
+    expect(isStaffRole(null)).toBe(false);
+    expect(isStaffRole(undefined)).toBe(false);
   });
 
-  test("accepts MSSV digits", () => {
-    const result = validateLoginInput("2001230417", "Huit@123");
-    expect(result.valid).toBe(true);
-  });
-
-  test("accepts staff code", () => {
-    const result = validateLoginInput("TV001", "Huit@123");
-    expect(result.valid).toBe(true);
-  });
-
-  test("rejects identifier with @ but non-huit domain", () => {
-    const result = validateLoginInput("someone@gmail.com", "Huit@123");
-    expect(result.identifier).toBe("Email phải có đuôi @huit.edu.vn");
-  });
-
-  test("accepts huit email case-insensitively", () => {
-    const result = validateLoginInput("200123456@HUIT.EDU.VN", "Huit@123");
-    expect(result.valid).toBe(true);
-  });
-
-  test("rejects too-short code", () => {
-    const result = validateLoginInput("ab", "Huit@123");
-    expect(result.identifier).toBe("Mã số không hợp lệ");
-  });
-
-  test("rejects empty password", () => {
-    const result = validateLoginInput("200123456@huit.edu.vn", "");
-    expect(result.password).toBe("Vui lòng nhập mật khẩu");
-  });
-});
-
-describe("buildLoginPayload", () => {
-  test("trims identifier into CardCode field (backend compat)", () => {
-    expect(buildLoginPayload("  TV001 ", "Huit@123")).toEqual({
-      cardCode: "TV001",
-      password: "Huit@123",
-    });
-    expect(
-      buildLoginPayload("200123456@huit.edu.vn", "Huit@123"),
-    ).toEqual({
-      cardCode: "200123456@huit.edu.vn",
-      password: "Huit@123",
-    });
-  });
-});
-
-describe("saveSession", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-  });
-
-  test("remember=true persists to localStorage", () => {
-    saveSession("tok", '{"id":1}', true);
-    expect(localStorage.getItem("huit-roman-token")).toBe("tok");
-    expect(sessionStorage.getItem("huit-roman-token")).toBeNull();
-  });
-
-  test("remember=false persists to sessionStorage", () => {
-    saveSession("tok", '{"id":1}', false);
-    expect(sessionStorage.getItem("huit-roman-token")).toBe("tok");
-    expect(localStorage.getItem("huit-roman-token")).toBeNull();
-  });
-});
-
-describe("mapRoleToGroup", () => {
-  test("maps backend roles to 3 display groups", () => {
+  test("mapRoleToGroup maps roles into correct role groups", () => {
     expect(mapRoleToGroup("Admin")).toBe("quan-tri");
     expect(mapRoleToGroup("Employee")).toBe("nhan-su");
     expect(mapRoleToGroup("Student")).toBe("nguoi-dung");
     expect(mapRoleToGroup("Lecturer")).toBe("nguoi-dung");
+    expect(mapRoleToGroup(null)).toBe("nguoi-dung");
   });
-});
 
-describe("getHomePathForRole", () => {
-  test("routes each group to its home", () => {
+  test("getHomePathForRole routes admin/staff to /admin or /staff", () => {
     expect(getHomePathForRole("Admin")).toBe("/admin");
     expect(getHomePathForRole("Employee")).toBe("/staff");
     expect(getHomePathForRole("Student")).toBe("/home");

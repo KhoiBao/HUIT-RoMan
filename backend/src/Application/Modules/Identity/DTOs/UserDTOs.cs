@@ -25,12 +25,13 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
 
     public class UpdateUserDto
     {
-        public string FullName { get; set; }
-        public string Email { get; set; }
-        public string PhoneNumber { get; set; }
-        public string Status { get; set; }
+        public string? FullName { get; set; }
+        public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? Status { get; set; }
         public int? DepartmentId { get; set; }
     }
+
 
     public class ChangeUserRoleDto
     {

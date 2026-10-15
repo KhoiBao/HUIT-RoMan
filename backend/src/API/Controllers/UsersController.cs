@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Modules.Identity.DTOs;
 using HUIT_RoMan.Application.Modules.Identity.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -12,10 +13,40 @@ namespace HUIT_RoMan.API.Controllers
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly ICurrentUserService _currentUser;
 
-        public UsersController(IUserService userService)
+        public UsersController(IUserService userService, ICurrentUserService currentUser)
         {
             _userService = userService;
+            _currentUser = currentUser;
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // CURRENT USER PROFILE
+        // ─────────────────────────────────────────────────────────────────
+
+        /// <summary>Lấy thông tin người dùng hiện tại đang đăng nhập</summary>
+        [HttpGet("me")]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            if (_currentUser.UserId == null)
+                return Unauthorized(new { message = "Bạn chưa đăng nhập." });
+
+            var response = await _userService.GetByIdAsync(_currentUser.UserId.Value);
+            if (!response.Success) return NotFound(response);
+            return Ok(response);
+        }
+
+        /// <summary>Cập nhật thông tin cá nhân của người dùng hiện tại</summary>
+        [HttpPut("me")]
+        public async Task<IActionResult> UpdateCurrentUser([FromBody] UpdateUserDto request)
+        {
+            if (_currentUser.UserId == null)
+                return Unauthorized(new { message = "Bạn chưa đăng nhập." });
+
+            var response = await _userService.UpdateAsync(_currentUser.UserId.Value, request);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -40,6 +71,7 @@ namespace HUIT_RoMan.API.Controllers
             if (!response.Success) return NotFound(response);
             return Ok(response);
         }
+
 
         /// <summary>Lấy danh sách sinh viên</summary>
         [HttpGet("students")]
