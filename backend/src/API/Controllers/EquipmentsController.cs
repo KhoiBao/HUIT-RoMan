@@ -46,9 +46,13 @@ namespace HUIT_RoMan.API.Controllers
         public async Task<IActionResult> Update(int id, [FromBody] CreateEquipmentDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
-            var success = await _equipmentService.UpdateAsync(id, request);
-            if (!success) return NotFound();
-            return NoContent();
+            var response = await _equipmentService.UpdateAsync(id, request);
+            if (!response.Success)
+            {
+                if (response.Message == "Không tìm thấy thiết bị.") return NotFound(response);
+                return BadRequest(response);
+            }
+            return Ok(response);
         }
 
         [HttpDelete("{id}")]

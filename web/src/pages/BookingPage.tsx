@@ -204,12 +204,14 @@ export default function BookingPage() {
         purpose: "",
         note: "",
       }));
-    } catch (err: unknown) {
-      setSubmitError(
-        err instanceof Error
+    } catch (err: any) {
+      const serverMsg =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        (err instanceof Error
           ? err.message
-          : "Gửi đơn đặt phòng thất bại. Vui lòng kiểm tra lại thông tin."
-      );
+          : "Gửi đơn đặt phòng thất bại. Vui lòng kiểm tra lại thông tin.");
+      setSubmitError(serverMsg);
     } finally {
       setIsSubmitting(false);
     }

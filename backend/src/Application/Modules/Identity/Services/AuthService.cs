@@ -32,7 +32,9 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             // UI chỉ nhập email; field giữ tên CardCode để tương thích ngược.
             // Chấp nhận CardCode hoặc Email hoặc UserName.
             var loginKey = request.CardCode?.Trim();
-            var user = await _unitOfWork.Repository<User>().FirstOrDefaultAsync(u => u.CardCode == loginKey || u.Email == loginKey || u.UserName == loginKey);
+            var user = await _unitOfWork.Repository<User>().FirstOrDefaultAsync(
+                u => u.CardCode == loginKey || u.Email == loginKey || u.UserName == loginKey,
+                u => u.Department);
             
             if (user == null)
             {
@@ -87,7 +89,9 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
                     Id = user.Id,
                     CardCode = user.CardCode,
                     FullName = user.FullName,
-                    Role = role
+                    Role = role,
+                    DepartmentId = user.DepartmentId,
+                    DepartmentName = user.Department?.Name
                 }
             };
         }

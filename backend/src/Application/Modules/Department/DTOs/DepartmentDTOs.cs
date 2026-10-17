@@ -8,6 +8,9 @@ namespace HUIT_RoMan.Application.Modules.Department.DTOs
         public string Name { get; set; }
         public string Type { get; set; }
         public string Status { get; set; }
+        public int TotalEmployees { get; set; }
+        public int TotalRoomTypes { get; set; }
+        public int TotalRooms { get; set; }
     }
 
     public class CreateDepartmentDto

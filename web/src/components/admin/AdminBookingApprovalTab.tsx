@@ -71,6 +71,8 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
   } | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string>("");
   const [submittingAction, setSubmittingAction] = useState<boolean>(false);
+  const [approvingBookingId, setApprovingBookingId] = useState<number | null>(null);
+  const [approvingDetailId, setApprovingDetailId] = useState<number | null>(null);
 
   // Fetch bookings from API
   const fetchBookings = async () => {
@@ -128,27 +130,41 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
 
   // Handle Approve whole booking
   const handleApproveBooking = async (bookingId: number) => {
-    if (!window.confirm(`Xác nhận duyệt toàn bộ đơn đăng ký #${bookingId}?`))
-      return;
     try {
-      setSubmittingAction(true);
+      setApprovingBookingId(bookingId);
       const res = await api.patch(`/api/Bookings/${bookingId}/approve`, {
         decision: "Đã duyệt",
         rejectionReason: "",
       });
       if (res.data?.success) {
         onNotify(`Đã duyệt đơn đăng ký #${bookingId} thành công!`, "success");
-        await fetchBookings();
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === bookingId
+              ? {
+                  ...b,
+                  status: "Đã duyệt",
+                  details: b.details.map((d) => ({ ...d, status: "Đã duyệt" })),
+                }
+              : b
+          )
+        );
+        fetchBookings();
       } else {
         onNotify(res.data?.message || "Duyệt đơn không thành công.", "warning");
       }
     } catch (err: any) {
-      onNotify(
-        err.response?.data?.message || "Lỗi xử lý duyệt đơn từ hệ thống.",
-        "warning"
-      );
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        (err.response?.status === 401
+          ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+          : err.response?.status === 403
+          ? "Bạn không có quyền thực hiện thao tác duyệt này."
+          : err.message || "Lỗi xử lý duyệt đơn từ hệ thống.");
+      onNotify(msg, "warning");
     } finally {
-      setSubmittingAction(false);
+      setApprovingBookingId(null);
     }
   };
 
@@ -197,10 +213,15 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
       setRejectTarget(null);
       await fetchBookings();
     } catch (err: any) {
-      onNotify(
-        err.response?.data?.message || "Lỗi xử lý từ chối đơn từ máy chủ.",
-        "warning"
-      );
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        (err.response?.status === 401
+          ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+          : err.response?.status === 403
+          ? "Bạn không có quyền thực hiện thao tác từ chối này."
+          : err.message || "Lỗi xử lý từ chối đơn từ máy chủ.");
+      onNotify(msg, "warning");
     } finally {
       setSubmittingAction(false);
     }
@@ -208,25 +229,59 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
 
   // Handle Approve individual room detail
   const handleApproveDetail = async (detailId: number, roomCode: string) => {
-    if (!window.confirm(`Xác nhận duyệt phòng ${roomCode} cho chi tiết này?`))
-      return;
     try {
-      setSubmittingAction(true);
+      setApprovingDetailId(detailId);
       const res = await api.patch(`/api/Bookings/details/${detailId}/approve`, {
         decision: "Đã duyệt",
         rejectionReason: "",
       });
       if (res.data?.success) {
         onNotify(`Đã duyệt phòng ${roomCode} thành công!`, "success");
-        await fetchBookings();
+        setBookings((prev) =>
+          prev.map((b) => {
+            const hasDetail = b.details.some((d) => d.id === detailId);
+            if (!hasDetail) return b;
+            const updatedDetails = b.details.map((d) =>
+              d.id === detailId ? { ...d, status: "Đã duyệt" } : d
+            );
+            const allApproved = updatedDetails.every(
+              (d) => d.status === "Đã duyệt"
+            );
+            const allRejected = updatedDetails.every(
+              (d) => d.status === "Từ chối"
+            );
+            const anyProcessed = updatedDetails.some(
+              (d) => d.status !== "Chờ duyệt"
+            );
+            const nextStatus = allApproved
+              ? "Đã duyệt"
+              : allRejected
+              ? "Từ chối"
+              : anyProcessed
+              ? "Duyệt một phần"
+              : b.status;
+            return { ...b, status: nextStatus, details: updatedDetails };
+          })
+        );
+        fetchBookings();
+      } else {
+        onNotify(
+          res.data?.message || "Duyệt chi tiết không thành công.",
+          "warning"
+        );
       }
     } catch (err: any) {
-      onNotify(
-        err.response?.data?.message || "Lỗi phê duyệt chi tiết phòng.",
-        "warning"
-      );
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        (err.response?.status === 401
+          ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+          : err.response?.status === 403
+          ? "Bạn không có quyền thực hiện thao tác duyệt này."
+          : err.message || "Lỗi phê duyệt chi tiết phòng.");
+      onNotify(msg, "warning");
     } finally {
-      setSubmittingAction(false);
+      setApprovingDetailId(null);
     }
   };
 
@@ -464,10 +519,16 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                           type="button"
                           className="btn-action-approve"
                           onClick={() => handleApproveBooking(b.id)}
-                          disabled={submittingAction}
+                          disabled={approvingBookingId === b.id || submittingAction}
                           title="Duyệt toàn bộ đơn đăng ký này"
                         >
-                          <CheckCircleIcon size={16} /> Duyệt đơn
+                          {approvingBookingId === b.id ? (
+                            <span>Đang duyệt...</span>
+                          ) : (
+                            <>
+                              <CheckCircleIcon size={16} /> Duyệt đơn
+                            </>
+                          )}
                         </button>
                         <button
                           type="button"
@@ -549,9 +610,15 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                                 onClick={() =>
                                   handleApproveDetail(detail.id, detail.roomCode)
                                 }
-                                disabled={submittingAction}
+                                disabled={approvingDetailId === detail.id || submittingAction}
                               >
-                                <CheckIcon size={12} className="mr-1 inline-block" /> Duyệt phòng này
+                                {approvingDetailId === detail.id ? (
+                                  <span>Đang duyệt...</span>
+                                ) : (
+                                  <>
+                                    <CheckIcon size={12} className="mr-1 inline-block" /> Duyệt phòng này
+                                  </>
+                                )}
                               </button>
                               <button
                                 type="button"

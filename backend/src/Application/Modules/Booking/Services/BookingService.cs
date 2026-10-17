@@ -63,10 +63,10 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                     if (startPeriod == null || endPeriod == null)
                         return ApiResponse<BookingResponseDto>.ErrorResponse("Không tìm thấy thông tin tiết học.");
 
-                    var date = detail.StartAt.Date;
-                    // The inputs are in UTC+7 (local). We need to convert them to UTC for the database.
-                    detail.StartAt = System.DateTime.SpecifyKind(date.Add(startPeriod.StartTime).AddHours(-7), System.DateTimeKind.Utc);
-                    detail.EndAt = System.DateTime.SpecifyKind(date.Add(endPeriod.EndTime).AddHours(-7), System.DateTimeKind.Utc);
+                    // detail.StartAt sent by client is in UTC. Convert to UTC+7 (Vietnam local) to get the correct calendar date.
+                    var localDate = detail.StartAt.ToUniversalTime().AddHours(7).Date;
+                    detail.StartAt = System.DateTime.SpecifyKind(localDate.Add(startPeriod.StartTime).AddHours(-7), System.DateTimeKind.Utc);
+                    detail.EndAt = System.DateTime.SpecifyKind(localDate.Add(endPeriod.EndTime).AddHours(-7), System.DateTimeKind.Utc);
                 }
 
                 if (detail.EndAt <= detail.StartAt)
@@ -134,6 +134,20 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         public async Task<ApiResponse<IEnumerable<BookingResponseDto>>> GetAllBookingsAsync()
         {
             var bookings = await _bookingRepo.GetAllAsync(b => b.User, b => b.BookingDetails);
+            
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            {
+                var rooms = await _roomRepo.GetAllAsync(r => r.RoomType);
+                var deptRoomIds = rooms
+                    .Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value)
+                    .Select(r => r.Id)
+                    .ToHashSet();
+
+                bookings = bookings
+                    .Where(b => b.BookingDetails != null && b.BookingDetails.Any(bd => deptRoomIds.Contains(bd.RoomId)))
+                    .ToList();
+            }
+
             var dtos = await MapBookingListAsync(bookings);
             return ApiResponse<IEnumerable<BookingResponseDto>>.SuccessResponse(dtos);
         }
@@ -185,16 +199,52 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 return ApiResponse<bool>.ErrorResponse("Chỉ có thể duyệt đơn ở trạng thái Chờ duyệt.");
 
             var newStatus = request.Decision == "Đã duyệt" ? "Đã duyệt" : "Từ chối";
-            booking.Status = newStatus;
-            booking.RejectionReason = request.RejectionReason;
 
-            foreach (var detail in booking.BookingDetails)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
-                detail.Status = newStatus;
-                detail.RejectionReason = request.RejectionReason;
+                var rooms = await _roomRepo.GetAllAsync(r => r.RoomType);
+                var deptRoomIds = rooms
+                    .Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value)
+                    .Select(r => r.Id)
+                    .ToHashSet();
+
+                var targetDetails = booking.BookingDetails.Where(bd => deptRoomIds.Contains(bd.RoomId)).ToList();
+                if (!targetDetails.Any())
+                {
+                    return ApiResponse<bool>.ErrorResponse("Đơn này không có phòng nào thuộc đơn vị bạn quản lý.");
+                }
+
+                foreach (var detail in targetDetails)
+                {
+                    detail.Status = newStatus;
+                    detail.RejectionReason = request.RejectionReason;
+                    _bookingDetailRepo.Update(detail);
+                }
+
+                var allDetails = booking.BookingDetails.ToList();
+                if (allDetails.All(d => d.Status == "Đã duyệt"))
+                    booking.Status = "Đã duyệt";
+                else if (allDetails.All(d => d.Status == "Từ chối"))
+                    booking.Status = "Từ chối";
+                else if (allDetails.Any(d => d.Status != "Chờ duyệt"))
+                    booking.Status = "Duyệt một phần";
+
+                _bookingRepo.Update(booking);
+            }
+            else
+            {
+                booking.Status = newStatus;
+                booking.RejectionReason = request.RejectionReason;
+
+                foreach (var detail in booking.BookingDetails)
+                {
+                    detail.Status = newStatus;
+                    detail.RejectionReason = request.RejectionReason;
+                }
+
+                _bookingRepo.Update(booking);
             }
 
-            _bookingRepo.Update(booking);
             await _unitOfWork.SaveChangesAsync();
 
             var message = newStatus == "Đã duyệt" ? "Duyệt đơn thành công." : "Từ chối đơn thành công.";
@@ -212,6 +262,15 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             var detail = await _bookingDetailRepo.GetByIdAsync(detailId, bd => bd.Booking);
             if (detail == null)
                 return ApiResponse<bool>.ErrorResponse("Không tìm thấy chi tiết đặt phòng.");
+
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            {
+                var room = await _roomRepo.GetByIdAsync(detail.RoomId, r => r.RoomType);
+                if (room?.RoomType?.DepartmentId != _currentUser.DepartmentId.Value)
+                {
+                    return ApiResponse<bool>.ErrorResponse("Bạn chỉ có quyền duyệt phòng thuộc đơn vị của mình.");
+                }
+            }
 
             if (detail.Status != "Chờ duyệt")
                 return ApiResponse<bool>.ErrorResponse("Chi tiết này đã được xử lý.");

@@ -25,9 +25,9 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         {
             var roomTypes = await _roomTypeRepo.GetAllAsync();
 
-            if (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
-                roomTypes = roomTypes.Where(rt => rt.DepartmentId == _currentUser.DepartmentId).ToList();
+                roomTypes = roomTypes.Where(rt => rt.DepartmentId == _currentUser.DepartmentId.Value).ToList();
             }
 
             var dtos = roomTypes.Select(rt => new RoomTypeDto
@@ -48,9 +48,9 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var rt = await _roomTypeRepo.GetByIdAsync(id);
             if (rt == null) return ApiResponse<RoomTypeDto>.ErrorResponse("Không tìm thấy loại phòng");
 
-            if (!_currentUser.IsAdmin && rt.DepartmentId != _currentUser.DepartmentId)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue && rt.DepartmentId != _currentUser.DepartmentId.Value)
             {
-                return ApiResponse<RoomTypeDto>.ErrorResponse("Bạn không có quyền xem loại phòng của khoa khác.");
+                return ApiResponse<RoomTypeDto>.ErrorResponse("Bạn không có quyền xem loại phòng của đơn vị khác.");
             }
 
             var dto = new RoomTypeDto
@@ -77,9 +77,9 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Status = "Hoạt động"
             };
 
-            if (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
-                rt.DepartmentId = _currentUser.DepartmentId;
+                rt.DepartmentId = _currentUser.DepartmentId.Value;
             }
             else if (_currentUser.IsAdmin)
             {
@@ -107,9 +107,9 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var rt = await _roomTypeRepo.GetByIdAsync(id);
             if (rt == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy loại phòng");
 
-            if (!_currentUser.IsAdmin && rt.DepartmentId != _currentUser.DepartmentId)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue && rt.DepartmentId != _currentUser.DepartmentId.Value)
             {
-                return ApiResponse<bool>.ErrorResponse("Bạn không có quyền sửa loại phòng của khoa khác.");
+                return ApiResponse<bool>.ErrorResponse("Bạn không có quyền sửa loại phòng của đơn vị khác.");
             }
 
             rt.Name = request.Name;
@@ -133,9 +133,9 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var rt = await _roomTypeRepo.GetByIdAsync(id);
             if (rt == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy loại phòng");
 
-            if (!_currentUser.IsAdmin && rt.DepartmentId != _currentUser.DepartmentId)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue && rt.DepartmentId != _currentUser.DepartmentId.Value)
             {
-                return ApiResponse<bool>.ErrorResponse("Bạn không có quyền xóa loại phòng của khoa khác.");
+                return ApiResponse<bool>.ErrorResponse("Bạn không có quyền xóa loại phòng của đơn vị khác.");
             }
 
             _roomTypeRepo.Remove(rt);

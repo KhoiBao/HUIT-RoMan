@@ -63,6 +63,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
     {
         public int UserId { get; set; }
         public string Position { get; set; }
+        public int? DepartmentId { get; set; }
     }
 
     public class UpdateEmployeeDto

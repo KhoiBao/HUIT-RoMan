@@ -73,6 +73,9 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public string Description { get; set; }
         public string Status { get; set; }
         public int EquipmentCategoryId { get; set; }
+        public int TotalQuantity { get; set; }
+        public int AvailableQuantity { get; set; }
+        public int AllocatedQuantity { get; set; }
     }
 
     public class CreateEquipmentDto
@@ -81,6 +84,7 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public string Name { get; set; }
         public string Description { get; set; }
         public int EquipmentCategoryId { get; set; }
+        public int TotalQuantity { get; set; }
     }
 
     public class RoomEquipmentDto

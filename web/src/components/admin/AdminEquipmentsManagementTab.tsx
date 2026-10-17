@@ -18,6 +18,9 @@ export interface WarehouseEquipment {
   status: string;
   equipmentCategoryId: number;
   categoryName?: string;
+  totalQuantity: number;
+  availableQuantity: number;
+  allocatedQuantity: number;
 }
 
 export interface EquipmentCategory {
@@ -80,6 +83,15 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
   const [formName, setFormName] = useState<string>("");
   const [formDesc, setFormDesc] = useState<string>("");
   const [formCatId, setFormCatId] = useState<number | "">("");
+  const [formTotalQty, setFormTotalQty] = useState<number>(10);
+
+  // Edit Warehouse Equip modal
+  const [editingEquip, setEditingEquip] = useState<WarehouseEquipment | null>(null);
+  const [editCode, setEditCode] = useState<string>("");
+  const [editName, setEditName] = useState<string>("");
+  const [editDesc, setEditDesc] = useState<string>("");
+  const [editCatId, setEditCatId] = useState<number | "">("");
+  const [editTotalQty, setEditTotalQty] = useState<number>(1);
 
   // Assign to room modal
   const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
@@ -176,6 +188,11 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
       alert("Vui lòng nhập tên thiết bị và chọn danh mục.");
       return;
     }
+    const totalQty = Number(formTotalQty);
+    if (!totalQty || totalQty < 1) {
+      alert("Số lượng tổng nhập kho phải lớn hơn hoặc bằng 1.");
+      return;
+    }
     try {
       setSubmitting(true);
       await api.post("/api/Equipments", {
@@ -183,16 +200,67 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
         name: formName.trim(),
         description: formDesc.trim(),
         equipmentCategoryId: Number(formCatId),
+        totalQuantity: totalQty,
       });
-      onNotify(`Đã thêm thiết bị "${formName}" vào kho thành công!`, "success");
+      onNotify(`Đã thêm thiết bị "${formName}" vào kho thành công với số lượng ${totalQty}!`, "success");
       setShowAddModal(false);
       setFormCode("");
       setFormName("");
       setFormDesc("");
+      setFormTotalQty(10);
       await fetchData();
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || "Lỗi khi tạo thiết bị mới.",
+        "warning"
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOpenEdit = (eq: WarehouseEquipment) => {
+    setEditingEquip(eq);
+    setEditCode(eq.code || "");
+    setEditName(eq.name || "");
+    setEditDesc(eq.description || "");
+    setEditCatId(eq.equipmentCategoryId);
+    setEditTotalQty(eq.totalQuantity || 1);
+  };
+
+  const handleUpdateEquip = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEquip) return;
+    if (!editName.trim() || !editCatId) {
+      alert("Vui lòng nhập tên thiết bị và chọn danh mục.");
+      return;
+    }
+    const totalQty = Number(editTotalQty);
+    if (!totalQty || totalQty < 1) {
+      alert("Số lượng tổng nhập kho phải lớn hơn hoặc bằng 1.");
+      return;
+    }
+    if (totalQty < (editingEquip.allocatedQuantity || 0)) {
+      alert(
+        `Tổng số lượng (${totalQty}) không thể nhỏ hơn số lượng đang phân bổ trong các phòng (${editingEquip.allocatedQuantity || 0} chiếc).`
+      );
+      return;
+    }
+    try {
+      setSubmitting(true);
+      await api.put(`/api/Equipments/${editingEquip.id}`, {
+        code: editCode.trim(),
+        name: editName.trim(),
+        description: editDesc.trim(),
+        equipmentCategoryId: Number(editCatId),
+        totalQuantity: totalQty,
+      });
+      onNotify(`Đã cập nhật thiết bị "${editName}" thành công!`, "success");
+      setEditingEquip(null);
+      await fetchData();
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || err.response?.data || "Lỗi khi cập nhật thiết bị.",
         "warning"
       );
     } finally {
@@ -207,18 +275,29 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
       alert("Vui lòng chọn phòng và thiết bị cần gán.");
       return;
     }
+    const selectedEquip = equipments.find((eq) => eq.id === Number(assignEquipId));
+    const currentInRoom = roomEquipments.find((r) => r.equipmentId === Number(assignEquipId))?.quantity || 0;
+    const maxAllowed = (selectedEquip?.availableQuantity ?? 0) + currentInRoom;
+
+    if (selectedEquip && assignQuantity > maxAllowed) {
+      alert(
+        `Số lượng phân bổ (${assignQuantity}) vượt quá số lượng khả dụng trong kho (kho hiện còn ${selectedEquip.availableQuantity} chiếc khả dụng).`
+      );
+      return;
+    }
+
     try {
       setSubmitting(true);
-      await api.post(`/api/Rooms/${selectedRoomId}/equipments`, {
+      const res = await api.post(`/api/Rooms/${selectedRoomId}/equipments`, {
         equipmentId: Number(assignEquipId),
         quantity: Number(assignQuantity),
         status: assignStatus,
       });
-      onNotify("Đã phân bổ thiết bị vào phòng thành công!", "success");
+      onNotify(res.data?.message || "Đã phân bổ thiết bị vào phòng thành công!", "success");
       setShowAssignModal(false);
       setAssignEquipId("");
       setAssignQuantity(1);
-      await fetchRoomEquips(Number(selectedRoomId));
+      await Promise.all([fetchRoomEquips(Number(selectedRoomId)), fetchData()]);
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || err.response?.data || "Lỗi khi gán thiết bị vào phòng.",
@@ -231,12 +310,12 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
 
   // Handle Remove Equipment from Room
   const handleRemoveFromRoom = async (equipId: number, equipName: string) => {
-    if (!window.confirm(`Xác nhận thu hồi thiết bị "${equipName}" khỏi phòng?`))
+    if (!window.confirm(`Xác nhận thu hồi thiết bị "${equipName}" khỏi phòng? Toàn bộ số lượng sẽ được hoàn trả về kho.`))
       return;
     try {
-      await api.delete(`/api/Rooms/${selectedRoomId}/equipments/${equipId}`);
-      onNotify(`Đã thu hồi thiết bị "${equipName}" thành công!`, "info");
-      await fetchRoomEquips(Number(selectedRoomId));
+      const res = await api.delete(`/api/Rooms/${selectedRoomId}/equipments/${equipId}`);
+      onNotify(res.data?.message || `Đã thu hồi thiết bị "${equipName}" và hoàn trả về kho thành công!`, "info");
+      await Promise.all([fetchRoomEquips(Number(selectedRoomId)), fetchData()]);
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || "Lỗi khi thu hồi thiết bị khỏi phòng.",
@@ -424,8 +503,12 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                     <th>Mã thiết bị</th>
                     <th>Tên thiết bị</th>
                     <th>Danh mục</th>
+                    <th>Tổng SL</th>
+                    <th>Đã phân bổ</th>
+                    <th>Còn trong kho</th>
                     <th>Mô tả chi tiết</th>
                     <th>Trạng thái</th>
+                    <th>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -438,12 +521,38 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                       <td>
                         <span className="tag-room-type">{e.categoryName}</span>
                       </td>
+                      <td>
+                        <span className="font-bold text-slate-800">{e.totalQuantity ?? 0}</span>
+                      </td>
+                      <td>
+                        <span className="badge-count-pill">{e.allocatedQuantity ?? 0}</span>
+                      </td>
+                      <td>
+                        <span
+                          className={`admin-status-pill flex items-center gap-1 ${
+                            (e.availableQuantity ?? 0) > 0 ? "pill-approved" : "pill-rejected"
+                          }`}
+                        >
+                          <CheckIcon size={12} />
+                          <span>{e.availableQuantity ?? 0} chiếc</span>
+                        </span>
+                      </td>
                       <td className="text-sm text-muted">{e.description || "—"}</td>
                       <td>
                         <span className="admin-status-pill pill-approved flex items-center gap-1">
                           <CheckIcon size={12} />
                           <span>{formatEquipStatus(e.status)}</span>
                         </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-action-icon text-highlight"
+                          onClick={() => handleOpenEdit(e)}
+                          title="Chỉnh sửa thông số và số lượng kho"
+                        >
+                          Sửa
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -601,6 +710,19 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                 </div>
 
                 <div className="form-group-admin">
+                  <label>Tổng số lượng nhập kho (*):</label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="admin-input"
+                    placeholder="VD: 10, 20..."
+                    value={formTotalQty}
+                    onChange={(e) => setFormTotalQty(Number(e.target.value))}
+                    required
+                  />
+                </div>
+
+                <div className="form-group-admin">
                   <label>Mô tả kỹ thuật:</label>
                   <textarea
                     rows={3}
@@ -626,6 +748,107 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                   disabled={submitting}
                 >
                   {submitting ? "Đang lưu..." : "Xác nhận lưu kho"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Equipment in Warehouse */}
+      {editingEquip && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-content">
+            <div className="modal-header">
+              <h3 className="modal-title">Chỉnh sửa thiết bị kho</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setEditingEquip(null)}
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateEquip}>
+              <div className="modal-body">
+                <div className="form-group-admin">
+                  <label>Danh mục phân loại (*):</label>
+                  <select
+                    className="admin-input"
+                    value={editCatId}
+                    onChange={(e) => setEditCatId(Number(e.target.value))}
+                    required
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Mã thiết bị (tùy chọn):</label>
+                  <input
+                    type="text"
+                    className="admin-input"
+                    value={editCode}
+                    onChange={(e) => setEditCode(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Tên thiết bị (*):</label>
+                  <input
+                    type="text"
+                    className="admin-input"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Tổng số lượng trong kho (*):</label>
+                  <input
+                    type="number"
+                    min={editingEquip.allocatedQuantity || 1}
+                    className="admin-input"
+                    value={editTotalQty}
+                    onChange={(e) => setEditTotalQty(Number(e.target.value))}
+                    required
+                  />
+                  <span className="text-xs text-muted block mt-1">
+                    Đang phân bổ trong phòng: <strong>{editingEquip.allocatedQuantity ?? 0}</strong> chiếc (Tổng số lượng không thể nhỏ hơn số lượng đã phân bổ).
+                  </span>
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Mô tả kỹ thuật:</label>
+                  <textarea
+                    rows={3}
+                    className="admin-textarea"
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setEditingEquip(null)}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="btn-confirm-save"
+                  disabled={submitting}
+                >
+                  {submitting ? "Đang lưu..." : "Lưu thay đổi"}
                 </button>
               </div>
             </form>
@@ -661,10 +884,18 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                     <option value="">-- Chọn thiết bị kho --</option>
                     {equipments.map((eq) => (
                       <option key={eq.id} value={eq.id}>
-                        {eq.code ? `[${eq.code}] ` : ""}{eq.name} ({eq.categoryName})
+                        {eq.code ? `[${eq.code}] ` : ""}{eq.name} — Còn trong kho: {eq.availableQuantity ?? 0}/{eq.totalQuantity ?? 0} chiếc ({eq.categoryName})
                       </option>
                     ))}
                   </select>
+                  {assignEquipId && (() => {
+                    const targetEq = equipments.find((eq) => eq.id === Number(assignEquipId));
+                    return targetEq ? (
+                      <span className="text-xs text-muted block mt-1">
+                        Tồn kho khả dụng: <strong className="text-highlight">{targetEq.availableQuantity ?? 0}</strong> chiếc (Tổng: {targetEq.totalQuantity ?? 0} | Đang phân bổ: {targetEq.allocatedQuantity ?? 0})
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
 
                 <div className="form-group-admin">
@@ -672,11 +903,26 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                   <input
                     type="number"
                     min={1}
+                    max={(() => {
+                      const targetEq = equipments.find((eq) => eq.id === Number(assignEquipId));
+                      const curInRoom = roomEquipments.find((r) => r.equipmentId === Number(assignEquipId))?.quantity || 0;
+                      return targetEq ? targetEq.availableQuantity + curInRoom : undefined;
+                    })()}
                     className="admin-input"
                     value={assignQuantity}
                     onChange={(e) => setAssignQuantity(Number(e.target.value))}
                     required
                   />
+                  {assignEquipId && (() => {
+                    const targetEq = equipments.find((eq) => eq.id === Number(assignEquipId));
+                    const curInRoom = roomEquipments.find((r) => r.equipmentId === Number(assignEquipId))?.quantity || 0;
+                    const maxAllowed = targetEq ? targetEq.availableQuantity + curInRoom : 0;
+                    return (
+                      <span className="text-xs text-slate-500 block mt-1">
+                        Tối đa có thể gán: <strong>{maxAllowed}</strong> chiếc
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 <div className="form-group-admin">

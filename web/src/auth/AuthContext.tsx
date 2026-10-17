@@ -18,6 +18,8 @@ export interface AuthUser {
   cardCode: string;
   fullName?: string;
   role?: string;
+  departmentId?: number;
+  departmentName?: string;
 }
 
 interface AuthContextValue {

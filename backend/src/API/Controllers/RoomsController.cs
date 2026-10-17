@@ -90,18 +90,18 @@ namespace HUIT_RoMan.API.Controllers
         public async Task<IActionResult> AddOrUpdateEquipment(int roomId, [FromBody] AddRoomEquipmentDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
-            var success = await _roomEquipmentService.AddOrUpdateEquipmentToRoomAsync(roomId, request);
-            if (!success) return BadRequest("Thêm thiết bị thất bại. Vui lòng kiểm tra lại Mã phòng và Mã thiết bị.");
-            return Ok();
+            var response = await _roomEquipmentService.AddOrUpdateEquipmentToRoomAsync(roomId, request);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
         }
 
         [HttpDelete("{roomId}/equipments/{equipmentId}")]
         [Authorize(Roles = "Admin,Employee")]
         public async Task<IActionResult> RemoveEquipment(int roomId, int equipmentId)
         {
-            var success = await _roomEquipmentService.RemoveEquipmentFromRoomAsync(roomId, equipmentId);
-            if (!success) return NotFound();
-            return NoContent();
+            var response = await _roomEquipmentService.RemoveEquipmentFromRoomAsync(roomId, equipmentId);
+            if (!response.Success) return NotFound(response);
+            return Ok(response);
         }
 
         // ─────────────────────────────────────────────────────────────────

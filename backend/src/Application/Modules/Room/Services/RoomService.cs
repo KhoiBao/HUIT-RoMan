@@ -27,9 +27,9 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         {
             var rooms = await _roomRepo.GetAllAsync(r => r.RoomType);
 
-            if (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
-                rooms = rooms.Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId).ToList();
+                rooms = rooms.Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value).ToList();
             }
 
             var dtos = rooms.Select(r => new RoomDto
@@ -56,11 +56,11 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             
             if (r == null) return ApiResponse<RoomDto>.ErrorResponse("Không tìm thấy phòng");
 
-            if (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
-                if (r.RoomType?.DepartmentId != _currentUser.DepartmentId)
+                if (r.RoomType?.DepartmentId != _currentUser.DepartmentId.Value)
                 {
-                    return ApiResponse<RoomDto>.ErrorResponse("Bạn không có quyền xem phòng của khoa khác.");
+                    return ApiResponse<RoomDto>.ErrorResponse("Bạn không có quyền xem phòng của đơn vị khác.");
                 }
             }
 
@@ -84,12 +84,12 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<RoomDto>> CreateAsync(CreateRoomDto request)
         {
-            if (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
                 var roomType = await _roomTypeRepo.GetByIdAsync(request.RoomTypeId);
-                if (roomType == null || roomType.DepartmentId != _currentUser.DepartmentId)
+                if (roomType == null || roomType.DepartmentId != _currentUser.DepartmentId.Value)
                 {
-                    return ApiResponse<RoomDto>.ErrorResponse("Bạn chỉ có thể tạo phòng cho loại phòng thuộc khoa của mình.");
+                    return ApiResponse<RoomDto>.ErrorResponse("Bạn chỉ có thể tạo phòng cho loại phòng thuộc đơn vị của mình.");
                 }
             }
 
@@ -117,14 +117,12 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType);
             if (r == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy phòng");
 
-            if (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
-                if (r.RoomType?.DepartmentId != _currentUser.DepartmentId)
+                if (r.RoomType?.DepartmentId != _currentUser.DepartmentId.Value)
                 {
-                    return ApiResponse<bool>.ErrorResponse("Bạn không có quyền sửa phòng của khoa khác.");
+                    return ApiResponse<bool>.ErrorResponse("Bạn không có quyền sửa phòng của đơn vị khác.");
                 }
-                
-
             }
 
             r.Name = request.Name;
@@ -147,11 +145,11 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType);
             if (r == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy phòng");
 
-            if (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
-                if (r.RoomType?.DepartmentId != _currentUser.DepartmentId)
+                if (r.RoomType?.DepartmentId != _currentUser.DepartmentId.Value)
                 {
-                    return ApiResponse<bool>.ErrorResponse("Bạn không có quyền xóa phòng của khoa khác.");
+                    return ApiResponse<bool>.ErrorResponse("Bạn không có quyền xóa phòng của đơn vị khác.");
                 }
             }
 

@@ -23,6 +23,8 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
         public string CardCode { get; set; }
         public string FullName { get; set; }
         public string Role { get; set; }
+        public int? DepartmentId { get; set; }
+        public string DepartmentName { get; set; }
     }
 
     public class ForgotPasswordRequest

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HUIT_RoMan.Application.Modules.Room.DTOs;
 using HUIT_RoMan.Domain.Entities;
 using HUIT_RoMan.Application.Common.Interfaces;
+using HUIT_RoMan.Application.Common.Models;
 
 namespace HUIT_RoMan.Application.Modules.Room.Services
 {
@@ -20,22 +21,31 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<IEnumerable<EquipmentDto>> GetAllAsync()
         {
-            var equipments = await _equipmentRepo.GetAllAsync();
-            return equipments.Select(e => new EquipmentDto
+            var equipments = await _equipmentRepo.GetAllAsync(e => e.RoomEquipments);
+            return equipments.Select(e =>
             {
-                Id = e.Id,
-                Code = e.Code,
-                Name = e.Name,
-                Description = e.Description,
-                Status = e.Status,
-                EquipmentCategoryId = e.EquipmentCategoryId
+                var allocated = e.RoomEquipments?.Where(re => !re.IsDeleted).Sum(re => re.Quantity) ?? 0;
+                return new EquipmentDto
+                {
+                    Id = e.Id,
+                    Code = e.Code,
+                    Name = e.Name,
+                    Description = e.Description,
+                    Status = e.Status,
+                    EquipmentCategoryId = e.EquipmentCategoryId,
+                    TotalQuantity = e.TotalQuantity,
+                    AvailableQuantity = e.AvailableQuantity,
+                    AllocatedQuantity = allocated
+                };
             }).ToList();
         }
 
         public async Task<EquipmentDto> GetByIdAsync(int id)
         {
-            var e = await _equipmentRepo.GetByIdAsync(id);
+            var e = await _equipmentRepo.GetByIdAsync(id, eq => eq.RoomEquipments);
             if (e == null) return null;
+
+            var allocated = e.RoomEquipments?.Where(re => !re.IsDeleted).Sum(re => re.Quantity) ?? 0;
 
             return new EquipmentDto
             {
@@ -44,19 +54,25 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Name = e.Name,
                 Description = e.Description,
                 Status = e.Status,
-                EquipmentCategoryId = e.EquipmentCategoryId
+                EquipmentCategoryId = e.EquipmentCategoryId,
+                TotalQuantity = e.TotalQuantity,
+                AvailableQuantity = e.AvailableQuantity,
+                AllocatedQuantity = allocated
             };
         }
 
         public async Task<EquipmentDto> CreateAsync(CreateEquipmentDto request)
         {
+            var qty = request.TotalQuantity > 0 ? request.TotalQuantity : 1;
             var equipment = new Equipment
             {
                 Code = request.Code,
                 Name = request.Name,
                 Description = request.Description,
                 Status = "Hoạt động",
-                EquipmentCategoryId = request.EquipmentCategoryId
+                EquipmentCategoryId = request.EquipmentCategoryId,
+                TotalQuantity = qty,
+                AvailableQuantity = qty
             };
 
             await _equipmentRepo.AddAsync(equipment);
@@ -69,14 +85,31 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Name = equipment.Name,
                 Description = equipment.Description,
                 Status = equipment.Status,
-                EquipmentCategoryId = equipment.EquipmentCategoryId
+                EquipmentCategoryId = equipment.EquipmentCategoryId,
+                TotalQuantity = equipment.TotalQuantity,
+                AvailableQuantity = equipment.AvailableQuantity,
+                AllocatedQuantity = 0
             };
         }
 
-        public async Task<bool> UpdateAsync(int id, CreateEquipmentDto request)
+        public async Task<ApiResponse<bool>> UpdateAsync(int id, CreateEquipmentDto request)
         {
-            var e = await _equipmentRepo.GetByIdAsync(id);
-            if (e == null) return false;
+            var e = await _equipmentRepo.GetByIdAsync(id, eq => eq.RoomEquipments);
+            if (e == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy thiết bị.");
+
+            int allocated = e.RoomEquipments?.Where(re => !re.IsDeleted).Sum(re => re.Quantity) ?? 0;
+            int newTotal = request.TotalQuantity > 0 ? request.TotalQuantity : e.TotalQuantity;
+
+            if (newTotal < allocated)
+            {
+                return ApiResponse<bool>.ErrorResponse(
+                    $"Tổng số lượng ({newTotal}) không thể nhỏ hơn số lượng đang phân bổ trong các phòng ({allocated}).");
+            }
+
+            int delta = newTotal - e.TotalQuantity;
+            e.TotalQuantity = newTotal;
+            e.AvailableQuantity += delta;
+            if (e.AvailableQuantity < 0) e.AvailableQuantity = 0;
 
             e.Code = request.Code;
             e.Name = request.Name;
@@ -85,7 +118,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
             _equipmentRepo.Update(e);
             await _unitOfWork.SaveChangesAsync();
-            return true;
+            return ApiResponse<bool>.SuccessResponse(true, "Cập nhật thiết bị thành công.");
         }
 
         public async Task<bool> DeleteAsync(int id)

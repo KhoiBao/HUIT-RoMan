@@ -15,4 +15,4 @@ if not exist "node_modules" (
 )
 
 echo Web: http://localhost:5173
-npm run dev -- --port 5173 --strictPort
+npm run dev

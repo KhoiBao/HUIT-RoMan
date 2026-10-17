@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using HUIT_RoMan.Application.Modules.Room.DTOs;
 
+using HUIT_RoMan.Application.Common.Models;
+
 namespace HUIT_RoMan.Application.Modules.Room.Services
 {
     public interface IEquipmentService
@@ -9,7 +11,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         Task<IEnumerable<EquipmentDto>> GetAllAsync();
         Task<EquipmentDto> GetByIdAsync(int id);
         Task<EquipmentDto> CreateAsync(CreateEquipmentDto request);
-        Task<bool> UpdateAsync(int id, CreateEquipmentDto request);
+        Task<ApiResponse<bool>> UpdateAsync(int id, CreateEquipmentDto request);
         Task<bool> DeleteAsync(int id);
     }
 }

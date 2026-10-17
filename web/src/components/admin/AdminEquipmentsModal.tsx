@@ -18,6 +18,9 @@ export interface WarehouseEquipment {
   description: string;
   status: string;
   equipmentCategoryId: number;
+  totalQuantity: number;
+  availableQuantity: number;
+  allocatedQuantity: number;
 }
 
 export interface EquipmentCategory {
@@ -73,6 +76,7 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
   const [newEquipName, setNewEquipName] = useState<string>("");
   const [newEquipDesc, setNewEquipDesc] = useState<string>("");
   const [newEquipCatId, setNewEquipCatId] = useState<number | "">("");
+  const [newEquipTotalQty, setNewEquipTotalQty] = useState<number>(10);
 
   // Fetch room equipments
   const fetchRoomEquipments = async () => {
@@ -122,18 +126,31 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
       alert("Số lượng phải lớn hơn hoặc bằng 1.");
       return;
     }
+
+    const selectedEquip = warehouseEquipments.find((w) => w.id === Number(selectedEquipId));
+    const currentInRoom = roomEquipments.find((r) => r.equipmentId === Number(selectedEquipId))?.quantity || 0;
+    const maxAllowed = (selectedEquip?.availableQuantity ?? 0) + currentInRoom;
+
+    if (selectedEquip && quantity > maxAllowed) {
+      alert(
+        `Số lượng phân bổ (${quantity}) vượt quá số lượng khả dụng trong kho (kho hiện còn ${selectedEquip.availableQuantity} chiếc khả dụng).`
+      );
+      return;
+    }
+
     try {
       setSubmitting(true);
-      await api.post(`/api/Rooms/${room.id}/equipments`, {
+      const res = await api.post(`/api/Rooms/${room.id}/equipments`, {
         equipmentId: Number(selectedEquipId),
         quantity: Number(quantity),
         status: equipStatus,
       });
-      onNotify(`Đã phân bổ thiết bị vào phòng ${room.roomCode} thành công!`, "success");
+      const msg = res.data?.message || `Đã phân bổ thiết bị vào phòng ${room.roomCode} thành công!`;
+      onNotify(msg, "success");
       setShowAddForm(false);
       setSelectedEquipId("");
       setQuantity(1);
-      await fetchRoomEquipments();
+      await Promise.all([fetchRoomEquipments(), fetchWarehouseData()]);
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || err.response?.data || "Lỗi khi gán thiết bị vào phòng.",
@@ -148,14 +165,15 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
   const handleRemoveEquipment = async (equipmentId: number, equipmentName: string) => {
     if (
       !window.confirm(
-        `Xác nhận thu hồi thiết bị "${equipmentName}" khỏi phòng ${room.roomCode}?`
+        `Xác nhận thu hồi thiết bị "${equipmentName}" khỏi phòng ${room.roomCode}? Toàn bộ số lượng sẽ được hoàn trả về kho.`
       )
     )
       return;
     try {
-      await api.delete(`/api/Rooms/${room.id}/equipments/${equipmentId}`);
-      onNotify(`Đã thu hồi thiết bị "${equipmentName}" thành công!`, "success");
-      await fetchRoomEquipments();
+      const res = await api.delete(`/api/Rooms/${room.id}/equipments/${equipmentId}`);
+      const msg = res.data?.message || `Đã thu hồi thiết bị "${equipmentName}" và hoàn trả về kho thành công!`;
+      onNotify(msg, "success");
+      await Promise.all([fetchRoomEquipments(), fetchWarehouseData()]);
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || "Lỗi khi thu hồi thiết bị.",
@@ -175,6 +193,11 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
       alert("Vui lòng chọn danh mục thiết bị.");
       return;
     }
+    const totalQty = Number(newEquipTotalQty);
+    if (!totalQty || totalQty < 1) {
+      alert("Số lượng tổng nhập kho phải lớn hơn hoặc bằng 1.");
+      return;
+    }
     try {
       setSubmitting(true);
       await api.post("/api/Equipments", {
@@ -182,11 +205,13 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
         name: newEquipName.trim(),
         description: newEquipDesc.trim(),
         equipmentCategoryId: Number(newEquipCatId),
+        totalQuantity: totalQty,
       });
-      onNotify(`Đã thêm thiết bị "${newEquipName}" vào kho thành công!`, "success");
+      onNotify(`Đã thêm thiết bị "${newEquipName}" vào kho thành công với số lượng ${totalQty}!`, "success");
       setNewEquipCode("");
       setNewEquipName("");
       setNewEquipDesc("");
+      setNewEquipTotalQty(10);
       await fetchWarehouseData();
     } catch (err: any) {
       onNotify(
@@ -272,10 +297,18 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                         <option value="">-- Chọn thiết bị trong kho --</option>
                         {warehouseEquipments.map((w) => (
                           <option key={w.id} value={w.id}>
-                            {w.code ? `[${w.code}] ` : ""}{w.name} ({w.description || "Không có mô tả"})
+                            {w.code ? `[${w.code}] ` : ""}{w.name} — Còn trong kho: {w.availableQuantity ?? 0}/{w.totalQuantity ?? 0} chiếc
                           </option>
                         ))}
                       </select>
+                      {selectedEquipId && (() => {
+                        const targetEq = warehouseEquipments.find((w) => w.id === Number(selectedEquipId));
+                        return targetEq ? (
+                          <span className="text-xs text-muted block mt-1">
+                            Tồn kho khả dụng: <strong className="text-highlight">{targetEq.availableQuantity ?? 0}</strong> chiếc (Tổng sở hữu: {targetEq.totalQuantity ?? 0} | Đang phân bổ: {targetEq.allocatedQuantity ?? 0})
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
 
                     <div className="form-group-admin">
@@ -283,11 +316,26 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                       <input
                         type="number"
                         min={1}
+                        max={(() => {
+                          const targetEq = warehouseEquipments.find((w) => w.id === Number(selectedEquipId));
+                          const curInRoom = roomEquipments.find((r) => r.equipmentId === Number(selectedEquipId))?.quantity || 0;
+                          return targetEq ? targetEq.availableQuantity + curInRoom : undefined;
+                        })()}
                         className="admin-input"
                         value={quantity}
                         onChange={(e) => setQuantity(Number(e.target.value))}
                         required
                       />
+                      {selectedEquipId && (() => {
+                        const targetEq = warehouseEquipments.find((w) => w.id === Number(selectedEquipId));
+                        const curInRoom = roomEquipments.find((r) => r.equipmentId === Number(selectedEquipId))?.quantity || 0;
+                        const maxAllowed = targetEq ? targetEq.availableQuantity + curInRoom : 0;
+                        return (
+                          <span className="text-xs text-slate-500 block mt-1">
+                            Tối đa có thể gán: <strong>{maxAllowed}</strong> chiếc
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <div className="form-group-admin">
@@ -447,6 +495,19 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                     </div>
 
                     <div className="form-group-admin">
+                      <label>Tổng số lượng nhập kho (*):</label>
+                      <input
+                        type="number"
+                        min={1}
+                        className="admin-input"
+                        placeholder="VD: 10, 20..."
+                        value={newEquipTotalQty}
+                        onChange={(e) => setNewEquipTotalQty(Number(e.target.value))}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group-admin">
                       <label>Mô tả chi tiết:</label>
                       <textarea
                         rows={2}
@@ -485,7 +546,9 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                         <tr>
                           <th>Mã</th>
                           <th>Tên thiết bị</th>
-                          <th>Mô tả</th>
+                          <th>Tổng SL</th>
+                          <th>Đã cấp</th>
+                          <th>Còn kho</th>
                           <th>Trạng thái</th>
                         </tr>
                       </thead>
@@ -496,7 +559,22 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                               <span className="code-tag">{w.code || `#${w.id}`}</span>
                             </td>
                             <td className="font-semibold">{w.name}</td>
-                            <td className="text-muted text-xs">{w.description || "—"}</td>
+                            <td>
+                              <span className="font-bold">{w.totalQuantity ?? 0}</span>
+                            </td>
+                            <td>
+                              <span className="badge-count-pill">{w.allocatedQuantity ?? 0}</span>
+                            </td>
+                            <td>
+                              <span
+                                className={`admin-status-pill flex items-center gap-1 ${
+                                  (w.availableQuantity ?? 0) > 0 ? "pill-approved" : "pill-rejected"
+                                }`}
+                              >
+                                <CheckIcon size={12} />
+                                <span>{w.availableQuantity ?? 0} chiếc</span>
+                              </span>
+                            </td>
                             <td>
                               <span className="admin-status-pill pill-approved flex items-center gap-1">
                                 <CheckIcon size={12} />

@@ -21,15 +21,48 @@ namespace HUIT_RoMan.Application.Modules.Department.Services
             _unitOfWork = unitOfWork;
         }
 
+        private static string NormalizeStatus(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status)) return "Hoạt động";
+            var s = status.Trim();
+            if (s.Equals("Active", StringComparison.OrdinalIgnoreCase) || s.Equals("Hoạt động", StringComparison.OrdinalIgnoreCase))
+                return "Hoạt động";
+            if (s.Equals("Inactive", StringComparison.OrdinalIgnoreCase) || s.Equals("Tạm khóa", StringComparison.OrdinalIgnoreCase) || s.Equals("Ngưng hoạt động", StringComparison.OrdinalIgnoreCase))
+                return "Tạm khóa";
+            return s;
+        }
+
         public async Task<ApiResponse<IEnumerable<DepartmentDto>>> GetAllAsync()
         {
-            var departments = await _departmentRepo.GetAllAsync();
+            var departments = await _departmentRepo.GetAllAsync(d => d.RoomTypes);
+            var employees = await _unitOfWork.Repository<Employee>().GetAllAsync(e => e.User);
+            var rooms = await _unitOfWork.Repository<Domain.Entities.Room>().GetAllAsync(r => r.RoomType);
+
+            bool needsSave = false;
+            foreach (var d in departments)
+            {
+                var norm = NormalizeStatus(d.Status);
+                if (d.Status != norm)
+                {
+                    d.Status = norm;
+                    _departmentRepo.Update(d);
+                    needsSave = true;
+                }
+            }
+            if (needsSave)
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+
             var dtos = departments.Select(d => new DepartmentDto
             {
                 Id = d.Id,
                 Name = d.Name,
                 Type = d.Type,
-                Status = d.Status
+                Status = NormalizeStatus(d.Status),
+                TotalEmployees = employees.Count(e => e.User?.DepartmentId == d.Id),
+                TotalRoomTypes = d.RoomTypes?.Count ?? 0,
+                TotalRooms = rooms.Count(r => r.RoomType?.DepartmentId == d.Id)
             }).ToList();
 
             return new ApiResponse<IEnumerable<DepartmentDto>>
@@ -42,7 +75,7 @@ namespace HUIT_RoMan.Application.Modules.Department.Services
 
         public async Task<ApiResponse<DepartmentDto>> GetByIdAsync(int id)
         {
-            var department = await _departmentRepo.GetByIdAsync(id);
+            var department = await _departmentRepo.GetByIdAsync(id, d => d.RoomTypes);
             if (department == null)
             {
                 return new ApiResponse<DepartmentDto>
@@ -52,12 +85,18 @@ namespace HUIT_RoMan.Application.Modules.Department.Services
                 };
             }
 
+            var employees = await _unitOfWork.Repository<Employee>().GetAllAsync(e => e.User);
+            var rooms = await _unitOfWork.Repository<Domain.Entities.Room>().GetAllAsync(r => r.RoomType);
+
             var dto = new DepartmentDto
             {
                 Id = department.Id,
                 Name = department.Name,
                 Type = department.Type,
-                Status = department.Status
+                Status = NormalizeStatus(department.Status),
+                TotalEmployees = employees.Count(e => e.User?.DepartmentId == department.Id),
+                TotalRoomTypes = department.RoomTypes?.Count ?? 0,
+                TotalRooms = rooms.Count(r => r.RoomType?.DepartmentId == department.Id)
             };
 
             return new ApiResponse<DepartmentDto>
@@ -72,11 +111,12 @@ namespace HUIT_RoMan.Application.Modules.Department.Services
         {
             try
             {
+                var normStatus = NormalizeStatus(request.Status);
                 var department = new EntitiesDepartment
                 {
                     Name = request.Name,
                     Type = request.Type,
-                    Status = request.Status
+                    Status = normStatus
                 };
 
                 await _departmentRepo.AddAsync(department);
@@ -123,7 +163,7 @@ namespace HUIT_RoMan.Application.Modules.Department.Services
 
                 department.Name = request.Name;
                 department.Type = request.Type;
-                department.Status = request.Status;
+                department.Status = NormalizeStatus(request.Status);
 
                 _departmentRepo.Update(department);
                 await _unitOfWork.SaveChangesAsync();

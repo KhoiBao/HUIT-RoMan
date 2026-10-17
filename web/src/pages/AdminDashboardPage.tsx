@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, type FormEvent } from "react";
 import SiteHeader from "../components/SiteHeader";
 import { api } from "../lib/api";
+import { useAuth } from "../auth/AuthContext";
 import AdminBookingApprovalTab from "../components/admin/AdminBookingApprovalTab";
 import AdminRoomsManagementTab from "../components/admin/AdminRoomsManagementTab";
 import AdminEquipmentsManagementTab from "../components/admin/AdminEquipmentsManagementTab";
 import AdminRoomTypesTab from "../components/admin/AdminRoomTypesTab";
+import AdminDepartmentsTab from "../components/admin/AdminDepartmentsTab";
 import AdminEmployeesTab from "../components/admin/AdminEmployeesTab";
 import AdminUsersTab from "../components/admin/AdminUsersTab";
 import {
@@ -28,6 +30,7 @@ import {
   TagIcon,
   BriefcaseIcon,
   GraduationCapIcon,
+  BankIcon,
   XIcon,
 } from "../components/Icon";
 
@@ -36,6 +39,7 @@ export type AdminTabType =
   | "rooms"
   | "equipments"
   | "roomTypes"
+  | "departments"
   | "employees"
   | "users"
   | "timeline";
@@ -231,7 +235,8 @@ const TIME_SLOTS = [
 ];
 
 export default function AdminDashboardPage() {
-  // Navigation active tab: approvals | rooms | roomTypes | employees | users | timeline
+  const { user } = useAuth();
+  // Navigation active tab: approvals | rooms | roomTypes | departments | employees | users | timeline
   const [activeTab, setActiveTab] = useState<AdminTabType>("approvals");
   const [pendingCount, setPendingCount] = useState<number>(0);
 
@@ -598,17 +603,23 @@ export default function AdminDashboardPage() {
           <div className="hero-eyebrow-row">
             <span className="badge-command-center">TRUNG TÂM ĐIỀU HÀNH</span>
             <span className="badge-command-sub">
-              Khu vực kiểm soát quyền Quản trị viên
+              {user?.role === "Employee"
+                ? `Nhân sự quản trị: ${user?.departmentName || "Đơn vị được phân công"}`
+                : "Khu vực kiểm soát quyền Quản trị viên"}
             </span>
           </div>
 
           <div className="hero-main-flex">
             <div className="hero-headings">
               <h1 className="admin-hero-title">
-                Bảng điều khiển Quản lý phòng Thư viện HUIT (Staff)
+                {user?.role === "Employee"
+                  ? `Bảng điều khiển Nhân sự — ${user?.departmentName || "Đơn vị HUIT"}`
+                  : "Bảng điều khiển Quản lý phòng Thư viện HUIT (Admin)"}
               </h1>
               <p className="admin-hero-subtitle">
-                Giám sát thời gian thực, điều phối nhận phòng và xử lý sự cố.
+                {user?.role === "Employee"
+                  ? `Bạn đang quản lý dữ liệu và xét duyệt phòng thuộc phạm vi: ${user?.departmentName || "Đơn vị của bạn"}.`
+                  : "Giám sát thời gian thực, điều phối nhận phòng và xử lý sự cố toàn hệ thống."}
               </p>
             </div>
 
@@ -701,6 +712,17 @@ export default function AdminDashboardPage() {
           <button
             type="button"
             className={`admin-nav-tab-item ${
+              activeTab === "departments" ? "active-tab" : ""
+            }`}
+            onClick={() => setActiveTab("departments")}
+          >
+            <BankIcon size={18} />
+            <span>Quản lý đơn vị</span>
+          </button>
+
+          <button
+            type="button"
+            className={`admin-nav-tab-item ${
               activeTab === "employees" ? "active-tab" : ""
             }`}
             onClick={() => setActiveTab("employees")}
@@ -747,6 +769,10 @@ export default function AdminDashboardPage() {
 
         {activeTab === "roomTypes" && (
           <AdminRoomTypesTab onNotify={showToast} />
+        )}
+
+        {activeTab === "departments" && (
+          <AdminDepartmentsTab onNotify={showToast} />
         )}
 
         {activeTab === "employees" && (

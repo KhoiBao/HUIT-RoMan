@@ -26,6 +26,9 @@ namespace HUIT_RoMan.Domain.Entities
         public string Status { get; set; }
         public string Description { get; set; }
 
+        public int TotalQuantity { get; set; } = 0;
+        public int AvailableQuantity { get; set; } = 0;
+
         [ForeignKey("EquipmentCategory")]
         public int EquipmentCategoryId { get; set; }
         public virtual EquipmentCategory EquipmentCategory { get; set; }

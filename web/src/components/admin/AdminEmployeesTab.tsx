@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../../lib/api";
+import { useAuth } from "../../auth/AuthContext";
 import {
   PlusIcon,
   SearchIcon,
@@ -28,6 +29,7 @@ export interface EmployeeItem {
 export interface DepartmentOption {
   id: number;
   name: string;
+  type?: string;
 }
 
 export interface UserOption {
@@ -43,6 +45,7 @@ interface Props {
 }
 
 export default function AdminEmployeesTab({ onNotify }: Props) {
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [allUsers, setAllUsers] = useState<UserOption[]>([]);
@@ -53,6 +56,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [createUserId, setCreateUserId] = useState<number | "">("");
   const [createPosition, setCreatePosition] = useState<string>("Thủ thư");
+  const [createDeptId, setCreateDeptId] = useState<number | "">("");
 
   // Modal edit
   const [editingEmp, setEditingEmp] = useState<EmployeeItem | null>(null);
@@ -97,6 +101,14 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
     );
   });
 
+  // Open Create Modal
+  const openCreate = () => {
+    setCreateUserId("");
+    setCreatePosition("Thủ thư");
+    setCreateDeptId(user?.role === "Employee" && user?.departmentId ? user.departmentId : "");
+    setShowCreateModal(true);
+  };
+
   // Handle Create Employee
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,11 +121,13 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
       const res = await api.post("/api/Employees", {
         userId: Number(createUserId),
         position: createPosition.trim(),
+        departmentId: createDeptId ? Number(createDeptId) : null,
       });
       if (res.data?.success) {
         onNotify("Đã tạo hồ sơ nhân viên thành công!", "success");
         setShowCreateModal(false);
         setCreateUserId("");
+        setCreateDeptId("");
         await fetchEmployees();
       }
     } catch (err: any) {
@@ -207,7 +221,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
           <button
             type="button"
             className="btn-toolbar-primary"
-            onClick={() => setShowCreateModal(true)}
+            onClick={openCreate}
           >
             <PlusIcon size={16} /> + Thêm nhân sự mới
           </button>
@@ -225,6 +239,34 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
           />
         </div>
       </div>
+
+      {user?.role === "Employee" && (
+        <div style={{
+          backgroundColor: "#eff6ff",
+          border: "1px solid #bfdbfe",
+          color: "#1e40af",
+          padding: "10px 14px",
+          borderRadius: "8px",
+          marginBottom: "16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          fontSize: "13.5px"
+        }}>
+          <span>
+            📌 Bạn đang quản lý danh sách nhân sự thuộc đơn vị: <strong>{user?.departmentName || "Đơn vị được phân công"}</strong>
+          </span>
+          <span style={{
+            backgroundColor: "#dbeafe",
+            padding: "2px 8px",
+            borderRadius: "6px",
+            fontWeight: 600,
+            fontSize: "12px"
+          }}>
+            {filteredEmployees.length} nhân sự
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <div className="admin-loading-state">
@@ -352,6 +394,29 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                     <option value="Chuyên viên">Chuyên viên</option>
                     <option value="Kỹ thuật viên">Kỹ thuật viên</option>
                   </select>
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Đơn vị / Phòng ban tương ứng (*):</label>
+                  <select
+                    className="admin-input"
+                    value={createDeptId}
+                    onChange={(e) => setCreateDeptId(e.target.value ? Number(e.target.value) : "")}
+                    disabled={user?.role === "Employee" && !!user?.departmentId}
+                    required
+                  >
+                    <option value="">-- Chọn đơn vị tương ứng --</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name} {d.type ? `(${d.type})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {user?.role === "Employee" && user?.departmentId && (
+                    <small style={{ color: "#64748b", fontSize: "12px", display: "block", marginTop: "4px" }}>
+                      Tự động gán theo đơn vị của bạn: {user.departmentName || "Đơn vị hiện tại"}
+                    </small>
+                  )}
                 </div>
               </div>
 
