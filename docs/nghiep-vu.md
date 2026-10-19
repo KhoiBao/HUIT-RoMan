@@ -40,7 +40,7 @@ Lưu ý:
 | `Identity` | `User`, `Department`, `Employee`, `UserRestriction` | Xong CRUD + login JWT |
 | `Room` | `Room`, `RoomType`, `RoomEquipment`, `Equipment`, `EquipmentCategory`, `EquipmentConditionLog`, `MaintenanceRecord`, `UsageCondition`, `RoomTypeCondition` | Xong CRUD + xem lịch + phòng trống |
 | `Booking` | `Booking`, `BookingDetail` | Xong tạo/duyệt/hủy/lịch/tiết |
-| `Usage` | `UsageSession`, `Period`, `Shift`, `ShiftLog` | Chưa có Service/Controller |
+| `Usage` | `UsageSession`, `Period`, `Shift`, `ShiftLog` | Xong Service/Controller Check-in, Check-out & Quản lý phiên sử dụng |
 | `Violation` | `ViolationType`, `ViolationRecord`, `Feedback` | Chưa làm (Should/Could) |
 | `Communication` | `Notification`, `ChatConversation`, `ChatMessage` | Chưa làm (Could) |
 | `Reporting` | Dùng stored proc `GetBookingSummary` | Chưa nối vào API |

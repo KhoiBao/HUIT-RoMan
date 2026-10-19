@@ -86,6 +86,20 @@ Vòng đời: `Chờ duyệt` → `Đã duyệt` / `Từ chối` / `Duyệt mộ
 | `PATCH /api/Users/{id}/status?status=Active\|Inactive\|Suspended` | Khóa/mở (khóa chặn login ngay) | Admin |
 | `GET /api/Employees`, `POST`, `PUT/{id}`, `DELETE/{id}` | CRUD nhân sự (xóa = xóa mềm) | Đăng nhập / Admin |
 
+## 8. Quản lý sử dụng phòng & Trả phòng — `UsageSessionsController` (`/api/UsageSessions`)
+
+| Method + đường dẫn | Chức năng | Quyền |
+|---|---|---|
+| `GET /api/UsageSessions?status=&roomId=&date=&search=` | Lấy danh sách phiên sử dụng phòng | Admin, Employee |
+| `GET /api/UsageSessions/active` | Danh sách phòng đang sử dụng thời gian thực | Admin, Employee |
+| `GET /api/UsageSessions/summary` | Thống kê nhanh tình hình sử dụng phòng hôm nay | Admin, Employee |
+| `GET /api/UsageSessions/my` | Xem lịch sử/phiên sử dụng phòng của chính mình | Đăng nhập |
+| `GET /api/UsageSessions/{id}` | Chi tiết phiên sử dụng theo ID | Đăng nhập |
+| `GET /api/UsageSessions/code/{code}` | Tra cứu thông tin phiên theo Mã xác nhận nhận phòng | Đăng nhập |
+| `POST /api/UsageSessions/check-in` | Check-in nhận phòng (chuyển trạng thái sang "Đang sử dụng") | Admin, Employee |
+| `POST /api/UsageSessions/check-out` | Xác nhận trả phòng & Khảo sát thiết bị (hoàn tất phiên, đổi trạng thái phòng về "Trống" hoặc "Bảo trì") | Admin, Employee |
+| `PATCH /api/UsageSessions/{id}/no-show` | Hủy ca do quá giờ không nhận phòng (No-show >15p) | Admin, Employee |
+
 ## Ghi chú xóa mềm
 
 `DELETE` ở mọi module chỉ set `IsDeleted = true` — bản ghi biến mất khỏi mọi API nhưng vẫn nằm trong DB. Muốn dùng lại email đã xóa thì Admin xử lý trong DB.

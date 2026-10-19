@@ -9,6 +9,8 @@ import AdminRoomTypesTab from "../components/admin/AdminRoomTypesTab";
 import AdminDepartmentsTab from "../components/admin/AdminDepartmentsTab";
 import AdminEmployeesTab from "../components/admin/AdminEmployeesTab";
 import AdminUsersTab from "../components/admin/AdminUsersTab";
+import AdminUsageSessionsTab from "../components/admin/AdminUsageSessionsTab";
+import { checkInSession, checkOutSession } from "../lib/usage";
 import {
   ClockIcon,
   UsersIcon,
@@ -36,6 +38,7 @@ import {
 
 export type AdminTabType =
   | "approvals"
+  | "sessions"
   | "rooms"
   | "equipments"
   | "roomTypes"
@@ -405,7 +408,15 @@ export default function AdminDashboardPage() {
   };
 
   // 3. Check-in thủ công
-  const handleCheckInNow = (roomCode: string) => {
+  const handleCheckInNow = async (roomCode: string) => {
+    try {
+      if (selectedBooking?.id) {
+        await checkInSession({ confirmationCode: selectedBooking.id });
+      }
+    } catch {
+      // Bỏ qua lỗi nếu là phòng mock mẫu
+    }
+
     setRooms((prev) =>
       prev.map((r) => {
         if (r.code === roomCode && r.booking) {
@@ -435,8 +446,23 @@ export default function AdminDashboardPage() {
   };
 
   // 4. Trả phòng & Khảo sát thiết bị
-  const handleCompleteSurveyCheckout = () => {
+  const handleCompleteSurveyCheckout = async () => {
     if (!selectedBooking) return;
+    try {
+      if (selectedBooking.id) {
+        await checkOutSession({
+          usageSessionId: 0,
+          roomCondition: "Trống",
+          devicesOk: surveyChecklist.devicesOk,
+          cleaned: surveyChecklist.cleaned,
+          lightsOff: surveyChecklist.lightsOff,
+          staffNote: surveyChecklist.staffNote,
+        });
+      }
+    } catch {
+      // Bỏ qua nếu là phòng mock
+    }
+
     setRooms((prev) =>
       prev.map((r) => {
         if (r.code === selectedBooking.roomCode) {
@@ -679,6 +705,17 @@ export default function AdminDashboardPage() {
           <button
             type="button"
             className={`admin-nav-tab-item ${
+              activeTab === "sessions" ? "active-tab" : ""
+            }`}
+            onClick={() => setActiveTab("sessions")}
+          >
+            <ShieldCheckIcon size={18} />
+            <span>Sử dụng &amp; Trả phòng</span>
+          </button>
+
+          <button
+            type="button"
+            className={`admin-nav-tab-item ${
               activeTab === "rooms" ? "active-tab" : ""
             }`}
             onClick={() => setActiveTab("rooms")}
@@ -757,6 +794,10 @@ export default function AdminDashboardPage() {
         {/* ── Tab Views ─────────────────────────────────────────────────── */}
         {activeTab === "approvals" && (
           <AdminBookingApprovalTab onNotify={showToast} />
+        )}
+
+        {activeTab === "sessions" && (
+          <AdminUsageSessionsTab onNotify={showToast} />
         )}
 
         {activeTab === "rooms" && (

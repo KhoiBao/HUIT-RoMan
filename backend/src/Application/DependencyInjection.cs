@@ -3,6 +3,7 @@ using HUIT_RoMan.Application.Modules.Identity.Services;
 using HUIT_RoMan.Application.Modules.Room.Services;
 using HUIT_RoMan.Application.Modules.Department.Services;
 using HUIT_RoMan.Application.Modules.Booking.Services;
+using HUIT_RoMan.Application.Modules.Usage.Services;
 
 namespace HUIT_RoMan.Application;
 
@@ -29,6 +30,9 @@ public static class DependencyInjection
 
         // Booking Services
         services.AddScoped<IBookingService, BookingService>();
+
+        // Usage Module (Quản lý phiên sử dụng & Trả phòng)
+        services.AddScoped<IUsageService, UsageService>();
 
         return services;
     }

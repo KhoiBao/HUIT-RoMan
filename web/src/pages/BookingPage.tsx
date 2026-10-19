@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import SiteHeader from "../components/SiteHeader";
 import InfoFooter from "../components/InfoFooter";
@@ -14,6 +14,7 @@ import {
   type AvailableRoom,
   type BookingResponse,
   type BookingFormState,
+  type BookingDetailItem,
   validateBookingForm,
   buildBookingPayload,
   canCancelBooking,
@@ -30,13 +31,20 @@ import {
   getScheduleStatusBadge,
   fetchPeriodsApi,
 } from "../lib/schedule";
+import {
+  fetchMyUsageSessions,
+  checkInSession,
+  checkOutSession,
+  type UsageSessionItem,
+} from "../lib/usage";
 
 export default function BookingPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Active Tab: "create" | "my-bookings"
-  const [activeTab, setActiveTab] = useState<"create" | "my-bookings">("create");
+  // Active Tab: "create" | "my-bookings" (auto-select from ?tab=my-bookings)
+  const initialTab = searchParams.get("tab") === "my-bookings" ? "my-bookings" : "create";
+  const [activeTab, setActiveTab] = useState<"create" | "my-bookings">(initialTab);
 
   // Periods metadata
   const [periods, setPeriods] = useState<Period[]>([]);
@@ -78,10 +86,48 @@ export default function BookingPage() {
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // My bookings tab state
+  // My bookings & Usage Sessions tab state
   const [myBookings, setMyBookings] = useState<BookingResponse[]>([]);
+  const [myUsageSessions, setMyUsageSessions] = useState<UsageSessionItem[]>([]);
   const [isLoadingBookings, setIsLoadingBookings] = useState<boolean>(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+
+  // User Check-In / Check-Out states & modals
+  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState<boolean>(false);
+  const [isCheckOutModalOpen, setIsCheckOutModalOpen] = useState<boolean>(false);
+  const [selectedDetailItem, setSelectedDetailItem] = useState<{
+    detail: BookingDetailItem;
+    booking: BookingResponse;
+    session?: UsageSessionItem;
+  } | null>(null);
+
+  // Check-In form state
+  const [checkInGuestCount, setCheckInGuestCount] = useState<number>(1);
+  const [checkInNote, setCheckInNote] = useState<string>("");
+  const [isProcessingCheckIn, setIsProcessingCheckIn] = useState<boolean>(false);
+
+  // Check-Out form state
+  const [checkOutNote, setCheckOutNote] = useState<string>("");
+  const [devicesOk, setDevicesOk] = useState<boolean>(true);
+  const [cleaned, setCleaned] = useState<boolean>(true);
+  const [lightsOff, setLightsOff] = useState<boolean>(true);
+  const [isProcessingCheckOut, setIsProcessingCheckOut] = useState<boolean>(false);
+
+  // Quick Code Check-in state & toast
+  const [quickCodeInput, setQuickCodeInput] = useState<string>("");
+  const [isQuickCheckingIn, setIsQuickCheckingIn] = useState<boolean>(false);
+  const [directCheckingInId, setDirectCheckingInId] = useState<number | null>(null);
+  const [usageToast, setUsageToast] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  // Sync activeTab when URL searchParams has tab=my-bookings
+  useEffect(() => {
+    if (searchParams.get("tab") === "my-bookings") {
+      setActiveTab("my-bookings");
+    }
+  }, [searchParams]);
 
   // 1. Initial Load: Periods
   useEffect(() => {
@@ -139,14 +185,18 @@ export default function BookingPage() {
     }
   }, [isInitializing]);
 
-  // 3. Load My Bookings
+  // 3. Load My Bookings & My Usage Sessions
   async function loadMyBookings() {
     setIsLoadingBookings(true);
     try {
-      const list = await fetchMyBookingsApi();
-      setMyBookings(list);
+      const [bookingsList, sessionsList] = await Promise.all([
+        fetchMyBookingsApi(),
+        fetchMyUsageSessions().catch(() => []),
+      ]);
+      setMyBookings(bookingsList);
+      setMyUsageSessions(sessionsList);
     } catch (err: unknown) {
-      console.error("Failed to fetch my bookings", err);
+      console.error("Failed to fetch my bookings/sessions", err);
     } finally {
       setIsLoadingBookings(false);
     }
@@ -157,6 +207,171 @@ export default function BookingPage() {
       loadMyBookings();
     }
   }, [activeTab]);
+
+  // Session map by BookingDetailId for fast O(1) lookup
+  const sessionByDetailId = useMemo(() => {
+    const map = new Map<number, UsageSessionItem>();
+    for (const s of myUsageSessions) {
+      map.set(s.bookingDetailId, s);
+    }
+    return map;
+  }, [myUsageSessions]);
+
+  // Quick Code Check-in
+  async function handleQuickCodeCheckIn(e: React.FormEvent) {
+    e.preventDefault();
+    const cleanCode = quickCodeInput.trim().toUpperCase();
+    if (!cleanCode) {
+      setUsageToast({
+        type: "error",
+        text: "Vui lòng nhập mã nhận phòng (VD: HUIT-18549) để check-in hoặc bấm nút '⚡ Check-in nhận phòng ngay' bên dưới.",
+      });
+      return;
+    }
+
+    setIsQuickCheckingIn(true);
+    setUsageToast(null);
+    try {
+      const res = await checkInSession({ confirmationCode: cleanCode });
+      setUsageToast({
+        type: "success",
+        text: `✓ Nhận phòng ${res.roomName} (${res.roomCode}) thành công! Trạng thái phòng chuyển sang 'Đang sử dụng'.`,
+      });
+      setQuickCodeInput("");
+      await loadMyBookings();
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message ||
+        (err instanceof Error
+          ? err.message
+          : "Mã nhận phòng không hợp lệ hoặc không thuộc quyền sở hữu của bạn.");
+      setUsageToast({
+        type: "error",
+        text: msg,
+      });
+    } finally {
+      setIsQuickCheckingIn(false);
+    }
+  }
+
+  // Direct 1-Click Check-in without forcing a modal
+  async function handleDirectCheckIn(
+    detail: BookingDetailItem,
+    session?: UsageSessionItem
+  ) {
+    setDirectCheckingInId(detail.id);
+    setUsageToast(null);
+    try {
+      const res = await checkInSession({
+        bookingDetailId: detail.id,
+        usageSessionId: session?.id,
+        actualGuestCount: detail.guestCount || 1,
+        staffNote: "Người dùng tự check-in trên web",
+      });
+      setUsageToast({
+        type: "success",
+        text: `✓ Check-in nhận phòng ${res.roomCode} thành công! Phòng đã chuyển sang trạng thái 'Đang sử dụng'.`,
+      });
+      await loadMyBookings();
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message ||
+        (err instanceof Error ? err.message : "Nhận phòng thất bại.");
+      setUsageToast({
+        type: "error",
+        text: msg,
+      });
+    } finally {
+      setDirectCheckingInId(null);
+    }
+  }
+
+  function openCheckInModal(
+    detail: BookingDetailItem,
+    booking: BookingResponse,
+    session?: UsageSessionItem
+  ) {
+    setSelectedDetailItem({ detail, booking, session });
+    setCheckInGuestCount(detail.guestCount || 1);
+    setCheckInNote("");
+    setIsCheckInModalOpen(true);
+  }
+
+  async function handleConfirmCheckIn() {
+    if (!selectedDetailItem) return;
+    setIsProcessingCheckIn(true);
+    setUsageToast(null);
+    try {
+      const res = await checkInSession({
+        bookingDetailId: selectedDetailItem.detail.id,
+        usageSessionId: selectedDetailItem.session?.id,
+        actualGuestCount: checkInGuestCount,
+        staffNote: checkInNote.trim() || undefined,
+      });
+      setIsCheckInModalOpen(false);
+      setUsageToast({
+        type: "success",
+        text: `✓ Check-in nhận phòng ${res.roomCode} thành công! Chúc bạn có buổi học tập/sinh hoạt hiệu quả.`,
+      });
+      await loadMyBookings();
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message ||
+        (err instanceof Error ? err.message : "Nhận phòng thất bại.");
+      setUsageToast({
+        type: "error",
+        text: msg,
+      });
+    } finally {
+      setIsProcessingCheckIn(false);
+    }
+  }
+
+  function openCheckOutModal(
+    detail: BookingDetailItem,
+    booking: BookingResponse,
+    session?: UsageSessionItem
+  ) {
+    setSelectedDetailItem({ detail, booking, session });
+    setCheckOutNote("");
+    setDevicesOk(true);
+    setCleaned(true);
+    setLightsOff(true);
+    setIsCheckOutModalOpen(true);
+  }
+
+  async function handleConfirmCheckOut() {
+    if (!selectedDetailItem) return;
+    setIsProcessingCheckOut(true);
+    setUsageToast(null);
+    try {
+      const res = await checkOutSession({
+        usageSessionId: selectedDetailItem.session?.id,
+        bookingDetailId: selectedDetailItem.detail.id,
+        roomCondition: devicesOk ? "Trống" : "Bảo trì",
+        staffNote: checkOutNote.trim() || undefined,
+        devicesOk,
+        cleaned,
+        lightsOff,
+      });
+      setIsCheckOutModalOpen(false);
+      setUsageToast({
+        type: "success",
+        text: `✓ Xác nhận trả phòng ${res.roomCode} thành công! Cảm ơn bạn đã giữ gìn vệ sinh và thiết bị phòng.`,
+      });
+      await loadMyBookings();
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.message ||
+        (err instanceof Error ? err.message : "Xác nhận trả phòng thất bại.");
+      setUsageToast({
+        type: "error",
+        text: msg,
+      });
+    } finally {
+      setIsProcessingCheckOut(false);
+    }
+  }
 
   // Toggle room selection
   function toggleRoom(roomId: number) {
@@ -733,13 +948,13 @@ export default function BookingPage() {
             </div>
           )}
 
-          {/* TAB 2: MY BOOKINGS HISTORY */}
+          {/* TAB 2: MY BOOKINGS HISTORY & ROOM USAGE */}
           {activeTab === "my-bookings" && (
             <section className="my-bookings-section">
               <div className="section-head-bar">
                 <div>
-                  <h2>Lịch sử các đơn đặt phòng của bạn</h2>
-                  <p>Theo dõi tiến độ xét duyệt và trạng thái từng phòng</p>
+                  <h2>Lịch sử đơn & Nhận phòng</h2>
+                  <p>Theo dõi tiến độ duyệt, lấy mã nhận phòng và thực hiện Check-in / Trả phòng</p>
                 </div>
                 <button
                   type="button"
@@ -750,10 +965,56 @@ export default function BookingPage() {
                 </button>
               </div>
 
+              {/* Usage feedback Toast */}
+              {usageToast && (
+                <div className={`usage-toast-alert ${usageToast.type}`}>
+                  <span>{usageToast.text}</span>
+                  <button
+                    type="button"
+                    className="usage-toast-close"
+                    onClick={() => setUsageToast(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Quick Check-in Banner */}
+              <div className="user-checkin-hero-box">
+                <div className="user-checkin-hero-info">
+                  <div className="user-checkin-hero-title">
+                    <span>⚡ Nhận phòng nhanh bằng mã xác nhận</span>
+                  </div>
+                  <p className="user-checkin-hero-desc">
+                    Khi đến phòng đã được duyệt, bạn có thể nhập mã nhận phòng (HUIT-xxxxx) hoặc bấm nút Check-in bên dưới để bắt đầu sử dụng phòng ngay.
+                  </p>
+                </div>
+                <form
+                  onSubmit={handleQuickCodeCheckIn}
+                  className="user-quick-code-form"
+                >
+                  <input
+                    type="text"
+                    className="user-quick-code-input"
+                    placeholder="Mã: HUIT-xxxxx"
+                    value={quickCodeInput}
+                    onChange={(e) => setQuickCodeInput(e.target.value)}
+                    disabled={isQuickCheckingIn}
+                  />
+                  <button
+                    type="submit"
+                    className="user-quick-code-btn"
+                    disabled={isQuickCheckingIn}
+                  >
+                    {isQuickCheckingIn ? "Đang xử lý..." : "⚡ Nhận phòng ngay"}
+                  </button>
+                </form>
+              </div>
+
               {isLoadingBookings && (
                 <div className="loading-box">
                   <div className="spinner"></div>
-                  <span>Đang tải lịch sử đơn đặt...</span>
+                  <span>Đang tải lịch sử đơn đặt & phiên sử dụng...</span>
                 </div>
               )}
 
@@ -833,30 +1094,157 @@ export default function BookingPage() {
 
                           {/* Room Details in Booking */}
                           <div className="booking-details-sublist">
-                            <h4>Danh sách phòng trong đơn ({b.details.length}):</h4>
-                            <div className="booking-details-grid">
+                            <h4>Danh sách phòng & Trạng thái nhận phòng ({b.details.length}):</h4>
+                            <div className="user-details-grid">
                               {b.details.map((detail) => {
-                                const detailStatus = getScheduleStatusBadge(
-                                  detail.status
-                                );
+                                const session = sessionByDetailId.get(detail.id);
+                                const detailStatus = getScheduleStatusBadge(detail.status);
+                                const isApproved =
+                                  detail.status === "Đã duyệt" ||
+                                  session?.status === "Chờ nhận phòng";
+                                const isInUse =
+                                  detail.status === "Đang sử dụng" ||
+                                  session?.status === "Đang sử dụng";
+                                const isCompleted =
+                                  detail.status === "Hoàn thành" ||
+                                  session?.status === "Hoàn thành";
+
+                                const cardStatusClass = isApproved
+                                  ? "status-approved"
+                                  : isInUse
+                                  ? "status-in-use"
+                                  : "";
+
                                 return (
                                   <div
                                     key={detail.id}
-                                    className="detail-room-badge"
+                                    className={`user-detail-card ${cardStatusClass}`}
                                   >
-                                    <div className="detail-room-title">
-                                      <BuildingIcon size={14} />
-                                      <strong>{detail.roomCode}</strong> —{" "}
-                                      {detail.roomName}
+                                    <div className="user-detail-head">
+                                      <div className="user-room-title">
+                                        <span className="user-room-code-badge">
+                                          {detail.roomCode}
+                                        </span>
+                                        <span>{detail.roomName}</span>
+                                      </div>
+                                      {isInUse ? (
+                                        <span className="badge-in-use-pill">
+                                          <span className="pulse-dot-green"></span>
+                                          Đang sử dụng
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className={`detail-chip ${detailStatus.cssClass}`}
+                                        >
+                                          {detailStatus.label}
+                                        </span>
+                                      )}
                                     </div>
-                                    <div className="detail-time-text">
-                                      {new Date(detail.startAt).toLocaleDateString("vi-VN")} • {formatDetailTimeRange(detail)}
+
+                                    <div className="user-detail-meta">
+                                      <div className="user-detail-meta-row">
+                                        <ClockIcon size={13} />
+                                        <span>
+                                          {new Date(detail.startAt).toLocaleDateString("vi-VN")} • {formatDetailTimeRange(detail)}
+                                        </span>
+                                      </div>
+
+                                      {/* Confirmation Code for check-in */}
+                                      {session?.confirmationCode && (
+                                        <div className="user-code-box">
+                                          <span>Mã nhận phòng:</span>
+                                          <strong className="user-code-val">
+                                            {session.confirmationCode}
+                                          </strong>
+                                          <button
+                                            type="button"
+                                            className="btn-copy-code-mini"
+                                            onClick={() => {
+                                              navigator.clipboard.writeText(
+                                                session.confirmationCode
+                                              );
+                                              alert(
+                                                `Đã sao chép mã nhận phòng: ${session.confirmationCode}`
+                                              );
+                                            }}
+                                          >
+                                            📋 Chép mã
+                                          </button>
+                                        </div>
+                                      )}
+
+                                      {/* Timestamps */}
+                                      {session?.actualCheckIn && (
+                                        <div className="completed-note-text">
+                                          Đã nhận phòng lúc:{" "}
+                                          {new Date(session.actualCheckIn).toLocaleTimeString(
+                                            "vi-VN",
+                                            { hour: "2-digit", minute: "2-digit" }
+                                          )}
+                                        </div>
+                                      )}
+                                      {session?.actualCheckOut && (
+                                        <div className="completed-note-text">
+                                          Đã trả phòng lúc:{" "}
+                                          {new Date(session.actualCheckOut).toLocaleTimeString(
+                                            "vi-VN",
+                                            { hour: "2-digit", minute: "2-digit" }
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
-                                    <span
-                                      className={`detail-chip ${detailStatus.cssClass}`}
-                                    >
-                                      {detailStatus.label}
-                                    </span>
+
+                                    {/* Action Buttons */}
+                                    <div className="user-detail-footer">
+                                      {isApproved && (
+                                        <div style={{ display: "flex", gap: "6px", width: "100%" }}>
+                                          <button
+                                            type="button"
+                                            className="btn-user-checkin-action"
+                                            disabled={directCheckingInId === detail.id}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDirectCheckIn(detail, session);
+                                            }}
+                                          >
+                                            {directCheckingInId === detail.id
+                                              ? "⏳ Đang nhận phòng..."
+                                              : "⚡ Check-in nhận phòng ngay"}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="btn-outline"
+                                            style={{ padding: "6px 10px", fontSize: "12px", whiteSpace: "nowrap" }}
+                                            title="Tùy chỉnh số lượng người hoặc ghi chú nhận phòng"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openCheckInModal(detail, b, session);
+                                            }}
+                                          >
+                                            Chi tiết
+                                          </button>
+                                        </div>
+                                      )}
+
+                                      {isInUse && (
+                                        <button
+                                          type="button"
+                                          className="btn-user-checkout-action"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openCheckOutModal(detail, b, session);
+                                          }}
+                                        >
+                                          ✓ Xác nhận trả phòng
+                                        </button>
+                                      )}
+
+                                      {isCompleted && (
+                                        <span className="completed-note-text">
+                                          ✓ Đã hoàn tất buổi mượn phòng
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 );
                               })}
@@ -869,6 +1257,220 @@ export default function BookingPage() {
                 </div>
               )}
             </section>
+          )}
+
+          {/* USER CHECK-IN MODAL */}
+          {isCheckInModalOpen && selectedDetailItem && (
+            <div
+              className="admin-modal-overlay modal-backdrop"
+              onClick={() => setIsCheckInModalOpen(false)}
+            >
+              <div
+                className="admin-modal-box modal-dialog quick-checkin-modal"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <div className="modal-title-wrap">
+                    <h3>⚡ Xác nhận nhận phòng</h3>
+                    <span className="modal-subtitle">
+                      Bắt đầu thời gian sử dụng phòng thực tế
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="modal-close-btn"
+                    onClick={() => setIsCheckInModalOpen(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="modal-body">
+                  <div className="user-modal-summary">
+                    <div className="user-modal-summary-row">
+                      <span>Phòng:</span>
+                      <strong>
+                        {selectedDetailItem.detail.roomCode} — {selectedDetailItem.detail.roomName}
+                      </strong>
+                    </div>
+                    <div className="user-modal-summary-row">
+                      <span>Hoạt động:</span>
+                      <strong>{selectedDetailItem.booking.activityName}</strong>
+                    </div>
+                    <div className="user-modal-summary-row">
+                      <span>Thời gian:</span>
+                      <strong>{formatDetailTimeRange(selectedDetailItem.detail)}</strong>
+                    </div>
+                    {selectedDetailItem.session?.confirmationCode && (
+                      <div className="user-modal-summary-row">
+                        <span>Mã nhận phòng:</span>
+                        <strong className="text-primary">
+                          {selectedDetailItem.session.confirmationCode}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "14px" }}>
+                    <label className="form-label">
+                      Số lượng người thực tế vào phòng:
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      className="form-input"
+                      value={checkInGuestCount}
+                      onChange={(e) =>
+                        setCheckInGuestCount(Math.max(1, Number(e.target.value)))
+                      }
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
+                      Ghi chú khi nhận phòng (tùy chọn):
+                    </label>
+                    <textarea
+                      rows={2}
+                      className="form-input"
+                      placeholder="Ghi chú thêm về thiết bị hoặc hiện trạng ban đầu..."
+                      value={checkInNote}
+                      onChange={(e) => setCheckInNote(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={() => setIsCheckInModalOpen(false)}
+                    disabled={isProcessingCheckIn}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleConfirmCheckIn}
+                    disabled={isProcessingCheckIn}
+                  >
+                    {isProcessingCheckIn ? "Đang nhận phòng..." : "✓ Xác nhận vào phòng"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* USER CHECK-OUT MODAL */}
+          {isCheckOutModalOpen && selectedDetailItem && (
+            <div
+              className="admin-modal-overlay modal-backdrop"
+              onClick={() => setIsCheckOutModalOpen(false)}
+            >
+              <div
+                className="admin-modal-box modal-dialog quick-checkin-modal"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="modal-header">
+                  <div className="modal-title-wrap">
+                    <h3>✓ Xác nhận trả phòng</h3>
+                    <span className="modal-subtitle">
+                      Hoàn thành phiên sử dụng và bàn giao phòng
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="modal-close-btn"
+                    onClick={() => setIsCheckOutModalOpen(false)}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="modal-body">
+                  <div className="user-modal-summary">
+                    <div className="user-modal-summary-row">
+                      <span>Phòng:</span>
+                      <strong>
+                        {selectedDetailItem.detail.roomCode} — {selectedDetailItem.detail.roomName}
+                      </strong>
+                    </div>
+                    <div className="user-modal-summary-row">
+                      <span>Hoạt động:</span>
+                      <strong>{selectedDetailItem.booking.activityName}</strong>
+                    </div>
+                  </div>
+
+                  <p className="quick-checkin-hint">
+                    Vui lòng kiểm tra và tích xác nhận các tiêu chí bàn giao phòng trước khi rời đi:
+                  </p>
+
+                  <div className="user-checkout-checklist">
+                    <label className="checkout-check-item">
+                      <input
+                        type="checkbox"
+                        checked={lightsOff}
+                        onChange={(e) => setLightsOff(e.target.checked)}
+                      />
+                      <span>Đã tắt điều hòa nhiệt độ, quạt gió và hệ thống đèn chiếu sáng</span>
+                    </label>
+
+                    <label className="checkout-check-item">
+                      <input
+                        type="checkbox"
+                        checked={cleaned}
+                        onChange={(e) => setCleaned(e.target.checked)}
+                      />
+                      <span>Đã thu dọn rác cá nhân và trả lại phòng sạch sẽ gọn gàng</span>
+                    </label>
+
+                    <label className="checkout-check-item">
+                      <input
+                        type="checkbox"
+                        checked={devicesOk}
+                        onChange={(e) => setDevicesOk(e.target.checked)}
+                      />
+                      <span>Tất cả thiết bị, máy chiếu, bàn ghế nguyên vẹn (bỏ tích nếu có hư hỏng)</span>
+                    </label>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
+                      Ghi chú phản hồi / Báo cáo sự cố (nếu có):
+                    </label>
+                    <textarea
+                      rows={2}
+                      className="form-input"
+                      placeholder="Nếu có sự cố máy chiếu, điều hòa... xin hãy ghi chú để ban quản lý sửa chữa kịp thời..."
+                      value={checkOutNote}
+                      onChange={(e) => setCheckOutNote(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={() => setIsCheckOutModalOpen(false)}
+                    disabled={isProcessingCheckOut}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    style={{ background: "linear-gradient(135deg, #059669, #10b981)" }}
+                    onClick={handleConfirmCheckOut}
+                    disabled={isProcessingCheckOut}
+                  >
+                    {isProcessingCheckOut ? "Đang xử lý..." : "✓ Xác nhận trả phòng"}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </main>
