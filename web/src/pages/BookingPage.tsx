@@ -9,7 +9,9 @@ import {
   UsersIcon,
   PlusIcon,
   InfoIcon,
+  BanIcon,
 } from "../components/Icon";
+import { checkMyEligibility, type UserEligibility } from "../lib/violations";
 import {
   type AvailableRoom,
   type BookingResponse,
@@ -85,6 +87,7 @@ export default function BookingPage() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [myEligibility, setMyEligibility] = useState<UserEligibility | null>(null);
 
   // My bookings & Usage Sessions tab state
   const [myBookings, setMyBookings] = useState<BookingResponse[]>([]);
@@ -147,6 +150,13 @@ export default function BookingPage() {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  // Check user violation eligibility
+  useEffect(() => {
+    checkMyEligibility()
+      .then((res) => setMyEligibility(res))
+      .catch((err) => console.warn("Could not check eligibility:", err));
   }, []);
 
   // 2. Search Available Rooms
@@ -391,6 +401,17 @@ export default function BookingPage() {
     setSubmitError(null);
     setSubmitSuccess(null);
 
+    if (myEligibility?.hasActiveRestriction) {
+      setSubmitError(
+        `Tài khoản đang bị tạm đình chỉ / cấm mượn phòng đến hết ngày ${
+          myEligibility.endAt
+            ? new Date(myEligibility.endAt).toLocaleDateString("vi-VN")
+            : "theo quyết định kỷ luật"
+        }. Lý do: ${myEligibility.reason || "Vi phạm quy chế mượn phòng"}.`
+      );
+      return;
+    }
+
     const validation = validateBookingForm(form, selectedRoomIds);
     if (!validation.isValid) {
       setErrors(validation.errors);
@@ -501,17 +522,69 @@ export default function BookingPage() {
 
           {/* TAB 1: CREATE BOOKING */}
           {activeTab === "create" && (
-            <div className="booking-flow-grid">
-              {/* Left Column: Form & Time Selection */}
-              <div className="booking-form-col">
-                <form
-                  onSubmit={handleBookingSubmit}
-                  className="booking-form-card"
+            <>
+              {myEligibility?.hasActiveRestriction && (
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #f87171",
+                    borderRadius: "10px",
+                    padding: "16px 20px",
+                    marginBottom: "20px",
+                    color: "#991b1b",
+                    boxShadow: "0 2px 8px rgba(220, 38, 38, 0.08)",
+                  }}
                 >
-                  <div className="form-step-title">
-                    <span className="step-num">1</span>
-                    <h3>Chọn thời gian & Chế độ đặt</h3>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      fontWeight: 700,
+                      fontSize: "15px",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    <BanIcon size={20} />
+                    <span>TÀI KHOẢN ĐANG BỊ CẤM MƯỢN PHÒNG</span>
                   </div>
+                  <div style={{ fontSize: "13.5px", lineHeight: "1.5" }}>
+                    <div>
+                      <strong>Lý do áp dụng:</strong>{" "}
+                      {myEligibility.reason || "Vi phạm quy định sử dụng phòng thư viện."}
+                    </div>
+                    {myEligibility.endAt && (
+                      <div style={{ marginTop: "4px" }}>
+                        <strong>Thời hạn kỷ luật:</strong> Đến hết ngày{" "}
+                        {new Date(myEligibility.endAt).toLocaleDateString("vi-VN")}{" "}
+                        (còn {myEligibility.remainingDays} ngày).
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        marginTop: "6px",
+                        color: "#b91c1c",
+                        fontStyle: "italic",
+                        fontSize: "12.5px",
+                      }}
+                    >
+                      * Hệ thống tạm khóa chức năng gửi đơn mượn phòng của bạn trong thời gian này.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="booking-flow-grid">
+                {/* Left Column: Form & Time Selection */}
+                <div className="booking-form-col">
+                  <form
+                    onSubmit={handleBookingSubmit}
+                    className="booking-form-card"
+                  >
+                    <div className="form-step-title">
+                      <span className="step-num">1</span>
+                      <h3>Chọn thời gian & Chế độ đặt</h3>
+                    </div>
 
                   {/* Mode switcher: Theo tiết vs Theo giờ */}
                   <div className="mode-segmented-control">
@@ -809,10 +882,33 @@ export default function BookingPage() {
                   <button
                     type="submit"
                     className="btn-primary-block"
-                    disabled={isSubmitting || selectedRoomIds.length === 0}
+                    disabled={
+                      isSubmitting ||
+                      selectedRoomIds.length === 0 ||
+                      myEligibility?.hasActiveRestriction
+                    }
+                    style={
+                      myEligibility?.hasActiveRestriction
+                        ? {
+                            background: "#dc2626",
+                            borderColor: "#dc2626",
+                            cursor: "not-allowed",
+                          }
+                        : undefined
+                    }
                   >
                     {isSubmitting ? (
                       <span>Đang xử lý gửi đơn...</span>
+                    ) : myEligibility?.hasActiveRestriction ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <BanIcon size={16} /> Tài khoản đang bị cấm mượn phòng
+                      </span>
                     ) : (
                       <span>
                         Gửi yêu cầu đặt {selectedRoomIds.length} phòng đã chọn
@@ -946,7 +1042,8 @@ export default function BookingPage() {
                 </div>
               </div>
             </div>
-          )}
+          </>
+        )}
 
           {/* TAB 2: MY BOOKINGS HISTORY & ROOM USAGE */}
           {activeTab === "my-bookings" && (

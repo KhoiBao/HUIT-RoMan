@@ -19,6 +19,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         private readonly IRepository<Domain.Entities.Room> _roomRepo;
         private readonly IRepository<Period> _periodRepo;
         private readonly IRepository<Domain.Entities.User> _userRepo;
+        private readonly IRepository<UserRestriction> _userRestrictionRepo;
 
         public BookingService(IUnitOfWork unitOfWork, ICurrentUserService currentUser)
         {
@@ -29,6 +30,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             _roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
             _periodRepo = _unitOfWork.Repository<Period>();
             _userRepo = _unitOfWork.Repository<Domain.Entities.User>();
+            _userRestrictionRepo = _unitOfWork.Repository<UserRestriction>();
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -38,6 +40,22 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         {
             if (_currentUser.UserId == null)
                 return ApiResponse<BookingResponseDto>.ErrorResponse("Bạn cần đăng nhập để đặt phòng.");
+
+            // Kiểm tra lệnh cấm mượn phòng (UserRestriction)
+            var now = DateTime.UtcNow;
+            var activeRestrictions = await _userRestrictionRepo.FindAsync(
+                ur => ur.UserId == _currentUser.UserId.Value
+                   && ur.Status == "Hoạt động"
+                   && ur.StartAt <= now
+                   && (ur.EndAt == null || ur.EndAt >= now)
+            );
+            if (activeRestrictions.Any())
+            {
+                var r = activeRestrictions.First();
+                var endStr = r.EndAt.HasValue ? $" đến ngày {r.EndAt.Value.AddHours(7):dd/MM/yyyy HH:mm}" : "";
+                return ApiResponse<BookingResponseDto>.ErrorResponse(
+                    $"Tài khoản của bạn hiện đang bị cấm/hạn chế mượn phòng{endStr}. Lý do: {r.Reason}. Vui lòng liên hệ ban quản lý thư viện để được giải quyết biên bản vi phạm.");
+            }
 
             if (request.Details == null || !request.Details.Any())
                 return ApiResponse<BookingResponseDto>.ErrorResponse("Vui lòng chọn ít nhất một phòng.");
@@ -539,7 +557,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 CreatedAt = booking.CreatedAt,
                 UserId = booking.UserId,
                 UserName = booking.User?.UserName,
-                UserFullName = booking.User?.UserName,
+                UserFullName = booking.User?.FullName ?? booking.User?.UserName,
                 Details = detailDtos
             };
         }
@@ -550,6 +568,72 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             foreach (var b in bookings.OrderByDescending(b => b.CreatedAt))
                 result.Add(await MapBookingAsync(b));
             return result;
+        }
+
+        public async Task<ApiResponse<IEnumerable<BookingResponseDto>>> SearchBookingsAsync(
+            string? keyword,
+            string? status,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int? roomId)
+        {
+            var bookings = await _bookingRepo.GetAllAsync(
+                b => b.User,
+                b => b.BookingDetails);
+
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            {
+                var deptId = _currentUser.DepartmentId.Value;
+                var deptRooms = (await _roomRepo.FindAsync(r => r.RoomType != null && r.RoomType.DepartmentId == deptId))
+                    .Select(r => r.Id).ToHashSet();
+
+                bookings = bookings.Where(b =>
+                    b.BookingDetails != null && b.BookingDetails.Any(d => deptRooms.Contains(d.RoomId))).ToList();
+            }
+
+            var query = bookings.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
+            {
+                query = query.Where(b => string.Equals(b.Status, status, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (fromDate.HasValue)
+            {
+                var f = fromDate.Value.ToUniversalTime();
+                query = query.Where(b => b.RequestedAt >= f);
+            }
+
+            if (toDate.HasValue)
+            {
+                var t = toDate.Value.ToUniversalTime();
+                query = query.Where(b => b.RequestedAt <= t);
+            }
+
+            if (roomId.HasValue && roomId.Value > 0)
+            {
+                query = query.Where(b => b.BookingDetails != null && b.BookingDetails.Any(d => d.RoomId == roomId.Value));
+            }
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                var term = keyword.Trim().ToLower();
+                query = query.Where(b =>
+                    b.Id.ToString() == term ||
+                    $"#{b.Id}".Contains(term) ||
+                    (b.ActivityName != null && b.ActivityName.ToLower().Contains(term)) ||
+                    (b.Purpose != null && b.Purpose.ToLower().Contains(term)) ||
+                    (b.User != null && (
+                        (b.User.FullName != null && b.User.FullName.ToLower().Contains(term)) ||
+                        (b.User.CardCode != null && b.User.CardCode.ToLower().Contains(term)) ||
+                        (b.User.UserName != null && b.User.UserName.ToLower().Contains(term)) ||
+                        (b.User.Email != null && b.User.Email.ToLower().Contains(term))
+                    ))
+                );
+            }
+
+            var dtos = await MapBookingListAsync(query);
+            return ApiResponse<IEnumerable<BookingResponseDto>>.SuccessResponse(dtos);
         }
     }
 }

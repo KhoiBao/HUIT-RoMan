@@ -158,5 +158,67 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             
             return ApiResponse<bool>.SuccessResponse(true, "Xóa phòng thành công");
         }
+
+        public async Task<ApiResponse<IEnumerable<RoomDto>>> SearchAsync(
+            string? keyword,
+            int? roomTypeId,
+            string? building,
+            string? floor,
+            string? status,
+            int? minCapacity)
+        {
+            var rooms = await _roomRepo.GetAllAsync(r => r.RoomType);
+
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            {
+                rooms = rooms.Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value).ToList();
+            }
+
+            var query = rooms.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                var term = keyword.Trim().ToLower();
+                query = query.Where(r =>
+                    r.Name.ToLower().Contains(term) ||
+                    r.RoomCode.ToLower().Contains(term) ||
+                    (r.Building != null && r.Building.ToLower().Contains(term)) ||
+                    (r.Floor != null && r.Floor.ToLower().Contains(term)) ||
+                    (r.RoomType != null && r.RoomType.Name.ToLower().Contains(term))
+                );
+            }
+
+            if (roomTypeId.HasValue && roomTypeId.Value > 0)
+                query = query.Where(r => r.RoomTypeId == roomTypeId.Value);
+
+            if (!string.IsNullOrWhiteSpace(building) && building != "ALL")
+                query = query.Where(r => string.Equals(r.Building, building, System.StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(floor) && floor != "ALL")
+                query = query.Where(r => string.Equals(r.Floor, floor, System.StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
+                query = query.Where(r => string.Equals(r.Status, status, System.StringComparison.OrdinalIgnoreCase));
+
+            if (minCapacity.HasValue && minCapacity.Value > 0)
+                query = query.Where(r => r.Capacity >= minCapacity.Value);
+
+            var dtos = query.Select(r => new RoomDto
+            {
+                Id = r.Id,
+                Name = r.Name,
+                RoomCode = r.RoomCode,
+                Building = r.Building,
+                Floor = r.Floor,
+                RoomNumber = r.RoomNumber,
+                Capacity = r.Capacity,
+                Status = r.Status,
+                RoomTypeId = r.RoomTypeId,
+                RoomTypeName = r.RoomType?.Name,
+                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
+            }).ToList();
+
+            return ApiResponse<IEnumerable<RoomDto>>.SuccessResponse(dtos);
+        }
     }
 }

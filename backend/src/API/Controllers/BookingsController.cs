@@ -42,6 +42,20 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(response);
         }
 
+        /// <summary>Tìm kiếm phiếu mượn phòng đa tiêu chí</summary>
+        [HttpGet("search")]
+        [Authorize(Roles = "Admin,Employee")]
+        public async Task<IActionResult> Search(
+            [FromQuery] string? keyword,
+            [FromQuery] string? status,
+            [FromQuery] DateTime? fromDate,
+            [FromQuery] DateTime? toDate,
+            [FromQuery] int? roomId)
+        {
+            var response = await _bookingService.SearchBookingsAsync(keyword, status, fromDate, toDate, roomId);
+            return Ok(response);
+        }
+
         /// <summary>Lấy đơn đặt phòng của user hiện tại</summary>
         [HttpGet("my")]
         public async Task<IActionResult> GetMy()

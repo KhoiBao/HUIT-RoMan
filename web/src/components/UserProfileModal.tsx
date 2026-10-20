@@ -7,8 +7,10 @@ import {
   ShieldCheckIcon,
   BuildingIcon,
   AlertTriangleIcon,
+  BanIcon,
   XIcon,
 } from "./Icon";
+import { checkMyEligibility, type UserEligibility } from "../lib/violations";
 
 
 interface UserProfileModalProps {
@@ -36,6 +38,7 @@ export default function UserProfileModal({
   const { user, logout } = useAuth();
 
   const [profile, setProfile] = useState<FullUserProfile | null>(null);
+  const [eligibility, setEligibility] = useState<UserEligibility | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isEditing, setIsEditing] = useState<boolean>(false);
 
@@ -55,16 +58,17 @@ export default function UserProfileModal({
     async function loadProfile() {
       setLoading(true);
       try {
-        const res = await api.get("/api/Users/me");
-        const data = res.data?.data ?? res.data;
+        const [userRes, elig] = await Promise.all([
+          api.get("/api/Users/me").catch(() => null),
+          checkMyEligibility().catch(() => null),
+        ]);
+
+        const data = userRes?.data?.data ?? userRes?.data;
         if (isMounted && data) {
           setProfile(data);
           setPhoneInput(data.phoneNumber || "");
           setEmailInput(data.email || "");
-        }
-      } catch {
-        // Fallback to auth context user
-        if (isMounted && user) {
+        } else if (isMounted && user) {
           const fallbackData: FullUserProfile = {
             id: user.id,
             userName: user.cardCode,
@@ -86,6 +90,12 @@ export default function UserProfileModal({
           setPhoneInput(fallbackData.phoneNumber || "");
           setEmailInput(fallbackData.email || "");
         }
+
+        if (isMounted && elig) {
+          setEligibility(elig);
+        }
+      } catch (err) {
+        console.error("Error loading profile:", err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -183,6 +193,22 @@ export default function UserProfileModal({
                     ? "Đã khóa"
                     : profile?.status || "Hoạt động"}
                 </span>
+                {eligibility?.hasActiveRestriction && (
+                  <span
+                    className="profile-status-pill pill-danger"
+                    style={{
+                      background: "#fee2e2",
+                      color: "#b91c1c",
+                      border: "1px solid #fecaca",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    <BanIcon size={12} /> Cấm mượn phòng
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -211,6 +237,50 @@ export default function UserProfileModal({
             </div>
           ) : (
             <>
+              {/* Cảnh báo cấm mượn phòng nếu có */}
+              {eligibility?.hasActiveRestriction && (
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fca5a5",
+                    borderRadius: "10px",
+                    padding: "14px 16px",
+                    marginBottom: "16px",
+                    color: "#991b1b",
+                    boxShadow: "0 1px 3px rgba(220, 38, 38, 0.08)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      fontWeight: 700,
+                      fontSize: "14px",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    <AlertTriangleIcon size={18} />
+                    <span>TÀI KHOẢN ĐANG BỊ HẠN CHẾ / CẤM MƯỢN PHÒNG</span>
+                  </div>
+                  <div style={{ fontSize: "13px", lineHeight: "1.45" }}>
+                    <div>
+                      <strong>Lý do:</strong>{" "}
+                      {eligibility.reason || "Vi phạm quy chế sử dụng phòng thư viện."}
+                    </div>
+                    {eligibility.endAt && (
+                      <div style={{ marginTop: "4px" }}>
+                        <strong>Thời hạn áp dụng:</strong> Đến hết ngày{" "}
+                        {new Date(eligibility.endAt).toLocaleDateString("vi-VN")}{" "}
+                        {eligibility.remainingDays
+                          ? `(còn ${eligibility.remainingDays} ngày)`
+                          : ""}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Thông tin học thuật / Đơn vị */}
               <div className="profile-section-card">
                 <h4 className="profile-card-title">
@@ -231,9 +301,35 @@ export default function UserProfileModal({
                   </div>
                   <div className="profile-item-row">
                     <span className="item-label">Trạng thái hồ sơ:</span>
-                    <span className="item-value color-green bold">
-                      Đủ điều kiện đăng ký phòng
-                    </span>
+                    {eligibility?.hasActiveRestriction ||
+                    eligibility?.isEligible === false ? (
+                      <span
+                        className="item-value bold"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          color: "#dc2626",
+                        }}
+                      >
+                        <BanIcon size={14} /> Bị cấm mượn phòng{" "}
+                        {eligibility.remainingDays
+                          ? `(Còn ${eligibility.remainingDays} ngày)`
+                          : ""}
+                      </span>
+                    ) : (
+                      <span
+                        className="item-value bold"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          color: "#16a34a",
+                        }}
+                      >
+                        <CheckCircleIcon size={14} /> Đủ điều kiện đăng ký phòng
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

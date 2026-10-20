@@ -683,9 +683,14 @@ export default function AdminDepartmentsTab({ onNotify }: Props) {
                     lineHeight: "1.5",
                   }}
                 >
-                  ⚠️ <strong>Cảnh báo ràng buộc:</strong> Đơn vị này hiện đang có{" "}
-                  <strong>{deletingDept.totalEmployees} nhân sự</strong> và{" "}
-                  <strong>{deletingDept.totalRooms} phòng học</strong> trực thuộc. Hệ thống sẽ từ chối xóa nếu các liên kết này chưa được giải phóng.
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "6px" }}>
+                    <AlertTriangleIcon size={16} />
+                    <span>
+                      <strong>Cảnh báo ràng buộc:</strong> Đơn vị này hiện đang có{" "}
+                      <strong>{deletingDept.totalEmployees} nhân sự</strong> và{" "}
+                      <strong>{deletingDept.totalRooms} phòng học</strong> trực thuộc. Hệ thống sẽ từ chối xóa nếu các liên kết này chưa được giải phóng.
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

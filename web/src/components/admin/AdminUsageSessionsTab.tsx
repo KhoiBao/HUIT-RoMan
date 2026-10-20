@@ -20,7 +20,13 @@ import {
   ShieldCheckIcon,
   BanIcon,
   ClipboardListIcon,
+  AlertTriangleIcon,
 } from "../Icon";
+import {
+  fetchViolationTypes,
+  recordViolation,
+  type ViolationTypeItem,
+} from "../../lib/violations";
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
@@ -57,6 +63,70 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
   const [showQuickCodeModal, setShowQuickCodeModal] = useState(false);
   const [quickCodeInput, setQuickCodeInput] = useState("");
   const [isSubmittingQuickCheckIn, setIsSubmittingQuickCheckIn] = useState(false);
+
+  // Modal Lập biên bản vi phạm từ phiên sử dụng
+  const [showViolationModal, setShowViolationModal] = useState(false);
+  const [violationTargetSession, setViolationTargetSession] =
+    useState<UsageSessionItem | null>(null);
+  const [violationTypes, setViolationTypes] = useState<ViolationTypeItem[]>([]);
+  const [violationTypeId, setViolationTypeId] = useState<number>(0);
+  const [violationDesc, setViolationDesc] = useState("");
+  const [violationSeverity, setViolationSeverity] = useState<number>(2);
+  const [violationPenalty, setViolationPenalty] = useState("");
+  const [violationRestrictDays, setViolationRestrictDays] = useState<number>(0);
+  const [isSubmittingViolation, setIsSubmittingViolation] = useState(false);
+
+  const openViolationModalForSession = async (session: UsageSessionItem) => {
+    setViolationTargetSession(session);
+    try {
+      const types = await fetchViolationTypes();
+      setViolationTypes(types);
+      if (types.length > 0) {
+        setViolationTypeId(types[0].id);
+        setViolationSeverity(types[0].severity);
+        setViolationPenalty(types[0].defaultPenalty || "Cảnh cáo");
+        if (types[0].severity >= 3) setViolationRestrictDays(14);
+        else if (types[0].severity === 2) setViolationRestrictDays(3);
+        else setViolationRestrictDays(0);
+      }
+    } catch {
+      // ignore
+    }
+    setViolationDesc(
+      `Phát hiện vi phạm tại phòng ${session.roomCode} (${session.roomName}) trong phiên sử dụng #${session.id}.`
+    );
+    setShowViolationModal(true);
+  };
+
+  const handleRecordViolationSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!violationTargetSession) return;
+    try {
+      setIsSubmittingViolation(true);
+      await recordViolation({
+        userId: violationTargetSession.userId,
+        violationTypeId: violationTypeId,
+        usageSessionId: violationTargetSession.id,
+        description: violationDesc.trim(),
+        severity: violationSeverity,
+        penaltyApplied: violationPenalty.trim() || "Cảnh cáo",
+        restrictDays: violationRestrictDays,
+      });
+      onNotify(
+        `Đã lập biên bản vi phạm thành công cho ${violationTargetSession.userFullName}!`,
+        "success"
+      );
+      setShowViolationModal(false);
+      setViolationTargetSession(null);
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || "Không thể lưu biên bản vi phạm.",
+        "warning"
+      );
+    } finally {
+      setIsSubmittingViolation(false);
+    }
+  };
 
   // Load dữ liệu
   const loadData = async () => {
@@ -537,46 +607,57 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
 
                     {/* Actions */}
                     <td className="cell-actions text-right">
-                      {session.status === "Chờ nhận phòng" && (
-                        <div className="action-button-group">
+                      <div className="action-button-group">
+                        {session.status === "Chờ nhận phòng" && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn-table-action btn-checkin"
+                              onClick={() => handleCheckIn(session)}
+                              title="Xác nhận nhận phòng ngay"
+                            >
+                              <ShieldCheckIcon size={14} />
+                              <span>Check-in</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="btn-table-action btn-noshow"
+                              onClick={() => handleCancelNoShow(session)}
+                              title="Hủy do quá 15 phút không đến nhận phòng"
+                            >
+                              <BanIcon size={14} />
+                            </button>
+                          </>
+                        )}
+
+                        {session.status === "Đang sử dụng" && (
                           <button
                             type="button"
-                            className="btn-table-action btn-checkin"
-                            onClick={() => handleCheckIn(session)}
-                            title="Xác nhận nhận phòng ngay"
+                            className="btn-table-action btn-checkout"
+                            onClick={() => openCheckoutModal(session)}
+                            title="Khảo sát thiết bị & Xác nhận trả phòng"
                           >
-                            <ShieldCheckIcon size={14} />
-                            <span>Check-in</span>
+                            <ClipboardListIcon size={14} />
+                            <span>Trả phòng</span>
                           </button>
+                        )}
 
-                          <button
-                            type="button"
-                            className="btn-table-action btn-noshow"
-                            onClick={() => handleCancelNoShow(session)}
-                            title="Hủy do quá 15 phút không đến nhận phòng"
-                          >
-                            <BanIcon size={14} />
-                          </button>
-                        </div>
-                      )}
+                        {session.status === "Hoàn thành" && (
+                          <span className="done-pill" title="Đã hoàn tất ca sử dụng">
+                            <CheckCircleIcon size={14} /> Đã trả
+                          </span>
+                        )}
 
-                      {session.status === "Đang sử dụng" && (
                         <button
                           type="button"
-                          className="btn-table-action btn-checkout"
-                          onClick={() => openCheckoutModal(session)}
-                          title="Khảo sát thiết bị & Xác nhận trả phòng"
+                          className="btn-table-action btn-action-violation-sm"
+                          onClick={() => openViolationModalForSession(session)}
+                          title="Lập biên bản vi phạm cho người mượn phiên này"
                         >
-                          <ClipboardListIcon size={14} />
-                          <span>Trả phòng &amp; Khảo sát</span>
+                          <AlertTriangleIcon size={13} />
                         </button>
-                      )}
-
-                      {session.status === "Hoàn thành" && (
-                        <span className="done-pill" title="Đã hoàn tất ca sử dụng">
-                          <CheckCircleIcon size={14} /> Đã trả phòng
-                        </span>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -843,6 +924,114 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                       <span>Xác nhận Check-in ngay</span>
                     </>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal 3: Lập biên bản vi phạm từ phiên sử dụng ───────────────── */}
+      {showViolationModal && violationTargetSession && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-box checkout-modal-card">
+            <div className="modal-header">
+              <div className="modal-title-with-badge">
+                <h3 className="modal-title text-amber">
+                  Lập biên bản vi phạm #{violationTargetSession.roomCode}
+                </h3>
+                <span className="modal-sub-tag">
+                  Phiên #{violationTargetSession.id} - {violationTargetSession.userFullName}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowViolationModal(false)}
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordViolationSubmit} className="modal-form">
+              <div className="form-group">
+                <label className="field-label required">Loại vi phạm</label>
+                <select
+                  value={violationTypeId}
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    setViolationTypeId(id);
+                    const vt = violationTypes.find((t) => t.id === id);
+                    if (vt) {
+                      setViolationSeverity(vt.severity);
+                      setViolationPenalty(vt.defaultPenalty || "Cảnh cáo");
+                      if (vt.severity >= 3) setViolationRestrictDays(14);
+                      else if (vt.severity === 2) setViolationRestrictDays(3);
+                      else setViolationRestrictDays(0);
+                    }
+                  }}
+                  className="input-select"
+                  required
+                >
+                  {violationTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.code} - {t.name} (Mức {t.severity})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="field-label required">Mô tả chi tiết vi phạm</label>
+                <textarea
+                  rows={3}
+                  value={violationDesc}
+                  onChange={(e) => setViolationDesc(e.target.value)}
+                  className="input-textarea"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="field-label required">Hình thức xử lý / Phạt</label>
+                <input
+                  type="text"
+                  value={violationPenalty}
+                  onChange={(e) => setViolationPenalty(e.target.value)}
+                  className="input-text"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="field-label">Áp dụng cấm mượn phòng (Khóa đặt phòng)</label>
+                <select
+                  value={violationRestrictDays}
+                  onChange={(e) => setViolationRestrictDays(Number(e.target.value))}
+                  className="input-select"
+                >
+                  <option value={0}>Không cấm mượn</option>
+                  <option value={3}>Cấm mượn 3 ngày</option>
+                  <option value={7}>Cấm mượn 7 ngày</option>
+                  <option value={14}>Cấm mượn 14 ngày</option>
+                  <option value={30}>Cấm mượn 30 ngày</option>
+                </select>
+              </div>
+
+              <div className="modal-footer-actions">
+                <button
+                  type="button"
+                  className="btn-modal-cancel"
+                  onClick={() => setShowViolationModal(false)}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-submit btn-submit-violation"
+                  disabled={isSubmittingViolation}
+                >
+                  {isSubmittingViolation ? "Đang lưu..." : "Lưu biên bản vi phạm"}
                 </button>
               </div>
             </form>

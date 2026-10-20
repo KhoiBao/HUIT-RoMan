@@ -12,5 +12,12 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         Task<ApiResponse<RoomDto>> CreateAsync(CreateRoomDto request);
         Task<ApiResponse<bool>> UpdateAsync(int id, UpdateRoomDto request);
         Task<ApiResponse<bool>> DeleteAsync(int id);
+        Task<ApiResponse<IEnumerable<RoomDto>>> SearchAsync(
+            string? keyword,
+            int? roomTypeId,
+            string? building,
+            string? floor,
+            string? status,
+            int? minCapacity);
     }
 }

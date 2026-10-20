@@ -38,6 +38,20 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(response);
         }
 
+        /// <summary>Tìm kiếm phòng đa tiêu chí (từ khóa, tòa nhà, tầng, loại phòng, trạng thái, sức chứa)</summary>
+        [HttpGet("search")]
+        public async Task<IActionResult> Search(
+            [FromQuery] string? keyword,
+            [FromQuery] int? roomTypeId,
+            [FromQuery] string? building,
+            [FromQuery] string? floor,
+            [FromQuery] string? status,
+            [FromQuery] int? minCapacity)
+        {
+            var response = await _roomService.SearchAsync(keyword, roomTypeId, building, floor, status, minCapacity);
+            return Ok(response);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {

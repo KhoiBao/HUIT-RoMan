@@ -27,5 +27,8 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
 
         /// <summary>Kích hoạt / vô hiệu hoá user (đổi Status)</summary>
         Task<ApiResponse<bool>> SetStatusAsync(int id, string status);
+
+        /// <summary>Tìm kiếm người mượn / người dùng đa tiêu chí</summary>
+        Task<ApiResponse<IEnumerable<UserDto>>> SearchAsync(string? keyword, string? role, string? status, int? departmentId);
     }
 }

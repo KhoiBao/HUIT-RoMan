@@ -53,12 +53,25 @@ namespace HUIT_RoMan.API.Controllers
         // READ
         // ─────────────────────────────────────────────────────────────────
 
-        /// <summary>Lấy tất cả người dùng (Admin)</summary>
+        /// <summary>Lấy tất cả người dùng (Admin, Employee)</summary>
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Employee")]
         public async Task<IActionResult> GetAll()
         {
             var response = await _userService.GetAllAsync();
+            return Ok(response);
+        }
+
+        /// <summary>Tìm kiếm người dùng / người mượn đa tiêu chí (tên, MSSV/mã cán bộ, email, phone, role, status)</summary>
+        [HttpGet("search")]
+        [Authorize(Roles = "Admin,Employee")]
+        public async Task<IActionResult> Search(
+            [FromQuery] string? keyword,
+            [FromQuery] string? role,
+            [FromQuery] string? status,
+            [FromQuery] int? departmentId)
+        {
+            var response = await _userService.SearchAsync(keyword, role, status, departmentId);
             return Ok(response);
         }
 

@@ -143,6 +143,44 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<bool>.SuccessResponse(true, $"Đã cập nhật trạng thái người dùng thành '{status}'.");
         }
 
+        public async Task<ApiResponse<IEnumerable<UserDto>>> SearchAsync(string? keyword, string? role, string? status, int? departmentId)
+        {
+            var query = _userManager.Users.AsQueryable();
+
+            if (departmentId.HasValue && departmentId.Value > 0)
+                query = query.Where(u => u.DepartmentId == departmentId.Value);
+
+            if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
+                query = query.Where(u => u.Status == status);
+
+            var users = query.ToList();
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                var term = keyword.Trim().ToLower();
+                users = users.Where(u =>
+                    (u.FullName != null && u.FullName.ToLower().Contains(term)) ||
+                    (u.CardCode != null && u.CardCode.ToLower().Contains(term)) ||
+                    (u.UserName != null && u.UserName.ToLower().Contains(term)) ||
+                    (u.Email != null && u.Email.ToLower().Contains(term)) ||
+                    (u.PhoneNumber != null && u.PhoneNumber.Contains(term))
+                ).ToList();
+            }
+
+            var dtos = new List<UserDto>();
+            foreach (var u in users)
+            {
+                var userRoles = await _userManager.GetRolesAsync(u);
+                var userRole = userRoles.Count > 0 ? userRoles[0] : "Student";
+                if (!string.IsNullOrWhiteSpace(role) && role != "ALL" && !string.Equals(userRole, role, System.StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                dtos.Add(await MapUserDtoAsync(u, userRole));
+            }
+
+            return ApiResponse<IEnumerable<UserDto>>.SuccessResponse(dtos);
+        }
+
         // ─────────────────────────────────────────────────────────────────
         // PRIVATE HELPERS
         // ─────────────────────────────────────────────────────────────────

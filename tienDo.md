@@ -1,6 +1,6 @@
 # BÁO CÁO ĐÁNH GIÁ TIẾN ĐỘ DỰ ÁN HUIT-RoMan
 **Hệ thống Quản lý Đăng ký và Khai thác Phòng Dùng Chung — Trường Đại học Công Thương TP.HCM (HUIT)**  
-*Mã đề tài: CNTT-KLCN236 | Cập nhật lúc: 19/10/2026*
+*Mã đề tài: CNTT-KLCN236 | Cập nhật lúc: 20/10/2026*
 
 ---
 
@@ -8,13 +8,13 @@
 
 | Phân hệ / Giai đoạn | Trạng thái | Đánh giá hoàn thành | Ghi chú |
 |---|---|---|---|
-| **Giao diện Web ReactJS** | Đã hoàn thiện cốt lõi | **95%** | Hoàn thành trang Đăng nhập, Trang chủ, Đặt phòng, Lịch phòng, Dashboard Quản trị, Duyệt phòng, Quản lý sử dụng & Trả phòng |
+| **Giao diện Web ReactJS** | Đã hoàn thiện nâng cao | **98%** | Hoàn thành Đăng nhập, Trang chủ, Đặt phòng, Lịch phòng, Dashboard Quản trị, Duyệt phòng, Quản lý sử dụng & Trả phòng, Phân hệ Xử lý vi phạm & Tìm kiếm hợp nhất Ctrl+K |
 | **Giao diện Mobile Flutter** | Chưa triển khai | **0%** | Chưa có source code Flutter trong dự án (xem xét ưu tiên sau) |
-| **Backend ASP.NET Core** | Hoàn thiện chức năng chính | **85%** | Đã hoàn thành Auth JWT, Danh mục, Phòng, Thiết bị, Đặt phòng, Duyệt đơn, Lịch phòng, Quản lý sử dụng & Trả phòng |
+| **Backend ASP.NET Core** | Hoàn thiện chức năng chính | **90%** | Đã hoàn thành Auth JWT, Danh mục, Phòng, Thiết bị, Đặt phòng, Duyệt đơn, Lịch phòng, Quản lý sử dụng & Trả phòng, Xử lý vi phạm, Tìm kiếm hợp nhất |
 | **Quản lý sử dụng & Trả phòng** | Hoàn thành | **100%** | Đã xây dựng hoàn chỉnh Entity, Stored Procedure, UsageService, UsageSessionsController, AdminUsageSessionsTab |
-| **Xử lý vi phạm & Lịch trực** | Chưa hoàn thiện | **15%** | Đã có Entity & Stored Procedure Database, chưa có API & UI |
+| **Xử lý vi phạm & Lịch trực** | Hoàn thành phân hệ vi phạm | **60%** | Đã hoàn thành 100% phân hệ Xử lý vi phạm, Lập biên bản, Cấm mượn phòng & Chặn đặt phòng; còn phân hệ Phân ca lịch trực |
 | **Thống kê & Báo cáo** | Đang dở dang | **30%** | Đã có PostgreSQL Function, chưa nối API Controller & UI biểu đồ |
-| **Kiểm thử toàn hệ thống** | Đang thực hiện | **45%** | Đã kiểm thử API qua Swagger & UI Web; chưa kiểm thử toàn diện E2E |
+| **Kiểm thử toàn hệ thống** | Đang thực hiện | **50%** | Đã kiểm thử API qua Swagger & UI Web; Vitest unit tests đạt 100% |
 
 ---
 
@@ -160,49 +160,74 @@
 
 ### TUẦN 9: XỬ LÝ VI PHẠM, LỊCH TRỰC NHÂN VIÊN & TÌM KIẾM NÂNG CAO
 
-18. [ ] **Xây dựng chức năng xử lý vi phạm**
-    - **Hiện trạng:** Chưa hoàn thiện (Mới có Database Entity & Stored Procedure).
-    - **Chi tiết:** Đã có Entity `ViolationRecord.cs`, `ViolationType.cs`, `UserRestriction.cs` và thủ tục `sp_record_violation_and_restrict`, nhưng chưa có Service/Controller quản lý vi phạm trên Backend.
+18. [x] **Xây dựng chức năng xử lý vi phạm**
+    - **Hiện trạng:** Hoàn thành toàn diện (Đạt 100%).
+    - **Chi tiết:**
+      - **Backend:** Xây dựng `IViolationService` và `ViolationService.cs`, `ViolationsController.cs` hỗ trợ toàn bộ quy trình: Quản lý danh mục loại vi phạm (`ViolationType`), lập và tra cứu biên bản (`ViolationRecord`), xử lý và thay đổi hình thức kỷ luật/phạt tiền, quản lý danh sách cấm mượn phòng (`UserRestriction`), kiểm tra điều kiện mượn phòng của người dùng (`/user-eligibility/{userId}`), thống kê số liệu vi phạm (`/stats`). Tích hợp chặn mượn phòng thời gian thực vào `BookingService.CreateBookingAsync`.
+      - **Database & Seeder:** Seed dữ liệu mẫu cho các loại vi phạm chuẩn (`VT01` - `VT06`), biên bản vi phạm thực tế và lệnh cấm thử nghiệm trong `ApplicationDbSeeder.cs`.
+      - **Web UI:** Xây dựng giao diện `AdminViolationsTab.tsx` với 4 thẻ KPI thống kê, 3 tab con (Biên bản vi phạm, Lệnh cấm & hạn chế, Danh mục loại vi phạm), bộ lọc đa tiêu chí, modal xử lý kỷ luật, modal gỡ cấm sớm có lý do xác nhận và áp dụng lệnh cấm thủ công.
 
-19. [ ] **Ghi nhận biên bản vi phạm**
-    - **Hiện trạng:** Chưa hoàn thiện (Chưa có API & UI).
-    - **Chi tiết:** Chưa có API endpoint và màn hình giao diện cho phép nhân sự lập biên bản ghi nhận vi phạm và áp dụng hình thức phạt (cấm mượn phòng).
+19. [x] **Ghi nhận biên bản vi phạm**
+    - **Hiện trạng:** Hoàn thành toàn diện (Đạt 100%).
+    - **Chi tiết:**
+      - **Backend:** Cung cấp API `POST /api/Violations` tiếp nhận lập biên bản kèm xử lý tự động tính toán thời hạn cấm dựa trên cấu hình loại vi phạm (hỗ trợ cả hình thức cảnh cáo, bồi thường, cấm mượn phòng có thời hạn hoặc vĩnh viễn). Tự động tạo bản ghi `UserRestriction` khi áp dụng hình thức cấm mượn phòng.
+      - **Web UI:**
+        - Modal lập biên bản độc lập trên `AdminViolationsTab.tsx`: Hỗ trợ tìm kiếm nhanh người vi phạm bằng autocomplete, chọn phiên sử dụng liên quan (nếu có), tự động gợi ý mức độ nghiêm trọng và chế tài xử lý theo loại vi phạm.
+        - Tích hợp trực tiếp trên `AdminUsageSessionsTab.tsx`: Nút "Lập biên bản vi phạm" ngay trên từng phiên sử dụng phòng (đang sử dụng hoặc hoàn tất), tự động điền thông tin người mượn, phòng và mã phiên.
 
 20. [ ] **Gửi thông báo nhắc nhở người sử dụng**
     - **Hiện trạng:** Chưa thực hiện.
     - **Chi tiết:** Đã có Entity `Notification.cs` trong Domain nhưng chưa có Controller/Service tạo và đẩy thông báo.
 
-21. [ ] **Quản lý lịch trực của nhân viên**
-    - **Hiện trạng:** Chưa thực hiện.
-    - **Chi tiết:** Đã có Entity `Shift.cs`, `ShiftLog.cs` trong Domain nhưng chưa có API Controller và giao diện phân ca/xếp lịch trực cho nhân sự.
+21. [x] **Quản lý lịch trực của nhân viên**
+    - **Hiện trạng:** Hoàn thành toàn diện (Đạt 100%).
+    - **Chi tiết:**
+      - **Backend:** Xây dựng `IShiftService`, `ShiftService`, `ShiftsController.cs` (`/api/Shifts`, `/api/Shifts/logs`, `/api/Shifts/my-shifts`, `/api/Shifts/stats`) cho phép lập lịch trực theo ca (sáng, chiều, tối), phân công nhân sự nhiều người cho một ca, cập nhật trạng thái ca trực (Lên lịch, Đang trực, Hoàn thành, Hủy), ghi chép và tra cứu nhật ký trực (bàn giao chìa khóa, phát hiện sự cố, kiểm tra an ninh vệ sinh). Tích hợp seed dữ liệu mẫu ca trực phong phú trong `ApplicationDbSeeder.cs`.
+      - **Web UI:** Xây dựng component `AdminShiftsTab.tsx` với chế độ xem kép:
+        - *Lưới lịch tuần trực quan (Week Calendar)*: Hiển thị 7 ngày trong tuần với các thẻ ca trực phân màu trực quan (Sáng - Chiều - Tối), huy hiệu trạng thái, avatar nhân sự phân công, nút đổi trạng thái ca trực (Bắt đầu, Hoàn tất, Sửa, Xóa).
+        - *Danh sách chi tiết dạng bảng (Table View)* kèm bộ lọc nâng cao (Tuần này, Hôm nay, Tuần sau, Tất cả, tìm kiếm, lọc trạng thái, lọc ca của tôi).
+        - *Modal phân ca trực mới / Sửa ca* với multi-checkbox chọn nhân sự.
+        - *Khu vực Nhật ký bàn giao ca & Ghi chú trực (Shift Logs)* kèm modal thêm ghi chép mới.
 
-22. [ ] **Xây dựng chức năng tìm kiếm phòng, người mượn, phiếu mượn, biên bản vi phạm**
-    - **Hiện trạng:** Hoàn thành một phần (Đạt ~65%).
-      - [x] Tìm kiếm phòng: Tìm theo tên, mã phòng, tòa nhà, tầng, loại phòng, sức chứa trên API (`RoomsController.cs`) và UI (`AdminRoomsManagementTab.tsx`, `BookingPage.tsx`, `SchedulePage.tsx`).
-      - [x] Tìm kiếm người mượn: Tìm theo họ tên, email, mã số trên API (`UsersController.cs`) và UI (`AdminUsersTab.tsx`).
-      - [x] Tìm kiếm phiếu mượn: Tìm theo mã đơn, hoạt động, phòng, người đặt trên UI (`AdminBookingApprovalTab.tsx`).
-      - [ ] Tìm kiếm biên bản vi phạm: Chưa có vì phân hệ vi phạm chưa hoàn thành.
+22. [x] **Xây dựng chức năng tìm kiếm phòng, người mượn, phiếu mượn, biên bản vi phạm**
+    - **Hiện trạng:** Hoàn thành toàn diện (Đạt 100%).
+      - [x] **Tìm kiếm phòng:** API `GET /api/Rooms/search` + UI `AdminRoomsManagementTab.tsx`, `BookingPage.tsx`, `SchedulePage.tsx` tìm theo từ khóa tên, mã phòng, tòa nhà, tầng, loại phòng, sức chứa.
+      - [x] **Tìm kiếm người mượn / người dùng:** API `GET /api/Users/search` + UI `AdminUsersTab.tsx` tìm theo họ tên, email, mã số sinh viên / cán bộ, số điện thoại, vai trò.
+      - [x] **Tìm kiếm phiếu mượn:** API `GET /api/Bookings/search` + UI `AdminBookingApprovalTab.tsx` tìm theo mã đơn, mục đích/hoạt động, tên phòng, người mượn.
+      - [x] **Tìm kiếm biên bản vi phạm:** API `GET /api/Violations` + UI `AdminViolationsTab.tsx` lọc theo mã biên bản, người vi phạm, loại vi phạm, mức độ nghiêm trọng, trạng thái xử lý.
+      - [x] **Hộp thoại tìm kiếm hợp nhất (Global Search Modal):** Xây dựng component `AdminGlobalSearchModal.tsx` mở nhanh bằng phím tắt `Ctrl + K` hoặc nút kính lúp trên thanh công cụ Admin, cho phép tìm kiếm song song xuyên suốt 4 phân hệ (Phòng, Người dùng, Phiếu mượn, Biên bản vi phạm) kèm badge kết quả và điều hướng trực tiếp đến đối tượng tương ứng.
 
 ---
 
 ### TUẦN 10: THỐNG KÊ, BÁO CÁO & HOÀN THIỆN WEB REACTJS
 
-23. [ ] **Xây dựng chức năng thống kê, báo cáo**
-    - **Hiện trạng:** Chưa hoàn thiện (Đã có SQL Function trong Database, chưa có API & UI).
-    - **Chi tiết:** Đã viết PostgreSQL Function `fn_get_booking_summary` và phương thức `GetBookingSummaryAsync` trong `StoredProcedureService.cs`, nhưng chưa tạo Controller (`ReportsController`) để cung cấp dữ liệu cho giao diện.
+23. [x] **Xây dựng chức năng thống kê, báo cáo**
+    - **Hiện trạng:** Hoàn thành toàn diện (Đạt 100%).
+    - **Chi tiết:**
+      - **Backend:** Xây dựng `IReportService`, `ReportService`, `ReportsController.cs` kết nối với Stored Procedure `fn_get_booking_summary` và cơ chế tổng hợp đa chiều từ EF Core. Cung cấp API tổng quan `GET /api/Reports/overview`, xuất báo cáo `GET /api/Reports/export` dạng file CSV chuẩn UTF-8 có BOM tương thích 100% với Microsoft Excel.
+      - **Web UI:** Xây dựng component `AdminReportsTab.tsx` với dải 4 thẻ KPI điều hành cấp cao (Tổng đơn & tỷ lệ duyệt, Tổng giờ dùng thực tế, Số vụ vi phạm & lệnh cấm, Hoạt động ca trực) kèm bộ lọc thời gian linh hoạt (7 ngày, 30 ngày, Quý, Năm, Tùy chọn ngày).
 
-24. [ ] **Thống kê tình trạng sử dụng phòng**
-    - **Hiện trạng:** Chưa hoàn thiện (Mới có hàm tính toán `total_rooms_used` ở DB, chưa có API và biểu đồ Web).
+24. [x] **Thống kê tình trạng sử dụng phòng**
+    - **Hiện trạng:** Hoàn thành toàn diện (Đạt 100%).
+    - **Chi tiết:**
+      - Cung cấp API `GET /api/Reports/room-usage` tính toán số giờ sử dụng thực tế, tỷ lệ lấp đầy (Occupancy Rate %) chuẩn hóa theo giờ mở cửa thư viện, số lượt check-in và số phiên sử dụng hoàn tất.
+      - UI hiển thị Bảng xếp hạng phòng được mượn nhiều nhất (Leaderboard) có huy chương 🥇🥈🥉, thống kê khai thác theo từng loại phòng và đánh giá tình trạng trang thiết bị sau khi trả phòng (tỷ lệ thiết bị tốt vs lỗi).
 
-25. [ ] **Thống kê lượt mượn phòng**
-    - **Hiện trạng:** Chưa hoàn thiện (Đã tính các chỉ số tổng đơn, đã duyệt, từ chối, chờ duyệt, đã hủy ở DB function, chưa có API và UI hiển thị).
+25. [x] **Thống kê lượt mượn phòng**
+    - **Hiện trạng:** Hoàn thành toàn diện (Đạt 100%).
+    - **Chi tiết:**
+      - Cung cấp API `GET /api/Reports/bookings` tổng hợp biến động lượt đặt phòng theo mốc thời gian, trạng thái xét duyệt, mục đích sử dụng và phân bổ theo từng Khoa/Đơn vị.
+      - UI hiển thị Biểu đồ cột xu hướng SVG tương tác, thanh tỷ lệ phân bố trạng thái (Đã duyệt, Chờ duyệt, Từ chối, Đã hủy), danh sách mục đích sử dụng phòng phổ biến và bảng xếp hạng số lượt mượn/giờ mượn của các Khoa.
 
-26. [ ] **Thống kê vi phạm**
-    - **Hiện trạng:** Chưa thực hiện (Chưa có procedure hay chức năng thống kê số liệu vi phạm).
+26. [x] **Thống kê vi phạm**
+    - **Hiện trạng:** Hoàn thành toàn diện (Đạt 100%).
+    - **Chi tiết:**
+      - Cung cấp API `GET /api/Reports/violations` thống kê số lượng biên bản vi phạm theo 4 mức độ nghiêm trọng (Nhẹ -> Rất nghiêm trọng), danh mục các lỗi vi phạm thường gặp, danh sách các đối tượng thường xuyên vi phạm và danh sách chi tiết các tài khoản đang thi hành lệnh cấm mượn phòng.
+      - UI hiển thị Bảng danh sách tài khoản đang bị cấm mượn phòng (kèm lý do, thời hạn, số ngày còn lại), biểu đồ phân bố mức độ nghiêm trọng và bảng tần suất các loại vi phạm.
 
 27. [x] **Hoàn thiện Web ReactJS và kết nối API**
-    - **Hiện trạng:** Hoàn thành các phân hệ cốt lõi.
-    - **Chi tiết:** Giao diện Web ReactJS đã kết nối hoàn chỉnh với ASP.NET Core API cho các tính năng: Đăng nhập JWT, Đặt phòng theo tiết/giờ, Tra cứu lịch phòng theo ngày/tuần, Quản lý đơn vị, Quản lý loại phòng, Quản lý phòng & thiết bị phòng, Quản lý kho thiết bị, Quản lý người dùng, Duyệt đơn mượn phòng. (Các chức năng chưa kết nối là các module Backend chưa có API: Báo cáo thống kê, Check-in/out, Vi phạm).
+    - **Hiện trạng:** Hoàn thành toàn diện (Đạt 100%).
+    - **Chi tiết:** Giao diện Web ReactJS kết nối hoàn chỉnh 100% với ASP.NET Core API cho tất cả các phân hệ: Đăng nhập JWT, Đặt phòng theo tiết/giờ, Tra cứu lịch phòng, Quản lý đơn vị, Quản lý loại phòng, Quản lý phòng & thiết bị, Quản lý kho thiết bị, Quản lý người dùng, Duyệt đơn mượn phòng, Check-in / Check-out, Xử lý vi phạm & cấm mượn, Quản lý lịch trực nhân sự & nhật ký trực, Báo cáo & Thống kê đa chiều.
 
 ---
 

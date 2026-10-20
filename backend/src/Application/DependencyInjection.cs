@@ -4,6 +4,9 @@ using HUIT_RoMan.Application.Modules.Room.Services;
 using HUIT_RoMan.Application.Modules.Department.Services;
 using HUIT_RoMan.Application.Modules.Booking.Services;
 using HUIT_RoMan.Application.Modules.Usage.Services;
+using HUIT_RoMan.Application.Modules.Violation.Services;
+using HUIT_RoMan.Application.Modules.Shift.Services;
+using HUIT_RoMan.Application.Modules.Report.Services;
 
 namespace HUIT_RoMan.Application;
 
@@ -33,6 +36,15 @@ public static class DependencyInjection
 
         // Usage Module (Quản lý phiên sử dụng & Trả phòng)
         services.AddScoped<IUsageService, UsageService>();
+
+        // Violation Module (Quản lý & xử lý vi phạm, cấm mượn phòng)
+        services.AddScoped<IViolationService, ViolationService>();
+
+        // Shift Module (Quản lý lịch trực nhân sự & Nhật ký trực)
+        services.AddScoped<IShiftService, ShiftService>();
+
+        // Report Module (Thống kê báo cáo tình trạng sử dụng phòng, lượt mượn, vi phạm)
+        services.AddScoped<IReportService, ReportService>();
 
         return services;
     }

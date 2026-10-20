@@ -10,6 +10,10 @@ import AdminDepartmentsTab from "../components/admin/AdminDepartmentsTab";
 import AdminEmployeesTab from "../components/admin/AdminEmployeesTab";
 import AdminUsersTab from "../components/admin/AdminUsersTab";
 import AdminUsageSessionsTab from "../components/admin/AdminUsageSessionsTab";
+import AdminViolationsTab from "../components/admin/AdminViolationsTab";
+import AdminShiftsTab from "../components/admin/AdminShiftsTab";
+import AdminReportsTab from "../components/admin/AdminReportsTab";
+import AdminGlobalSearchModal from "../components/admin/AdminGlobalSearchModal";
 import { checkInSession, checkOutSession } from "../lib/usage";
 import {
   ClockIcon,
@@ -33,12 +37,17 @@ import {
   BriefcaseIcon,
   GraduationCapIcon,
   BankIcon,
+  BarChartIcon,
+  CalendarIcon,
   XIcon,
 } from "../components/Icon";
 
 export type AdminTabType =
   | "approvals"
   | "sessions"
+  | "violations"
+  | "shifts"
+  | "reports"
   | "rooms"
   | "equipments"
   | "roomTypes"
@@ -315,6 +324,37 @@ export default function AdminDashboardPage() {
   const [showManualModal, setShowManualModal] = useState<boolean>(false);
   const [showFilterModal, setShowFilterModal] = useState<boolean>(false);
   const [showSurveyModal, setShowSurveyModal] = useState<boolean>(false);
+  const [showGlobalSearchModal, setShowGlobalSearchModal] = useState<boolean>(false);
+  const [pendingViolationsCount, setPendingViolationsCount] = useState<number>(0);
+
+  // Keyboard shortcut Ctrl+K to open Global Search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowGlobalSearchModal((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Fetch pending violations count
+  useEffect(() => {
+    const fetchViolationsCount = async () => {
+      try {
+        const res = await api.get("/api/Violations/stats");
+        if (res.data?.data) {
+          setPendingViolationsCount(res.data.data.pendingRecords || 0);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    fetchViolationsCount();
+    const interval = setInterval(fetchViolationsCount, 20000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Filter criteria
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
@@ -658,6 +698,18 @@ export default function AdminDashboardPage() {
                 </span>
               </div>
 
+              {/* Global Search button */}
+              <button
+                type="button"
+                className="btn-toolbar-search-global"
+                onClick={() => setShowGlobalSearchModal(true)}
+                title="Tra cứu nhanh phòng, người mượn, phiếu mượn, biên bản vi phạm (Phím tắt: Ctrl+K)"
+              >
+                <SearchIcon size={16} />
+                <span>Tra cứu nhanh</span>
+                <kbd className="kbd-shortcut-chip">Ctrl+K</kbd>
+              </button>
+
               {/* Advanced Filter button */}
               <button
                 type="button"
@@ -711,6 +763,42 @@ export default function AdminDashboardPage() {
           >
             <ShieldCheckIcon size={18} />
             <span>Sử dụng &amp; Trả phòng</span>
+          </button>
+
+          <button
+            type="button"
+            className={`admin-nav-tab-item ${
+              activeTab === "violations" ? "active-tab" : ""
+            }`}
+            onClick={() => setActiveTab("violations")}
+          >
+            <AlertTriangleIcon size={18} />
+            <span>Xử lý vi phạm</span>
+            {pendingViolationsCount > 0 && (
+              <span className="tab-badge-pulse badge-warning">{pendingViolationsCount}</span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            className={`admin-nav-tab-item ${
+              activeTab === "shifts" ? "active-tab" : ""
+            }`}
+            onClick={() => setActiveTab("shifts")}
+          >
+            <CalendarIcon size={18} />
+            <span>Lịch trực nhân viên</span>
+          </button>
+
+          <button
+            type="button"
+            className={`admin-nav-tab-item ${
+              activeTab === "reports" ? "active-tab" : ""
+            }`}
+            onClick={() => setActiveTab("reports")}
+          >
+            <BarChartIcon size={18} />
+            <span>Báo cáo &amp; Thống kê</span>
           </button>
 
           <button
@@ -798,6 +886,18 @@ export default function AdminDashboardPage() {
 
         {activeTab === "sessions" && (
           <AdminUsageSessionsTab onNotify={showToast} />
+        )}
+
+        {activeTab === "violations" && (
+          <AdminViolationsTab onNotify={showToast} />
+        )}
+
+        {activeTab === "shifts" && (
+          <AdminShiftsTab onNotify={showToast} />
+        )}
+
+        {activeTab === "reports" && (
+          <AdminReportsTab onNotify={showToast} />
         )}
 
         {activeTab === "rooms" && (
@@ -1787,6 +1887,13 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Global Unified Search Modal (Phòng, Người mượn, Phiếu mượn, Biên bản vi phạm) */}
+      <AdminGlobalSearchModal
+        isOpen={showGlobalSearchModal}
+        onClose={() => setShowGlobalSearchModal(false)}
+        onSelectCategory={(tab) => setActiveTab(tab)}
+      />
     </div>
   );
 }

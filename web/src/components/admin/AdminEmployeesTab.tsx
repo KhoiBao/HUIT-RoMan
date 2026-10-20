@@ -253,8 +253,8 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
           alignItems: "center",
           fontSize: "13.5px"
         }}>
-          <span>
-            📌 Bạn đang quản lý danh sách nhân sự thuộc đơn vị: <strong>{user?.departmentName || "Đơn vị được phân công"}</strong>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <BriefcaseIcon size={16} /> Bạn đang quản lý danh sách nhân sự thuộc đơn vị: <strong>{user?.departmentName || "Đơn vị được phân công"}</strong>
           </span>
           <span style={{
             backgroundColor: "#dbeafe",

@@ -42,5 +42,13 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
 
         /// <summary>Lấy tất cả tiết học</summary>
         Task<ApiResponse<IEnumerable<PeriodDto>>> GetPeriodsAsync();
+
+        /// <summary>Tìm kiếm phiếu mượn theo từ khóa, trạng thái, ngày, phòng</summary>
+        Task<ApiResponse<IEnumerable<BookingResponseDto>>> SearchBookingsAsync(
+            string? keyword,
+            string? status,
+            DateTime? fromDate,
+            DateTime? toDate,
+            int? roomId);
     }
 }
