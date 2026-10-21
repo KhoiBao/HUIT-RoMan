@@ -54,3 +54,8 @@ web/node_modules/
 web/dist/
 web/dist-ssr/
 web/*.local
+
+## Binaries
+*.exe
+cloudflared.exe
+

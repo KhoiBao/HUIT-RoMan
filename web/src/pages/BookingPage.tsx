@@ -10,6 +10,10 @@ import {
   PlusIcon,
   InfoIcon,
   BanIcon,
+  ZapIcon,
+  CheckIcon,
+  CopyIcon,
+  HourglassIcon,
 } from "../components/Icon";
 import { checkMyEligibility, type UserEligibility } from "../lib/violations";
 import {
@@ -45,8 +49,8 @@ export default function BookingPage() {
   const navigate = useNavigate();
 
   // Active Tab: "create" | "my-bookings" (auto-select from ?tab=my-bookings)
-  const initialTab = searchParams.get("tab") === "my-bookings" ? "my-bookings" : "create";
-  const [activeTab, setActiveTab] = useState<"create" | "my-bookings">(initialTab);
+  const activeTab: "create" | "my-bookings" =
+    searchParams.get("tab") === "my-bookings" ? "my-bookings" : "create";
 
   // Periods metadata
   const [periods, setPeriods] = useState<Period[]>([]);
@@ -125,12 +129,6 @@ export default function BookingPage() {
     text: string;
   } | null>(null);
 
-  // Sync activeTab when URL searchParams has tab=my-bookings
-  useEffect(() => {
-    if (searchParams.get("tab") === "my-bookings") {
-      setActiveTab("my-bookings");
-    }
-  }, [searchParams]);
 
   // 1. Initial Load: Periods
   useEffect(() => {
@@ -502,7 +500,7 @@ export default function BookingPage() {
               <button
                 type="button"
                 className={`tab-btn ${activeTab === "create" ? "active" : ""}`}
-                onClick={() => setActiveTab("create")}
+                onClick={() => navigate("/dat-phong")}
               >
                 <PlusIcon size={16} />
                 <span>Tạo đơn đặt phòng mới</span>
@@ -512,7 +510,7 @@ export default function BookingPage() {
                 className={`tab-btn ${
                   activeTab === "my-bookings" ? "active" : ""
                 }`}
-                onClick={() => setActiveTab("my-bookings")}
+                onClick={() => navigate("/dat-phong?tab=my-bookings")}
               >
                 <ClockIcon size={16} />
                 <span>Lịch sử đơn của tôi</span>
@@ -858,7 +856,7 @@ export default function BookingPage() {
                       <button
                         type="button"
                         className="btn-link"
-                        onClick={() => setActiveTab("my-bookings")}
+                        onClick={() => navigate("/dat-phong?tab=my-bookings")}
                       >
                         Xem trong danh sách đơn của tôi →
                       </button>
@@ -1080,7 +1078,10 @@ export default function BookingPage() {
               <div className="user-checkin-hero-box">
                 <div className="user-checkin-hero-info">
                   <div className="user-checkin-hero-title">
-                    <span>⚡ Nhận phòng nhanh bằng mã xác nhận</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                      <ZapIcon size={18} />
+                      Nhận phòng nhanh bằng mã xác nhận
+                    </span>
                   </div>
                   <p className="user-checkin-hero-desc">
                     Khi đến phòng đã được duyệt, bạn có thể nhập mã nhận phòng (HUIT-xxxxx) hoặc bấm nút Check-in bên dưới để bắt đầu sử dụng phòng ngay.
@@ -1103,7 +1104,17 @@ export default function BookingPage() {
                     className="user-quick-code-btn"
                     disabled={isQuickCheckingIn}
                   >
-                    {isQuickCheckingIn ? "Đang xử lý..." : "⚡ Nhận phòng ngay"}
+                    {isQuickCheckingIn ? (
+                      <>
+                        <HourglassIcon size={14} />
+                        <span>Đang xử lý...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ZapIcon size={14} />
+                        <span>Nhận phòng ngay</span>
+                      </>
+                    )}
                   </button>
                 </form>
               </div>
@@ -1126,7 +1137,7 @@ export default function BookingPage() {
                   <button
                     type="button"
                     className="btn-primary"
-                    onClick={() => setActiveTab("create")}
+                    onClick={() => navigate("/dat-phong")}
                   >
                     <PlusIcon size={18} />
                     <span>Đặt phòng ngay</span>
@@ -1196,15 +1207,19 @@ export default function BookingPage() {
                               {b.details.map((detail) => {
                                 const session = sessionByDetailId.get(detail.id);
                                 const detailStatus = getScheduleStatusBadge(detail.status);
-                                const isApproved =
-                                  detail.status === "Đã duyệt" ||
-                                  session?.status === "Chờ nhận phòng";
                                 const isInUse =
                                   detail.status === "Đang sử dụng" ||
                                   session?.status === "Đang sử dụng";
                                 const isCompleted =
                                   detail.status === "Hoàn thành" ||
-                                  session?.status === "Hoàn thành";
+                                  detail.status === "Hoàn tất" ||
+                                  session?.status === "Hoàn thành" ||
+                                  session?.status === "Hoàn tất";
+                                const isApproved =
+                                  !isInUse &&
+                                  !isCompleted &&
+                                  (detail.status === "Đã duyệt" ||
+                                    session?.status === "Chờ nhận phòng");
 
                                 const cardStatusClass = isApproved
                                   ? "status-approved"
@@ -1256,6 +1271,7 @@ export default function BookingPage() {
                                           <button
                                             type="button"
                                             className="btn-copy-code-mini"
+                                            style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
                                             onClick={() => {
                                               navigator.clipboard.writeText(
                                                 session.confirmationCode
@@ -1265,7 +1281,8 @@ export default function BookingPage() {
                                               );
                                             }}
                                           >
-                                            📋 Chép mã
+                                            <CopyIcon size={12} />
+                                            <span>Chép mã</span>
                                           </button>
                                         </div>
                                       )}
@@ -1304,9 +1321,17 @@ export default function BookingPage() {
                                               handleDirectCheckIn(detail, session);
                                             }}
                                           >
-                                            {directCheckingInId === detail.id
-                                              ? "⏳ Đang nhận phòng..."
-                                              : "⚡ Check-in nhận phòng ngay"}
+                                            {directCheckingInId === detail.id ? (
+                                              <>
+                                                <HourglassIcon size={14} />
+                                                <span>Đang nhận phòng...</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <ZapIcon size={14} />
+                                                <span>Check-in nhận phòng ngay</span>
+                                              </>
+                                            )}
                                           </button>
                                           <button
                                             type="button"
@@ -1332,13 +1357,15 @@ export default function BookingPage() {
                                             openCheckOutModal(detail, b, session);
                                           }}
                                         >
-                                          ✓ Xác nhận trả phòng
+                                          <CheckIcon size={14} />
+                                          <span>Xác nhận trả phòng</span>
                                         </button>
                                       )}
 
                                       {isCompleted && (
-                                        <span className="completed-note-text">
-                                          ✓ Đã hoàn tất buổi mượn phòng
+                                        <span className="completed-note-text" style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                          <CheckIcon size={12} />
+                                          <span>Đã hoàn tất buổi mượn phòng</span>
                                         </span>
                                       )}
                                     </div>
@@ -1368,7 +1395,10 @@ export default function BookingPage() {
               >
                 <div className="modal-header">
                   <div className="modal-title-wrap">
-                    <h3>⚡ Xác nhận nhận phòng</h3>
+                    <h3 style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                      <ZapIcon size={18} />
+                      Xác nhận nhận phòng
+                    </h3>
                     <span className="modal-subtitle">
                       Bắt đầu thời gian sử dụng phòng thực tế
                     </span>
@@ -1453,7 +1483,17 @@ export default function BookingPage() {
                     onClick={handleConfirmCheckIn}
                     disabled={isProcessingCheckIn}
                   >
-                    {isProcessingCheckIn ? "Đang nhận phòng..." : "✓ Xác nhận vào phòng"}
+                    {isProcessingCheckIn ? (
+                      <>
+                        <HourglassIcon size={14} />
+                        <span>Đang nhận phòng...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckIcon size={14} />
+                        <span>Xác nhận vào phòng</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1472,7 +1512,10 @@ export default function BookingPage() {
               >
                 <div className="modal-header">
                   <div className="modal-title-wrap">
-                    <h3>✓ Xác nhận trả phòng</h3>
+                    <h3 style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                      <CheckIcon size={18} />
+                      Xác nhận trả phòng
+                    </h3>
                     <span className="modal-subtitle">
                       Hoàn thành phiên sử dụng và bàn giao phòng
                     </span>
@@ -1563,7 +1606,17 @@ export default function BookingPage() {
                     onClick={handleConfirmCheckOut}
                     disabled={isProcessingCheckOut}
                   >
-                    {isProcessingCheckOut ? "Đang xử lý..." : "✓ Xác nhận trả phòng"}
+                    {isProcessingCheckOut ? (
+                      <>
+                        <HourglassIcon size={14} />
+                        <span>Đang xử lý...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckIcon size={14} />
+                        <span>Xác nhận trả phòng</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

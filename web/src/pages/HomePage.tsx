@@ -111,8 +111,8 @@ export default function HomePage() {
       <div className="home-sections">
         <RoomTypesSection />
         <ProcessSection />
-        <InfoFooter />
       </div>
+      <InfoFooter />
     </div>
   );
 }

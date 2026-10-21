@@ -13,14 +13,35 @@ var builder = WebApplication.CreateBuilder(args);
 // Controllers (thin - logic nằm ở Application, DB nằm ở Infrastructure)
 builder.Services.AddControllers();
 
-// CORS cho web React (Vite dev http://localhost:5173)
+// CORS cho web React - Cho phep moi Origin (Localhost, LAN IP, Public Tunnel) kem Credentials cho SignalR
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Web", policy => policy
-        .WithOrigins("http://localhost:5173", "https://localhost:5173", "http://127.0.0.1:5173", "https://127.0.0.1:5173", "http://localhost:3000")
+        .SetIsOriginAllowed(_ => true)
         .AllowAnyHeader()
-        .AllowAnyMethod());
+        .AllowAnyMethod()
+        .AllowCredentials());
 });
+
+// SignalR & Cấu hình Redis Backplane (Docker)
+var signalRBuilder = builder.Services.AddSignalR();
+var redisConnectionString = builder.Configuration["Redis:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    try
+    {
+        signalRBuilder.AddStackExchangeRedis(redisConnectionString, options =>
+        {
+            options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("HUIT_RoMan_Chat");
+            options.Configuration.AbortOnConnectFail = false;
+        });
+        Console.WriteLine($"[SignalR] Ket noi Redis Backplane thanh cong tai: {redisConnectionString}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[SignalR] Khong the ket noi Redis Backplane ({ex.Message}). Su dung In-memory SignalR.");
+    }
+}
 
 // PostgreSQL + EF Core (giữ nguyên connection string từ db_Library cũ)
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -60,6 +81,20 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = builder.Configuration["JwtSettings:Audience"],
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -137,5 +172,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<HUIT_RoMan.API.Hubs.ChatHub>("/hubs/chat");
 
 app.Run();
