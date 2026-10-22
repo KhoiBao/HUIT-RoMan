@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type FormEvent } from "react";
+import { useState, useEffect, useMemo, useCallback, type FormEvent } from "react";
 import SiteHeader from "../components/SiteHeader";
 import { api } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
@@ -13,6 +13,7 @@ import AdminUsageSessionsTab from "../components/admin/AdminUsageSessionsTab";
 import AdminViolationsTab from "../components/admin/AdminViolationsTab";
 import AdminShiftsTab from "../components/admin/AdminShiftsTab";
 import AdminReportsTab from "../components/admin/AdminReportsTab";
+import AdminChatTab from "../components/admin/AdminChatTab";
 import AdminGlobalSearchModal from "../components/admin/AdminGlobalSearchModal";
 import { checkInSession, checkOutSession } from "../lib/usage";
 import {
@@ -40,6 +41,7 @@ import {
   BarChartIcon,
   CalendarIcon,
   XIcon,
+  ChatIcon,
 } from "../components/Icon";
 
 export type AdminTabType =
@@ -48,6 +50,7 @@ export type AdminTabType =
   | "violations"
   | "shifts"
   | "reports"
+  | "chat"
   | "rooms"
   | "equipments"
   | "roomTypes"
@@ -310,7 +313,7 @@ export default function AdminDashboardPage() {
     type?: "success" | "warning" | "info";
   } | null>(null);
 
-  const showToast = (
+  const showToast = useCallback((
     text: string,
     type: "success" | "warning" | "info" = "success"
   ) => {
@@ -318,7 +321,7 @@ export default function AdminDashboardPage() {
     setTimeout(() => {
       setToastMsg(null);
     }, 4500);
-  };
+  }, []);
 
   // Modals state
   const [showManualModal, setShowManualModal] = useState<boolean>(false);
@@ -804,6 +807,17 @@ export default function AdminDashboardPage() {
           <button
             type="button"
             className={`admin-nav-tab-item ${
+              activeTab === "chat" ? "active-tab" : ""
+            }`}
+            onClick={() => setActiveTab("chat")}
+          >
+            <ChatIcon size={18} />
+            <span>Hỗ trợ trực tuyến</span>
+          </button>
+
+          <button
+            type="button"
+            className={`admin-nav-tab-item ${
               activeTab === "rooms" ? "active-tab" : ""
             }`}
             onClick={() => setActiveTab("rooms")}
@@ -898,6 +912,10 @@ export default function AdminDashboardPage() {
 
         {activeTab === "reports" && (
           <AdminReportsTab onNotify={showToast} />
+        )}
+
+        {activeTab === "chat" && (
+          <AdminChatTab onNotify={showToast} />
         )}
 
         {activeTab === "rooms" && (

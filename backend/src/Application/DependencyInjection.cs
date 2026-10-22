@@ -7,6 +7,7 @@ using HUIT_RoMan.Application.Modules.Usage.Services;
 using HUIT_RoMan.Application.Modules.Violation.Services;
 using HUIT_RoMan.Application.Modules.Shift.Services;
 using HUIT_RoMan.Application.Modules.Report.Services;
+using HUIT_RoMan.Application.Modules.Chat.Services;
 
 namespace HUIT_RoMan.Application;
 
@@ -45,6 +46,9 @@ public static class DependencyInjection
 
         // Report Module (Thống kê báo cáo tình trạng sử dụng phòng, lượt mượn, vi phạm)
         services.AddScoped<IReportService, ReportService>();
+
+        // Chat Module (Chat realtime SignalR với nhân viên trực)
+        services.AddScoped<IChatService, ChatService>();
 
         return services;
     }

@@ -238,9 +238,13 @@
     - [ ] Xem kết quả duyệt: Chưa thực hiện
     - [ ] Xem lịch sử sử dụng: Chưa thực hiện
     - [ ] Nhận thông báo: Chưa thực hiện
-    - [ ] Chat với nhân viên trực: Chưa thực hiện (Ngoài phạm vi đồ án / Dropped)
+    - [x] **Chat với nhân viên trực (Realtime SignalR & Redis Backplane Docker):**
+      - **Backend:** Cài đặt `Microsoft.AspNetCore.SignalR.StackExchangeRedis`, xây dựng `ChatHub.cs` (`/hubs/chat`), hỗ trợ JWT handshake qua Query param `access_token`. Xây dựng `IChatService` & `ChatService.cs` quản lý hội thoại (`ChatConversations`), tin nhắn (`ChatMessages`), kết nối ca trực hôm nay (`Shifts`) để xác định thủ thư/nhân viên trực ban thực tế. Cung cấp API `ChatController.cs` đồng bộ 2 chiều (REST + WebSocket).
+      - **Redis Docker:** Cấu hình `docker-compose.yml` (Redis 7 Alpine tại port 6379 kèm Redis Commander web GUI tại port 8081). Tạo script `run-redis.bat` và `stop-redis.bat`. Kết nối SignalR Pub/Sub Backplane sẵn sàng mở rộng đa server (scale out).
+      - **Web UI Client:** Component `LiveChatWidget.tsx` dạng nút tròn nổi góc phải màn hình cho người dùng toàn hệ thống (hiển thị nhân viên đang trực, trạng thái kết nối SignalR + Redis, danh sách tin nhắn, gợi ý câu hỏi nhanh, typing indicator).
+      - **Web UI Staff:** Component `AdminChatTab.tsx` trong Admin Dashboard cho phép thủ thư/quản trị viên tiếp nhận đồng thời nhiều phiên hỗ trợ, trả lời nhanh (canned responses), nhận thông báo tin nhắn tức thời và kết thúc phiên hỗ trợ.
     - [ ] Gửi phản hồi, đánh giá: Chưa thực hiện (Mới có Entity `Feedback.cs`)
-    - **Hiện trạng:** Chưa thực hiện. Trong repo chưa có mã nguồn Flutter.
+    - **Hiện trạng:** Đã hoàn thành 100% chức năng Chat realtime trên Web + Backend SignalR + Redis Docker.
 
 29. [ ] **Kiểm thử toàn hệ thống**
     - **Hiện trạng:** Đang thực hiện / Chưa hoàn thành.

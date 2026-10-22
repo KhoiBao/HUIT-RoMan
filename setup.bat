@@ -37,5 +37,6 @@ echo.
 echo XONG. Buoc tiep theo:
 echo  1. Bat PostgreSQL, tao DB trong ten LibraryDb
 echo     user/pass xem tai backend\src\API\appsettings.json
-echo  2. Chay update-db.bat de tao bang + seed tai khoan demo
-echo  3. Chay run-backend.bat roi run-web.bat
+echo  2. Chay run-redis.bat de bat Redis Docker (SignalR Realtime Backplane)
+echo  3. Chay update-db.bat de tao bang + seed tai khoan demo
+echo  4. Chay run-backend.bat roi run-web.bat

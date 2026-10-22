@@ -1,15 +1,19 @@
 import { useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { isStaffRole } from "../lib/auth";
 import { PlusIcon, LogOutIcon } from "./Icon";
 import UserProfileModal from "./UserProfileModal";
 
-
-
 export default function SiteHeader() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const searchParams = new URLSearchParams(location.search);
+  const currentTab = searchParams.get("tab");
+  const isDatPhongActive = location.pathname === "/dat-phong" && currentTab !== "my-bookings";
+  const isMyBookingsActive = location.pathname === "/dat-phong" && currentTab === "my-bookings";
 
   const displayName = user?.fullName || "Nguyễn Văn A";
   const displayCode = user?.cardCode || "2001230417";
@@ -52,22 +56,18 @@ export default function SiteHeader() {
             >
               Lịch phòng
             </NavLink>
-            <NavLink
+            <Link
               to="/dat-phong"
-              className={({ isActive }) =>
-                `nav-tab-item ${isActive ? "active" : ""}`
-              }
+              className={`nav-tab-item ${isDatPhongActive ? "active" : ""}`}
             >
               Đặt phòng
-            </NavLink>
-            <NavLink
+            </Link>
+            <Link
               to="/dat-phong?tab=my-bookings"
-              className={({ isActive }) =>
-                `nav-tab-item ${isActive ? "active" : ""}`
-              }
+              className={`nav-tab-item ${isMyBookingsActive ? "active" : ""}`}
             >
               Phòng đã đăng ký
-            </NavLink>
+            </Link>
             {isStaffRole(user?.role) && (
               <NavLink
                 to="/admin"
@@ -106,14 +106,14 @@ export default function SiteHeader() {
               <span className="bell-badge-dot"></span>
             </button>
 
-            {/* + Đặt phòng Button */}
+            {/* Đặt phòng Button */}
             <button
               type="button"
               className="btn-header-booking"
               onClick={() => navigate("/dat-phong")}
             >
               <PlusIcon size={16} />
-              <span>+ Đặt phòng</span>
+              <span>Đặt phòng</span>
             </button>
 
             {/* User Profile */}

@@ -14,6 +14,7 @@ import SchedulePage from "./pages/SchedulePage";
 import BookingPage from "./pages/BookingPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import ForbiddenPage from "./pages/ForbiddenPage";
+import { LiveChatWidget } from "./components/chat/LiveChatWidget";
 
 function RequireAuth({ children }: { children: ReactElement }) {
   const { token } = useAuth();
@@ -85,6 +86,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+        <LiveChatWidget />
       </BrowserRouter>
     </AuthProvider>
   );

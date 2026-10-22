@@ -12,9 +12,10 @@ import {
 export default function InfoFooter() {
   const navigate = useNavigate();
   return (
-    <>
-      <section className="section info-grid">
-        <div className="info-left">
+    <div className="info-footer-wrapper">
+      <div className="info-footer-container">
+        <section className="section info-grid">
+          <div className="info-left">
           <div className="eyebrow">HUIT — KHÔNG GIAN HỌC THUẬT DÙNG CHUNG</div>
           <h2>Không gian kiến tạo tri thức &amp; Đổi mới sáng tạo</h2>
           <p>
@@ -71,6 +72,7 @@ export default function InfoFooter() {
           </button>
         </aside>
       </section>
+      </div>
 
       <footer className="site-footer">
         <div className="foot-grid">
@@ -120,6 +122,6 @@ export default function InfoFooter() {
           <span>Phiên bản v2.4.0-Operational</span>
         </div>
       </footer>
-    </>
+    </div>
   );
 }
