@@ -2,7 +2,24 @@
 
 Đồ án nội bộ Trường Đại học Công Thương TP.HCM. 3 nhóm người dùng: **quản trị hệ thống**, **nhân sự** (thủ thư, quản lý phòng), **người dùng** (sinh viên, giảng viên). Chi tiết nghiệp vụ: `docs/nghiep-vu.md`.
 
-## Chạy trong 4 bước (Windows)
+> **Thành viên mới:** mở `docs/docker.md` — runbook đầy đủ để chạy Docker, code local, rebuild, migration, kiểm tra trước khi commit và xử lý sự cố.
+
+## Chạy toàn bộ hệ thống bằng Docker
+
+Yêu cầu **Docker Desktop** đang chạy và các dev server local (`run-backend.bat`, `run-web.bat`) đã tắt để không tranh cổng. Tại thư mục gốc:
+
+```powershell
+Copy-Item .env.example .env   # tùy chọn: đổi mật khẩu DB/JWT/cổng
+docker compose up --build -d
+```
+
+- Web: <http://localhost:5173>
+- Swagger: <http://localhost:5056/swagger>
+- Health: <http://localhost:5056/api/health>
+
+Container API tự áp migration và seed dữ liệu demo. Runbook đầy đủ: `docs/docker.md`.
+
+## Chạy local trong 4 bước (Windows)
 
 ```bat
 setup.bat        :: 1 lần đầu: kiểm tra .NET 8 + Node, restore, npm install
