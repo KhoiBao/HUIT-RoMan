@@ -1,0 +1,59 @@
+name: huit-roman
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: huit-roman-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-LibraryDb}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
+    ports:
+      # 5433 ở máy host để không đụng PostgreSQL local thường dùng 5432.
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: huit-roman-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB:-LibraryDb};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-123}"
+      JwtSettings__Secret: ${JWT_SECRET:-super_secret_key_for_development_huit_roman_12345}
+      JwtSettings__Issuer: HUIT-RoMan-API
+      JwtSettings__Audience: HUIT-RoMan-Client
+      Database__AutoMigrate: "true"
+    ports:
+      - "${API_PORT:-5056}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /
+    container_name: huit-roman-web
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

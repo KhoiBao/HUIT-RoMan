@@ -73,6 +73,10 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                     Expression.Constant(false));
                 modelBuilder.Entity(clrType).HasQueryFilter(Expression.Lambda(body, param));
             }
+
+            // Lưu ý: ràng buộc chống trùng lịch của BookingDetails
+            // (EX_BookingDetails_Room_NoOverlap) được tạo bằng SQL trong migration
+            // 20261022085713_AddBookingOverlapConstraint vì EF Core chưa hỗ trợ exclusion constraint.
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HUIT_RoMan.Application.Common.Exceptions;
 using HUIT_RoMan.Application.Modules.Booking.DTOs;
 using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Common.Models;
@@ -119,14 +120,13 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             };
 
             await _bookingRepo.AddAsync(booking);
-            await _unitOfWork.SaveChangesAsync();
 
             // Create BookingDetails
             foreach (var detail in request.Details)
             {
                 var bd = new BookingDetail
                 {
-                    BookingId = booking.Id,
+                    Booking = booking,
                     RoomId = detail.RoomId,
                     StartAt = detail.StartAt,
                     EndAt = detail.EndAt,
@@ -141,7 +141,18 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 await _bookingDetailRepo.AddAsync(bd);
             }
 
-            await _unitOfWork.SaveChangesAsync();
+            try
+            {
+                // Một SaveChanges duy nhất: Booking + toàn bộ Details nằm trong cùng transaction.
+                // Nếu request khác vừa đặt trùng, ràng buộc EX_BookingDetails_Room_NoOverlap ở DB
+                // sẽ chặn và rollback toàn bộ, tránh tạo Booking rác.
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (ScheduleConflictException)
+            {
+                return ApiResponse<BookingResponseDto>.ErrorResponse(
+                    "Một hoặc nhiều phòng vừa được người khác đặt trong cùng khung giờ. Vui lòng chọn khung giờ khác.");
+            }
 
             return await GetBookingByIdAsync(booking.Id);
         }

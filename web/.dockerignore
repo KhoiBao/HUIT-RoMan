@@ -1,0 +1,22 @@
+node_modules/
+dist/
+dist-ssr/
+coverage/
+
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Docker build nhận API URL qua build arg, không đọc file env local.
+.env
+.env.*
+!.env.example
+
+npm-debug.log*
+yarn-error.log*
+*.local
+
+Dockerfile
+.dockerignore
+README.md

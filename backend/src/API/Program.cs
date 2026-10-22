@@ -102,18 +102,34 @@ builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.ICurrentUser
 
 var app = builder.Build();
 
-// Run Database Seeder
+// Docker/CI có thể bật Database__AutoMigrate=true để áp migration trước khi seed.
+// Mặc định tắt để giữ nguyên quy trình `update-db.bat` khi chạy local.
+var autoMigrate = builder.Configuration.GetValue<bool>("Database:AutoMigrate");
+
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+
     try
     {
+        if (autoMigrate)
+        {
+            var dbContext = services.GetRequiredService<ApplicationDbContext>();
+            logger.LogInformation("Đang áp dụng các migration còn thiếu...");
+            await dbContext.Database.MigrateAsync();
+        }
+
+        // Run Database Seeder
         await HUIT_RoMan.Infrastructure.Persistence.ApplicationDbSeeder.SeedAsync(services);
     }
     catch (System.Exception ex)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Lỗi xảy ra trong quá trình Seed Database.");
+        logger.LogError(ex, "Lỗi xảy ra trong quá trình khởi tạo Database.");
+        if (autoMigrate)
+        {
+            throw;
+        }
     }
 }
 

@@ -48,6 +48,9 @@ Desktop.ini
 appsettings.Local.json
 appsettings.*.Local.json
 secrets.json
+.env
+.env.local
+!.env.example
 
 ## Web (Vite React)
 web/node_modules/
