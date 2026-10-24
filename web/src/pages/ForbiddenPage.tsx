@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import SiteHeader from "../components/SiteHeader";
 import { LockIcon, ArrowRightIcon, CalendarIcon } from "../components/Icon";
 
 export default function ForbiddenPage() {
@@ -11,7 +10,6 @@ export default function ForbiddenPage() {
 
   return (
     <div className="forbidden-page-layout">
-      <SiteHeader />
       <main className="forbidden-main">
         <div className="forbidden-card">
           <div className="forbidden-icon-badge">
@@ -63,10 +61,7 @@ export default function ForbiddenPage() {
             <button
               type="button"
               className="btn-ghost-logout"
-              onClick={() => {
-                logout();
-                navigate("/login");
-              }}
+              onClick={logout}
             >
               Đổi tài khoản đăng nhập <ArrowRightIcon size={14} />
             </button>

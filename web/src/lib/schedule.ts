@@ -636,13 +636,13 @@ export function computeMatrixKpis(
   rooms: RoomItem[],
   schedulesByRoom: Record<number, RoomScheduleItem[]>,
   dateStr: string,
-  currentMinutes = 585
+  currentMinutes = 0
 ) {
   const totalRooms = rooms.length;
   let availableRooms = 0;
   let confirmedBookings = 0;
   let inUseCount = 0;
-  let inUseText = "Không có phiên đang dùng";
+  let inUseDetail = "Không có phiên đang sử dụng";
 
   for (const room of rooms) {
     const scheds = (schedulesByRoom[room.id] || []).filter(
@@ -650,8 +650,13 @@ export function computeMatrixKpis(
     );
     confirmedBookings += scheds.length;
 
-    // Kiểm tra xem phòng có khung giờ trống không
-    availableRooms++;
+    const roomStatus = (room.status || "").toLowerCase();
+    let roomBusy =
+      roomStatus.includes("maintenance") ||
+      roomStatus.includes("bảo trì") ||
+      roomStatus.includes("inuse") ||
+      roomStatus.includes("in use") ||
+      roomStatus.includes("đang sử dụng");
 
     for (const s of scheds) {
       const st = parseVietnamTimeMinutes(s.startAt);
@@ -661,19 +666,21 @@ export function computeMatrixKpis(
         (currentMinutes >= st && currentMinutes < et)
       ) {
         inUseCount++;
-        const endStr = minutesToTimeString(et);
-        inUseText = `${room.name} (Kết thúc lúc ${endStr})`;
+        roomBusy = true;
+        inUseDetail = `${room.name} (Kết thúc lúc ${minutesToTimeString(et)})`;
       }
     }
+
+    if (!roomBusy) availableRooms++;
   }
 
   return {
-    availableText: `${Math.min(3, availableRooms)} / ${totalRooms} Phòng`,
-    availableSub: "Đang có khung giờ trống trong ngày",
+    availableText: `${availableRooms} / ${totalRooms} Phòng`,
+    availableSub: "Phòng sẵn sàng sử dụng",
     confirmedText: `${confirmedBookings} Lượt đặt`,
     confirmedSub: `Đã xác nhận trong ${formatVietnameseDate(dateStr)}`,
-    inUseText: `${inUseCount > 0 ? inUseCount : 1} Phiên đang dùng`,
-    inUseSub: inUseCount > 0 ? inUseText : "Phòng A104 (Kết thúc lúc 11:00)",
+    inUseText: `${inUseCount} Phiên đang dùng`,
+    inUseSub: inUseDetail,
     checkinTitle: "Check-in Thẻ HUIT",
     checkinSub: "Hủy tự động nếu trễ 15 phút",
   };

@@ -6,9 +6,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, TOKEN_KEY, USER_KEY } from "../lib/api";
 import {
   buildLoginPayload,
+  markExplicitLogout,
   saveSession,
   validateLoginInput,
 } from "../lib/auth";
@@ -46,6 +48,7 @@ function readInitial(): { user: AuthUser | null; token: string | null } {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const [initial] = useState(readInitial);
   const [user, setUser] = useState<AuthUser | null>(initial.user);
   const [token, setToken] = useState<string | null>(initial.token);
@@ -83,13 +86,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    markExplicitLogout();
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(USER_KEY);
     setToken(null);
     setUser(null);
-  }, []);
+    // Chủ động xoá route state: nếu để RequireAuth tự chuyển hướng,
+    // trang đang xem sẽ được lưu vào state.from và tài khoản kế tiếp
+    // có thể bị đưa trở lại trang của tài khoản cũ.
+    navigate("/login", { replace: true, state: null });
+  }, [navigate]);
 
   const value = useMemo(
     () => ({ user, token, login, logout }),

@@ -117,8 +117,8 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             // 7. Khởi tạo danh mục Tiết học (Tiết 1 -> Tiết 15)
             await EnsurePeriodsAsync(dbContext);
 
-            // 8. Khởi tạo các phòng demo (theo tiết & theo giờ)
-            await EnsureDemoRoomsAsync(dbContext, deptDaoTao.Id);
+            // 8. Khởi tạo các phòng dùng chung của Thư viện
+            await EnsureDemoRoomsAsync(dbContext, deptThuVien.Id);
 
             // 8b. Khởi tạo danh mục Thiết bị & Trang thiết bị mẫu
             await EnsureDemoEquipmentsAsync(dbContext);
@@ -328,125 +328,64 @@ namespace HUIT_RoMan.Infrastructure.Persistence
 
         private static async Task EnsureDemoRoomsAsync(ApplicationDbContext dbContext, int departmentId)
         {
-            var rtLyThuyet = await dbContext.RoomTypes.FirstOrDefaultAsync(r => r.Name == "Phòng Lý thuyết");
-            if (rtLyThuyet == null)
-            {
-                rtLyThuyet = new RoomType
-                {
-                    Name = "Phòng Lý thuyết",
-                    Description = "Phòng học lý thuyết",
-                    DefaultCapacity = 50,
-                    DepartmentId = departmentId,
-                    IsBookingByPeriod = true,
-                    Status = "Hoạt động",
-                    CreatedAt = DateTime.UtcNow
-                };
-                dbContext.RoomTypes.Add(rtLyThuyet);
-                await dbContext.SaveChangesAsync();
-            }
+            var rtHocNhom = await EnsureRoomTypeAsync(
+                dbContext,
+                "Phòng học nhóm",
+                "Phòng học nhóm tại Thư viện, sức chứa 5–7 người",
+                7,
+                departmentId);
 
-            var rtThucHanh = await dbContext.RoomTypes.FirstOrDefaultAsync(r => r.Name == "Phòng Thực hành");
-            if (rtThucHanh == null)
-            {
-                rtThucHanh = new RoomType
-                {
-                    Name = "Phòng Thực hành",
-                    Description = "Phòng học thực hành",
-                    DefaultCapacity = 45,
-                    DepartmentId = departmentId,
-                    IsBookingByPeriod = true,
-                    Status = "Hoạt động",
-                    CreatedAt = DateTime.UtcNow
-                };
-                dbContext.RoomTypes.Add(rtThucHanh);
-                await dbContext.SaveChangesAsync();
-            }
+            var rtThuyetTrinh = await EnsureRoomTypeAsync(
+                dbContext,
+                "Phòng thuyết trình",
+                "Phòng thuyết trình tại Thư viện, sức chứa 8–20 người",
+                20,
+                departmentId);
 
-            var rtHocNhom = await dbContext.RoomTypes.FirstOrDefaultAsync(r => r.Name == "Phòng học nhóm");
-            if (rtHocNhom == null)
-            {
-                rtHocNhom = new RoomType
-                {
-                    Name = "Phòng học nhóm",
-                    Description = "Phòng học nhóm 5-7 chỗ (Học thuật)",
-                    DefaultCapacity = 8,
-                    DepartmentId = departmentId,
-                    IsBookingByPeriod = false,
-                    Status = "Hoạt động",
-                    CreatedAt = DateTime.UtcNow
-                };
-                dbContext.RoomTypes.Add(rtHocNhom);
-                await dbContext.SaveChangesAsync();
-            }
-
-            var rtHoiTruong = await dbContext.RoomTypes.FirstOrDefaultAsync(r => r.Name == "Hội trường");
-            if (rtHoiTruong == null)
-            {
-                rtHoiTruong = new RoomType
-                {
-                    Name = "Hội trường",
-                    Description = "Hội trường tổ chức sự kiện, hội nghị",
-                    DefaultCapacity = 200,
-                    DepartmentId = departmentId,
-                    IsBookingByPeriod = false,
-                    Status = "Hoạt động",
-                    CreatedAt = DateTime.UtcNow
-                };
-                dbContext.RoomTypes.Add(rtHoiTruong);
-                await dbContext.SaveChangesAsync();
-            }
-
-            var rtPhongHop = await dbContext.RoomTypes.FirstOrDefaultAsync(r => r.Name == "Phòng họp");
-            if (rtPhongHop == null)
-            {
-                rtPhongHop = new RoomType
-                {
-                    Name = "Phòng họp",
-                    Description = "Phòng họp, hội thảo quy mô vừa và nhỏ",
-                    DefaultCapacity = 30,
-                    DepartmentId = departmentId,
-                    IsBookingByPeriod = false,
-                    Status = "Hoạt động",
-                    CreatedAt = DateTime.UtcNow
-                };
-                dbContext.RoomTypes.Add(rtPhongHop);
-                await dbContext.SaveChangesAsync();
-            }
+            var rtHoiThao = await EnsureRoomTypeAsync(
+                dbContext,
+                "Phòng hội thảo",
+                "Phòng hội thảo tại Thư viện, sức chứa 50–90 người",
+                90,
+                departmentId);
 
             var demoRooms = new (string Name, string Code, string Building, string Floor, string RoomNumber, int Capacity, int TypeId, string Description)[]
             {
-                // Tòa A - Tầng 1: Phòng học nhóm
-                ("Phòng học nhóm A101", "A101", "A", "1", "01", 8, rtHocNhom.Id, "Phòng học nhóm 8 chỗ • Smart TV • Bảng trắng"),
-                ("Phòng học nhóm A102", "A102", "A", "1", "02", 8, rtHocNhom.Id, "Phòng học nhóm 8 chỗ • Smart TV 55 inch • Bảng trắng"),
-                ("Phòng học nhóm A103", "A103", "A", "1", "03", 8, rtHocNhom.Id, "Phòng học nhóm 8 chỗ • WiFi riêng • Bảng kính"),
-                ("Phòng học nhóm A104", "A104", "A", "1", "04", 8, rtHocNhom.Id, "Phòng học nhóm 8 chỗ • Màn hình TV • Micro hội họp"),
+                // Thư viện - Tầng 3: 4 phòng học nhóm
+                ("Phòng học nhóm TV01", "TV01", "Thư viện", "3", "01", 7, rtHocNhom.Id, "Sức chứa 5–7 người • Smart TV • Bảng trắng • WiFi"),
+                ("Phòng học nhóm TV02", "TV02", "Thư viện", "3", "02", 7, rtHocNhom.Id, "Sức chứa 5–7 người • Smart TV • Bảng trắng • WiFi"),
+                ("Phòng học nhóm TV03", "TV03", "Thư viện", "3", "03", 7, rtHocNhom.Id, "Sức chứa 5–7 người • Smart TV • Bảng kính • WiFi"),
+                ("Phòng học nhóm TV04", "TV04", "Thư viện", "3", "04", 7, rtHocNhom.Id, "Sức chứa 5–7 người • Màn hình TV • Bảng trắng • WiFi"),
 
-                // Tòa A - Tầng 2: Phòng họp
-                ("Phòng họp A201", "A201", "A", "2", "01", 30, rtPhongHop.Id, "Phòng họp 30 chỗ • Máy chiếu • Bàn tròn hội thảo"),
-                ("Phòng họp A202", "A202", "A", "2", "02", 25, rtPhongHop.Id, "Phòng họp VIP 25 chỗ • Màn hình LED • Âm thanh hội nghị"),
+                // Thư viện - Tầng 3: phòng thuyết trình & hội thảo
+                ("Phòng thuyết trình TT01", "TT01", "Thư viện", "3", "05", 20, rtThuyetTrinh.Id, "Sức chứa 8–20 người • Máy chiếu • Âm thanh • Bảng tương tác"),
+                ("Phòng hội thảo HT01", "HT01", "Thư viện", "3", "06", 90, rtHoiThao.Id, "Sức chứa 50–90 người • Âm thanh hội nghị • Máy chiếu • Điều hòa"),
+            };
 
-                // Tòa A - Tầng 3: Phòng học Lý thuyết (đặt theo tiết)
-                ("Phòng Lý thuyết A301", "A301", "A", "3", "01", 50, rtLyThuyet.Id, "Phòng học lý thuyết 50 chỗ • Máy chiếu • Âm thanh trợ giảng"),
-                ("Phòng Lý thuyết A302", "A302", "A", "3", "02", 50, rtLyThuyet.Id, "Phòng học lý thuyết 50 chỗ • Máy chiếu • Bảng trượt mica"),
-                ("Phòng Lý thuyết A303", "A303", "A", "3", "03", 50, rtLyThuyet.Id, "Phòng học lý thuyết 50 chỗ • Máy chiếu • Điều hòa không khí"),
-                ("Phòng Lý thuyết A304", "A304", "A", "3", "04", 50, rtLyThuyet.Id, "Phòng học lý thuyết 50 chỗ • Máy chiếu • Điều hòa"),
-
-                // Tòa B - Tầng 2: Hội trường B201 & Phòng Thực hành
-                ("Hội trường B201", "B201", "B", "2", "01", 60, rtHoiTruong.Id, "Hội trường quy mô vừa 60 chỗ • Âm thanh / Máy chiếu"),
-                ("Phòng Thực hành B203", "B203", "B", "2", "03", 45, rtThucHanh.Id, "Phòng thực hành tin học 45 chỗ • 45 PC Core i7 • LAN Gigabit"),
-                ("Phòng Thực hành B204", "B204", "B", "2", "04", 45, rtThucHanh.Id, "Phòng thực hành máy tính Lab CNTT 45 chỗ • Máy chiếu"),
-
-                // Tòa B - Tầng 3: Phòng học Lý thuyết
-                ("Phòng Lý thuyết B301", "B301", "B", "3", "01", 60, rtLyThuyet.Id, "Phòng học lý thuyết 60 chỗ • Máy chiếu • Âm thanh giảng dạy"),
-                ("Phòng Lý thuyết B302", "B302", "B", "3", "02", 60, rtLyThuyet.Id, "Phòng học lý thuyết 60 chỗ • Máy chiếu • Điều hòa"),
-
-                // Tòa C - Tầng 1: Hội trường Lớn
-                ("Hội trường C101", "C101", "C", "1", "01", 200, rtHoiTruong.Id, "Hội trường lớn 200 chỗ • Âm thanh ánh sáng sân khấu • LED lớn"),
+            // Các phòng demo cũ được tái sử dụng mã để không làm mất lịch sử đặt phòng.
+            var legacyCodeByNewCode = new Dictionary<string, string>
+            {
+                ["TV01"] = "A101",
+                ["TV02"] = "A102",
+                ["TV03"] = "A103",
+                ["TV04"] = "A104",
+                ["TT01"] = "A201",
+                ["HT01"] = "B201",
             };
 
             foreach (var r in demoRooms)
             {
-                var existing = await dbContext.Rooms.FirstOrDefaultAsync(x => x.RoomCode == r.Code);
+                var existing = await dbContext.Rooms
+                    .IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(x => x.RoomCode == r.Code);
+
+                if (existing == null && legacyCodeByNewCode.TryGetValue(r.Code, out var legacyCode))
+                {
+                    existing = await dbContext.Rooms
+                        .IgnoreQueryFilters()
+                        .FirstOrDefaultAsync(x => x.RoomCode == legacyCode);
+                }
+
                 if (existing == null)
                 {
                     dbContext.Rooms.Add(new Room
@@ -462,21 +401,105 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                         Description = r.Description,
                         CreatedAt = DateTime.UtcNow
                     });
+                    continue;
                 }
-                else
-                {
-                    existing.Name = r.Name;
-                    existing.Building = r.Building;
-                    existing.Floor = r.Floor;
-                    existing.RoomNumber = r.RoomNumber;
-                    existing.Capacity = r.Capacity;
-                    existing.RoomTypeId = r.TypeId;
-                    existing.Description = r.Description;
-                    existing.Status = "Available";
-                    existing.IsDeleted = false;
-                }
+
+                existing.Name = r.Name;
+                existing.RoomCode = r.Code;
+                existing.Building = r.Building;
+                existing.Floor = r.Floor;
+                existing.RoomNumber = r.RoomNumber;
+                existing.Capacity = r.Capacity;
+                existing.RoomTypeId = r.TypeId;
+                existing.Description = r.Description;
+                existing.Status = "Available";
+                existing.IsDeleted = false;
+                existing.UpdatedAt = DateTime.UtcNow;
             }
+
+            // Phải lưu mã phòng mới trước khi dọn các mã demo cũ,
+            // nếu không các phòng vừa tái sử dụng sẽ bị đánh dấu xóa nhầm.
             await dbContext.SaveChangesAsync();
+
+            // Ẩn các phòng demo không còn thuộc danh mục phòng dùng chung của Thư viện.
+            var newRoomCodes = demoRooms.Select(r => r.Code).ToHashSet();
+            var legacyRoomCodes = new[]
+            {
+                "A101", "A102", "A103", "A104", "A201", "A202",
+                "A301", "A302", "A303", "A304", "B201", "B203",
+                "B204", "B301", "B302", "C101"
+            };
+
+            var staleRooms = await dbContext.Rooms
+                .IgnoreQueryFilters()
+                .Where(r => legacyRoomCodes.Contains(r.RoomCode) && !newRoomCodes.Contains(r.RoomCode))
+                .ToListAsync();
+
+            foreach (var room in staleRooms)
+            {
+                room.IsDeleted = true;
+                room.Status = "Ngừng sử dụng";
+                room.UpdatedAt = DateTime.UtcNow;
+            }
+
+            // Ẩn các loại phòng demo cũ; chỉ giữ 3 loại phòng của Thư viện.
+            var legacyRoomTypeNames = new[]
+            {
+                "Hội trường", "Phòng họp", "Phòng Lý thuyết", "Phòng Thực hành"
+            };
+
+            var staleRoomTypes = await dbContext.RoomTypes
+                .IgnoreQueryFilters()
+                .Where(rt => legacyRoomTypeNames.Contains(rt.Name))
+                .ToListAsync();
+
+            foreach (var roomType in staleRoomTypes)
+            {
+                roomType.IsDeleted = true;
+                roomType.Status = "Ngừng hoạt động";
+                roomType.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await dbContext.SaveChangesAsync();
+        }
+
+        private static async Task<RoomType> EnsureRoomTypeAsync(
+            ApplicationDbContext dbContext,
+            string name,
+            string description,
+            int defaultCapacity,
+            int departmentId)
+        {
+            var roomType = await dbContext.RoomTypes
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(rt => rt.Name == name);
+
+            if (roomType == null)
+            {
+                roomType = new RoomType
+                {
+                    Name = name,
+                    Description = description,
+                    DefaultCapacity = defaultCapacity,
+                    DepartmentId = departmentId,
+                    IsBookingByPeriod = false,
+                    Status = "Hoạt động",
+                    CreatedAt = DateTime.UtcNow
+                };
+                dbContext.RoomTypes.Add(roomType);
+                await dbContext.SaveChangesAsync();
+                return roomType;
+            }
+
+            roomType.Description = description;
+            roomType.DefaultCapacity = defaultCapacity;
+            roomType.DepartmentId = departmentId;
+            roomType.IsBookingByPeriod = false;
+            roomType.Status = "Hoạt động";
+            roomType.IsDeleted = false;
+            roomType.UpdatedAt = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync();
+            return roomType;
         }
 
         private static async Task EnsureDemoBookingsAsync(ApplicationDbContext dbContext)

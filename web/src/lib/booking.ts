@@ -1,5 +1,5 @@
 import { api } from "./api";
-import type { Period } from "./schedule";
+import { toISODateString, type Period } from "./schedule";
 
 export interface AvailableRoom {
   roomId: number;
@@ -83,14 +83,221 @@ export interface ValidationResult {
   errors: Record<string, string>;
 }
 
+export interface BookingValidationOptions {
+  role?: string | null;
+  now?: Date;
+}
+
+export interface AvailableRoomGroup {
+  roomTypeId: number;
+  roomTypeName: string;
+  rooms: AvailableRoom[];
+}
+
+/** Khung giờ mượn phòng dành cho sinh viên tại Thư viện HUIT. */
+export const STUDENT_OPEN_TIME = "07:00";
+export const STUDENT_CLOSE_TIME = "20:00";
+export const STUDENT_MAX_DURATION_MINUTES = 120;
+
+const STUDENT_OPEN_MINUTES = 7 * 60;
+const STUDENT_CLOSE_MINUTES = 20 * 60;
+
+function normalizeText(value?: string | null): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+export function isStudentRole(role?: string | null): boolean {
+  const value = normalizeText(role);
+  return value === "student" || value === "sinh viên" || value === "sinh vien";
+}
+
+/**
+ * Sinh viên chỉ được đặt phòng học nhóm và phòng thuyết trình của Thư viện.
+ * Các loại phòng khác (hội thảo, hội trường, phòng học...) do đơn vị quản lý.
+ */
+export function isStudentBookableRoomType(
+  roomTypeName?: string | null
+): boolean {
+  const value = normalizeText(roomTypeName);
+  return value.includes("nhóm") || value.includes("nhom") ||
+    value.includes("thuyết trình") || value.includes("thuyet trinh");
+}
+
+function parseClockMinutes(value?: string): number | null {
+  if (!value) return null;
+  const parts = value.split(":").map(Number);
+  if (parts.length < 2 || parts.some((part) => Number.isNaN(part))) {
+    return null;
+  }
+  return parts[0] * 60 + parts[1];
+}
+
+function formatClock(totalMinutes: number): string {
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function parseLocalDate(value: string): Date | null {
+  const parts = value.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+    return null;
+  }
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function isSameLocalDate(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * Kiểm tra khung giờ đặt phòng của sinh viên:
+ * 07:00–20:00, không Chủ Nhật, tối đa 2 giờ và không ở quá khứ.
+ */
+export function validateStudentBookingWindow(
+  form: BookingFormState,
+  now: Date = new Date()
+): ValidationResult {
+  const errors: Record<string, string> = {};
+
+  if (form.bookingMode !== "time") {
+    errors.bookingMode = "Sinh viên chỉ có thể đặt phòng theo khung giờ.";
+  }
+
+  const date = form.date ? parseLocalDate(form.date) : null;
+  if (!form.date) {
+    errors.date = "Vui lòng chọn ngày sử dụng phòng.";
+  } else if (!date) {
+    errors.date = "Ngày sử dụng phòng không hợp lệ.";
+  } else {
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (date < today) {
+      errors.date = "Không thể đặt phòng cho ngày trong quá khứ.";
+    } else if (date.getDay() === 0) {
+      errors.date = "Thư viện không phục vụ mượn phòng vào Chủ Nhật.";
+    }
+  }
+
+  const start = parseClockMinutes(form.startTime);
+  const end = parseClockMinutes(form.endTime);
+
+  if (!form.startTime) {
+    errors.startTime = "Vui lòng chọn giờ bắt đầu.";
+  } else if (start === null) {
+    errors.startTime = "Giờ bắt đầu không hợp lệ.";
+  } else if (start < STUDENT_OPEN_MINUTES) {
+    errors.startTime = "Sinh viên chỉ có thể đặt phòng từ 07:00.";
+  }
+
+  if (!form.endTime) {
+    errors.endTime = "Vui lòng chọn giờ kết thúc.";
+  } else if (end === null) {
+    errors.endTime = "Giờ kết thúc không hợp lệ.";
+  } else if (end > STUDENT_CLOSE_MINUTES) {
+    errors.endTime = "Sinh viên phải trả phòng trước 20:00.";
+  }
+
+  if (start !== null && end !== null) {
+    if (end <= start) {
+      errors.endTime = "Giờ kết thúc phải sau giờ bắt đầu.";
+    } else if (end - start > STUDENT_MAX_DURATION_MINUTES) {
+      errors.endTime = "Sinh viên chỉ được đặt tối đa 2 giờ mỗi lượt.";
+    }
+  }
+
+  if (date && start !== null && isSameLocalDate(date, now)) {
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    if (start <= nowMinutes) {
+      errors.startTime = "Không thể đặt thời gian đã qua trong ngày.";
+    }
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+}
+
+/**
+ * Gợi ý lượt đặt gần nhất còn hợp lệ cho sinh viên.
+ * Bỏ qua Chủ Nhật, thời gian đã qua và các lượt kết thúc sau 20:00.
+ */
+export function getNextStudentBookingSlot(
+  now: Date = new Date()
+): { date: string; startTime: string; endTime: string } {
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let startMinutes = STUDENT_OPEN_MINUTES;
+
+  if (day.getDay() !== 0) {
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    if (nowMinutes >= STUDENT_OPEN_MINUTES) {
+      const candidate = Math.ceil((nowMinutes + 15) / 15) * 15;
+      if (candidate + 60 <= STUDENT_CLOSE_MINUTES) {
+        startMinutes = candidate;
+      } else {
+        day.setDate(day.getDate() + 1);
+      }
+    }
+  } else {
+    day.setDate(day.getDate() + 1);
+  }
+
+  while (day.getDay() === 0) {
+    day.setDate(day.getDate() + 1);
+  }
+
+  return {
+    date: toISODateString(day),
+    startTime: formatClock(startMinutes),
+    endTime: formatClock(startMinutes + 60),
+  };
+}
+
+/**
+ * Gom danh sách phòng trống theo loại phòng để hiển thị dạng accordion gọn.
+ * Giữ nguyên thứ tự loại phòng mà API trả về (đã sắp theo tòa/tầng/mã phòng).
+ */
+export function groupAvailableRoomsByType(
+  rooms: AvailableRoom[]
+): AvailableRoomGroup[] {
+  const groups = new Map<number, AvailableRoomGroup>();
+
+  for (const room of rooms) {
+    const existing = groups.get(room.roomTypeId);
+    if (existing) {
+      existing.rooms.push(room);
+    } else {
+      groups.set(room.roomTypeId, {
+        roomTypeId: room.roomTypeId,
+        roomTypeName: room.roomTypeName,
+        rooms: [room],
+      });
+    }
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    rooms: [...group.rooms].sort((a, b) =>
+      a.roomCode.localeCompare(b.roomCode, "vi")
+    ),
+  }));
+}
+
 /**
  * Validate form nhập liệu đặt phòng
  */
 export function validateBookingForm(
   form: BookingFormState,
-  selectedRoomIds: number[]
+  selectedRoomIds: number[],
+  options: BookingValidationOptions = {}
 ): ValidationResult {
   const errors: Record<string, string> = {};
+  const student = isStudentRole(options.role);
+  const now = options.now ?? new Date();
 
   if (!form.activityName || form.activityName.trim().length < 3) {
     errors.activityName = "Tên hoạt động phải từ 3 ký tự trở lên.";
@@ -104,16 +311,22 @@ export function validateBookingForm(
     errors.guestCount = "Số lượng người tham gia phải lớn hơn 0.";
   }
 
-  if (!form.date) {
+  if (student) {
+    const windowResult = validateStudentBookingWindow(form, now);
+    Object.assign(errors, windowResult.errors);
+  } else if (!form.date) {
     errors.date = "Vui lòng chọn ngày sử dụng phòng.";
   } else {
-    const todayStr = new Date().toISOString().split("T")[0];
-    if (form.date < todayStr) {
+    const selectedDate = parseLocalDate(form.date);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (!selectedDate) {
+      errors.date = "Ngày sử dụng phòng không hợp lệ.";
+    } else if (selectedDate < today) {
       errors.date = "Không thể đặt phòng cho ngày trong quá khứ.";
     }
   }
 
-  if (form.bookingMode === "period") {
+  if (form.bookingMode === "period" && !student) {
     if (!form.startPeriodId) {
       errors.startPeriodId = "Vui lòng chọn tiết bắt đầu.";
     }
@@ -127,7 +340,7 @@ export function validateBookingForm(
     ) {
       errors.endPeriodId = "Tiết kết thúc phải bằng hoặc sau tiết bắt đầu.";
     }
-  } else {
+  } else if (form.bookingMode === "time") {
     if (!form.startTime) {
       errors.startTime = "Vui lòng chọn giờ bắt đầu.";
     }

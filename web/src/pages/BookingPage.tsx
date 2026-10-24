@@ -1,11 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import SiteHeader from "../components/SiteHeader";
-import InfoFooter from "../components/InfoFooter";
 import {
   CalendarIcon,
   ClockIcon,
-  BuildingIcon,
+  ChevronRightIcon,
   UsersIcon,
   PlusIcon,
   InfoIcon,
@@ -15,13 +13,22 @@ import {
   CopyIcon,
   HourglassIcon,
 } from "../components/Icon";
+import { useAuth } from "../auth/AuthContext";
 import { checkMyEligibility, type UserEligibility } from "../lib/violations";
 import {
   type AvailableRoom,
+  type AvailableRoomGroup,
   type BookingResponse,
   type BookingFormState,
   type BookingDetailItem,
   validateBookingForm,
+  validateStudentBookingWindow,
+  getNextStudentBookingSlot,
+  groupAvailableRoomsByType,
+  isStudentBookableRoomType,
+  isStudentRole,
+  STUDENT_OPEN_TIME,
+  STUDENT_CLOSE_TIME,
   buildBookingPayload,
   canCancelBooking,
   formatDetailTimeRange,
@@ -47,6 +54,8 @@ import {
 export default function BookingPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isStudent = isStudentRole(user?.role);
 
   // Active Tab: "create" | "my-bookings" (auto-select from ?tab=my-bookings)
   const activeTab: "create" | "my-bookings" =
@@ -57,20 +66,31 @@ export default function BookingPage() {
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
 
   // Form State
-  const defaultDate = searchParams.get("date") || toISODateString(new Date());
+  const studentSlot = getNextStudentBookingSlot();
+  const defaultDate =
+    searchParams.get("date") ||
+    (isStudent ? studentSlot.date : toISODateString(new Date()));
   const initialRoomId = Number(searchParams.get("roomId")) || null;
   const initialStartPeriod = Number(searchParams.get("startPeriodId")) || 1;
   const initialEndPeriod = Number(searchParams.get("endPeriodId")) || 2;
-  const initialStartTime = searchParams.get("startTime") || "08:00";
-  const initialEndTime = searchParams.get("endTime") || "10:30";
+  const initialStartTime = isStudent
+    ? studentSlot.startTime
+    : searchParams.get("startTime") || "08:00";
+  const initialEndTime = isStudent
+    ? studentSlot.endTime
+    : searchParams.get("endTime") || "10:30";
 
   const [form, setForm] = useState<BookingFormState>({
     activityName: "",
     purpose: "",
-    guestCount: 30,
+    guestCount: isStudent ? 5 : 30,
     note: "",
     date: defaultDate,
-    bookingMode: searchParams.get("startTime") ? "time" : "period",
+    bookingMode: isStudent
+      ? "time"
+      : searchParams.get("startTime")
+        ? "time"
+        : "period",
     startPeriodId: initialStartPeriod,
     endPeriodId: initialEndPeriod,
     startTime: initialStartTime,
@@ -86,6 +106,7 @@ export default function BookingPage() {
   );
   const [isSearchingRooms, setIsSearchingRooms] = useState<boolean>(false);
   const [hasSearched, setHasSearched] = useState<boolean>(false);
+  const [expandedRoomTypes, setExpandedRoomTypes] = useState<number[]>([]);
 
   // Submitting
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -159,8 +180,26 @@ export default function BookingPage() {
 
   // 2. Search Available Rooms
   async function searchRooms() {
-    setIsSearchingRooms(true);
     setSubmitError(null);
+
+    if (isStudent) {
+      const windowValidation = validateStudentBookingWindow(form);
+      if (!windowValidation.isValid) {
+        setErrors((prev) => ({ ...prev, ...windowValidation.errors }));
+        return;
+      }
+    }
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.date;
+      delete next.startTime;
+      delete next.endTime;
+      delete next.bookingMode;
+      return next;
+    });
+
+    setIsSearchingRooms(true);
     try {
       const results = await fetchAvailableRoomsApi({
         date: form.date,
@@ -170,12 +209,17 @@ export default function BookingPage() {
         endTime: form.bookingMode === "time" ? `${form.endTime}:00` : undefined,
       });
 
-      setAvailableRooms(results);
+      // Sinh viên chỉ thấy phòng học nhóm và phòng thuyết trình của Thư viện.
+      const visibleResults = isStudent
+        ? results.filter((room) => isStudentBookableRoomType(room.roomTypeName))
+        : results;
+
+      setAvailableRooms(visibleResults);
       setHasSearched(true);
 
       // Keep only selected rooms that are still available
       setSelectedRoomIds((prev) =>
-        prev.filter((id) => results.some((r) => r.roomId === id))
+        prev.filter((id) => visibleResults.some((r) => r.roomId === id))
       );
     } catch (err: unknown) {
       setSubmitError(
@@ -410,7 +454,9 @@ export default function BookingPage() {
       return;
     }
 
-    const validation = validateBookingForm(form, selectedRoomIds);
+    const validation = validateBookingForm(form, selectedRoomIds, {
+      role: user?.role,
+    });
     if (!validation.isValid) {
       setErrors(validation.errors);
       return;
@@ -477,10 +523,62 @@ export default function BookingPage() {
     selectedRoomIds.includes(r.roomId)
   );
 
+  const availableRoomGroups = useMemo(
+    () => groupAvailableRoomsByType(availableRooms),
+    [availableRooms]
+  );
+
+  useEffect(() => {
+    if (availableRoomGroups.length === 0) {
+      setExpandedRoomTypes([]);
+      return;
+    }
+    setExpandedRoomTypes((prev) => {
+      const stillVisible = prev.filter((id) =>
+        availableRoomGroups.some((group) => group.roomTypeId === id)
+      );
+      return stillVisible.length > 0
+        ? stillVisible
+        : [availableRoomGroups[0].roomTypeId];
+    });
+  }, [availableRoomGroups]);
+
+  const toggleRoomType = (roomTypeId: number) => {
+    setExpandedRoomTypes((prev) =>
+      prev.includes(roomTypeId)
+        ? prev.filter((id) => id !== roomTypeId)
+        : [...prev, roomTypeId]
+    );
+  };
+
+  const groupCapacityLabel = (group: AvailableRoomGroup): string => {
+    const capacities = group.rooms
+      .map((room) => room.capacity)
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (capacities.length === 0) return "Đang cập nhật sức chứa";
+    const min = Math.min(...capacities);
+    const max = Math.max(...capacities);
+    return min === max ? `${min} chỗ` : `${min}–${max} chỗ`;
+  };
+
+  const groupLocationLabel = (group: AvailableRoomGroup): string => {
+    const first = group.rooms[0];
+    if (!first) return "Thư viện HUIT";
+    if (first.building?.toLowerCase() === "thư viện") {
+      return `Thư viện • Tầng ${first.floor || "3"}`;
+    }
+    return `Tòa ${first.building || "—"} • Tầng ${first.floor || "—"}`;
+  };
+
+  const roomLocationLabel = (room: AvailableRoom): string => {
+    if (room.building?.toLowerCase() === "thư viện") {
+      return `Thư viện • Tầng ${room.floor || "3"}`;
+    }
+    return `Tòa ${room.building || "—"} • Tầng ${room.floor || "—"}`;
+  };
+
   return (
     <div className="booking-page">
-      <SiteHeader />
-
       <main className="booking-main">
         <div className="booking-container">
           {/* Top Banner */}
@@ -584,31 +682,49 @@ export default function BookingPage() {
                       <h3>Chọn thời gian & Chế độ đặt</h3>
                     </div>
 
-                  {/* Mode switcher: Theo tiết vs Theo giờ */}
-                  <div className="mode-segmented-control">
-                    <button
-                      type="button"
-                      className={`seg-btn ${
-                        form.bookingMode === "period" ? "active" : ""
-                      }`}
-                      onClick={() =>
-                        setForm((prev) => ({ ...prev, bookingMode: "period" }))
-                      }
-                    >
-                      Mượn theo Tiết học (Phòng học, Lab)
-                    </button>
-                    <button
-                      type="button"
-                      className={`seg-btn ${
-                        form.bookingMode === "time" ? "active" : ""
-                      }`}
-                      onClick={() =>
-                        setForm((prev) => ({ ...prev, bookingMode: "time" }))
-                      }
-                    >
-                      Mượn theo Khung giờ (Hội trường, Phòng họp)
-                    </button>
-                  </div>
+                  {/* Sinh viên chỉ đặt theo khung giờ của Thư viện */}
+                  {isStudent ? (
+                    <div className="student-booking-note">
+                      <InfoIcon size={17} />
+                      <div>
+                        <strong>Khung giờ dành cho sinh viên</strong>
+                        <span>
+                          Đặt theo giờ, từ 07:00 đến 20:00, tối đa 2 giờ mỗi
+                          lượt. Thư viện nghỉ Chủ Nhật. Chỉ áp dụng cho phòng
+                          học nhóm và phòng thuyết trình.
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mode-segmented-control">
+                      <button
+                        type="button"
+                        className={`seg-btn ${
+                          form.bookingMode === "period" ? "active" : ""
+                        }`}
+                        onClick={() =>
+                          setForm((prev) => ({ ...prev, bookingMode: "period" }))
+                        }
+                      >
+                        Mượn theo Tiết học (Phòng học, Lab)
+                      </button>
+                      <button
+                        type="button"
+                        className={`seg-btn ${
+                          form.bookingMode === "time" ? "active" : ""
+                        }`}
+                        onClick={() =>
+                          setForm((prev) => ({ ...prev, bookingMode: "time" }))
+                        }
+                      >
+                        Mượn theo Khung giờ (Hội trường, Phòng họp)
+                      </button>
+                    </div>
+                  )}
+
+                  {errors.bookingMode && (
+                    <span className="err-text">{errors.bookingMode}</span>
+                  )}
 
                   {/* Date Picker */}
                   <div className="form-group">
@@ -622,6 +738,7 @@ export default function BookingPage() {
                         errors.date ? "input-error" : ""
                       }`}
                       value={form.date}
+                      min={toISODateString(new Date())}
                       onChange={(e) =>
                         setForm((prev) => ({ ...prev, date: e.target.value }))
                       }
@@ -700,8 +817,13 @@ export default function BookingPage() {
                         <input
                           id="start-time"
                           type="time"
-                          className="form-input"
+                          className={`form-input ${
+                            errors.startTime ? "input-error" : ""
+                          }`}
                           value={form.startTime}
+                          min={isStudent ? STUDENT_OPEN_TIME : undefined}
+                          max={isStudent ? STUDENT_CLOSE_TIME : undefined}
+                          step={isStudent ? 900 : undefined}
                           onChange={(e) =>
                             setForm((prev) => ({
                               ...prev,
@@ -721,8 +843,13 @@ export default function BookingPage() {
                         <input
                           id="end-time"
                           type="time"
-                          className="form-input"
+                          className={`form-input ${
+                            errors.endTime ? "input-error" : ""
+                          }`}
                           value={form.endTime}
+                          min={isStudent ? form.startTime : undefined}
+                          max={isStudent ? STUDENT_CLOSE_TIME : undefined}
+                          step={isStudent ? 900 : undefined}
                           onChange={(e) =>
                             setForm((prev) => ({
                               ...prev,
@@ -734,6 +861,16 @@ export default function BookingPage() {
                           <span className="err-text">{errors.endTime}</span>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {isStudent && form.bookingMode === "time" && (
+                    <div className="student-time-hint">
+                      <ClockIcon size={14} />
+                      <span>
+                        Thư viện mở cửa 07:00 – 20:00. Mỗi lượt đặt không quá 2
+                        giờ và không nhận ngày Chủ Nhật.
+                      </span>
                     </div>
                   )}
 
@@ -947,72 +1084,124 @@ export default function BookingPage() {
                       <InfoIcon size={32} />
                       <h4>Không tìm thấy phòng trống phù hợp</h4>
                       <p>
-                        Tất cả các phòng trong khung giờ này đã có lịch đặt hoặc
-                        đang bảo trì. Bạn vui lòng chọn ngày hoặc tiết học khác.
+                        {isStudent
+                          ? "Phòng học nhóm và phòng thuyết trình trong khung giờ này đã có lịch hoặc đang bảo trì. Bạn vui lòng chọn khung giờ khác trong 07:00 – 20:00."
+                          : "Tất cả các phòng trong khung giờ này đã có lịch đặt hoặc đang bảo trì. Bạn vui lòng chọn ngày hoặc khung giờ khác."}
                       </p>
                     </div>
                   )}
 
-                  <div className="available-rooms-grid">
-                    {availableRooms.map((room) => {
-                      const isSelected = selectedRoomIds.includes(room.roomId);
-                      return (
-                        <div
-                          key={room.roomId}
-                          className={`room-select-card ${
-                            isSelected ? "selected" : ""
-                          }`}
-                          onClick={() => toggleRoom(room.roomId)}
-                        >
-                          <div className="room-card-head">
-                            <span className="room-code-tag">
-                              {room.roomCode}
-                            </span>
-                            <span className="room-type-tag">
-                              {room.roomTypeName}
-                            </span>
-                          </div>
-                          <h4 className="room-card-name">{room.roomName}</h4>
-                          <div className="room-card-info">
-                            <span>
-                              <BuildingIcon size={14} /> Tòa{" "}
-                              {room.building || "—"}, Tầng {room.floor || "—"}
-                            </span>
-                            <span>
-                              <UsersIcon size={14} /> Sức chứa: {room.capacity}{" "}
-                              chỗ
-                            </span>
-                          </div>
-                          <div className="room-card-bottom">
+                  {availableRoomGroups.length > 0 && (
+                    <div className="room-type-groups">
+                      {availableRoomGroups.map((group) => {
+                        const isOpen = expandedRoomTypes.includes(
+                          group.roomTypeId
+                        );
+                        const selectedInGroup = group.rooms.filter((room) =>
+                          selectedRoomIds.includes(room.roomId)
+                        ).length;
+
+                        return (
+                          <section
+                            key={group.roomTypeId}
+                            className={`room-type-group ${
+                              isOpen ? "is-open" : ""
+                            }`}
+                          >
                             <button
                               type="button"
-                              className={`select-btn ${
-                                isSelected ? "btn-selected" : "btn-unselected"
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleRoom(room.roomId);
-                              }}
+                              className="room-type-group-head"
+                              onClick={() =>
+                                toggleRoomType(group.roomTypeId)
+                              }
+                              aria-expanded={isOpen}
                             >
-                              {isSelected ? "✓ Đã chọn" : "+ Chọn phòng này"}
+                              <span className="room-type-group-icon">
+                                <UsersIcon size={17} />
+                              </span>
+                              <span className="room-type-group-main">
+                                <strong>{group.roomTypeName}</strong>
+                                <small>
+                                  {group.rooms.length} phòng •{" "}
+                                  {groupCapacityLabel(group)} •{" "}
+                                  {groupLocationLabel(group)}
+                                </small>
+                              </span>
+                              {selectedInGroup > 0 && (
+                                <span className="room-type-selected-pill">
+                                  Đã chọn {selectedInGroup}
+                                </span>
+                              )}
+                              <ChevronRightIcon
+                                size={18}
+                                className={`room-type-chevron ${
+                                  isOpen ? "is-open" : ""
+                                }`}
+                              />
                             </button>
-                            <button
-                              type="button"
-                              className="view-schedule-link"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(
-                                  `/lich-phong?roomId=${room.roomId}&date=${form.date}`
-                                );
-                              }}
-                            >
-                              Xem lịch
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+
+                            {isOpen && (
+                              <div className="room-compact-list">
+                                {group.rooms.map((room) => {
+                                  const isSelected =
+                                    selectedRoomIds.includes(room.roomId);
+                                  return (
+                                    <div
+                                      key={room.roomId}
+                                      className={`room-compact-row ${
+                                        isSelected ? "is-selected" : ""
+                                      }`}
+                                    >
+                                      <div className="room-compact-main">
+                                        <span className="room-code-tag">
+                                          {room.roomCode}
+                                        </span>
+                                        <span className="room-compact-text">
+                                          <strong>{room.roomName}</strong>
+                                          <small>
+                                            {roomLocationLabel(room)} •{" "}
+                                            {room.capacity} chỗ
+                                          </small>
+                                        </span>
+                                      </div>
+                                      <div className="room-compact-actions">
+                                        <button
+                                          type="button"
+                                          className={`select-btn ${
+                                            isSelected
+                                              ? "btn-selected"
+                                              : "btn-unselected"
+                                          }`}
+                                          onClick={() =>
+                                            toggleRoom(room.roomId)
+                                          }
+                                        >
+                                          {isSelected
+                                            ? "✓ Đã chọn"
+                                            : "Chọn phòng"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="view-schedule-link"
+                                          onClick={() =>
+                                            navigate(
+                                              `/lich-phong?roomId=${room.roomId}&date=${form.date}`
+                                            )
+                                          }
+                                        >
+                                          Lịch
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </section>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* Summary of Selected Rooms */}
                   {selectedRoomsList.length > 0 && (
@@ -1624,8 +1813,6 @@ export default function BookingPage() {
           )}
         </div>
       </main>
-
-      <InfoFooter />
     </div>
   );
 }

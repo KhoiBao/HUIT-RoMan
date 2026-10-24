@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   validateBookingForm,
+  validateStudentBookingWindow,
+  getNextStudentBookingSlot,
+  groupAvailableRoomsByType,
+  isStudentBookableRoomType,
+  isStudentRole,
   buildBookingPayload,
   canCancelBooking,
   formatDetailTimeRange,
@@ -139,5 +144,173 @@ describe("booking pure functions", () => {
       createdAt: "2026-10-20T00:00:00Z",
     };
     expect(formatDetailTimeRange(detailWithPeriod)).toBe("Tiết 1 → Tiết 2");
+  });
+
+  it("only group study and presentation room types are bookable by students", () => {
+    expect(isStudentBookableRoomType("Phòng học nhóm")).toBe(true);
+    expect(isStudentBookableRoomType("Phòng thuyết trình")).toBe(true);
+    expect(isStudentBookableRoomType("Phòng hội thảo")).toBe(false);
+    expect(isStudentBookableRoomType("Phòng Lý thuyết")).toBe(false);
+    expect(isStudentRole("Student")).toBe(true);
+    expect(isStudentRole("Sinh viên")).toBe(true);
+    expect(isStudentRole("Employee")).toBe(false);
+  });
+
+  it("rejects Sunday bookings for students", () => {
+    const form: BookingFormState = {
+      activityName: "Học nhóm",
+      purpose: "Ôn tập",
+      guestCount: 5,
+      note: "",
+      date: "2026-10-25",
+      bookingMode: "time",
+      startTime: "08:00",
+      endTime: "09:00",
+    };
+
+    const res = validateStudentBookingWindow(
+      form,
+      new Date(2026, 9, 24, 10, 0)
+    );
+    expect(res.isValid).toBe(false);
+    expect(res.errors.date).toContain("Chủ Nhật");
+  });
+
+  it("rejects student bookings outside 07:00–20:00", () => {
+    const form: BookingFormState = {
+      activityName: "Học nhóm",
+      purpose: "Ôn tập",
+      guestCount: 5,
+      note: "",
+      date: "2026-10-26",
+      bookingMode: "time",
+      startTime: "06:30",
+      endTime: "08:00",
+    };
+
+    const beforeOpen = validateStudentBookingWindow(
+      form,
+      new Date(2026, 9, 24, 10, 0)
+    );
+    expect(beforeOpen.isValid).toBe(false);
+    expect(beforeOpen.errors.startTime).toContain("07:00");
+
+    const afterClose = validateStudentBookingWindow(
+      { ...form, startTime: "19:00", endTime: "20:30" },
+      new Date(2026, 9, 24, 10, 0)
+    );
+    expect(afterClose.isValid).toBe(false);
+    expect(afterClose.errors.endTime).toContain("20:00");
+  });
+
+  it("limits student bookings to two hours", () => {
+    const form: BookingFormState = {
+      activityName: "Học nhóm",
+      purpose: "Ôn tập",
+      guestCount: 5,
+      note: "",
+      date: "2026-10-26",
+      bookingMode: "time",
+      startTime: "08:00",
+      endTime: "10:01",
+    };
+
+    const tooLong = validateStudentBookingWindow(
+      form,
+      new Date(2026, 9, 24, 10, 0)
+    );
+    expect(tooLong.isValid).toBe(false);
+    expect(tooLong.errors.endTime).toContain("2 giờ");
+
+    const exactlyTwoHours = validateStudentBookingWindow(
+      { ...form, endTime: "10:00" },
+      new Date(2026, 9, 24, 10, 0)
+    );
+    expect(exactlyTwoHours.isValid).toBe(true);
+  });
+
+  it("rejects student bookings whose start time already passed", () => {
+    const form: BookingFormState = {
+      activityName: "Học nhóm",
+      purpose: "Ôn tập",
+      guestCount: 5,
+      note: "",
+      date: "2026-10-24",
+      bookingMode: "time",
+      startTime: "09:30",
+      endTime: "10:30",
+    };
+
+    const res = validateStudentBookingWindow(
+      form,
+      new Date(2026, 9, 24, 10, 0)
+    );
+    expect(res.isValid).toBe(false);
+    expect(res.errors.startTime).toContain("đã qua");
+  });
+
+  it("picks the next valid student slot, skipping Sunday and closing time", () => {
+    const sunday = getNextStudentBookingSlot(new Date(2026, 9, 25, 10, 0));
+    expect(sunday).toEqual({
+      date: "2026-10-26",
+      startTime: "07:00",
+      endTime: "08:00",
+    });
+
+    const afterClose = getNextStudentBookingSlot(
+      new Date(2026, 9, 24, 19, 30)
+    );
+    expect(afterClose).toEqual({
+      date: "2026-10-26",
+      startTime: "07:00",
+      endTime: "08:00",
+    });
+  });
+
+  it("groups available rooms by room type for the picker", () => {
+    const rooms: AvailableRoom[] = [
+      {
+        roomId: 1,
+        roomName: "Phòng học nhóm TV01",
+        roomCode: "TV01",
+        building: "Thư viện",
+        floor: "3",
+        capacity: 7,
+        roomTypeId: 1,
+        roomTypeName: "Phòng học nhóm",
+        isBookingByPeriod: false,
+      },
+      {
+        roomId: 2,
+        roomName: "Phòng học nhóm TV02",
+        roomCode: "TV02",
+        building: "Thư viện",
+        floor: "3",
+        capacity: 7,
+        roomTypeId: 1,
+        roomTypeName: "Phòng học nhóm",
+        isBookingByPeriod: false,
+      },
+      {
+        roomId: 3,
+        roomName: "Phòng thuyết trình TT01",
+        roomCode: "TT01",
+        building: "Thư viện",
+        floor: "3",
+        capacity: 20,
+        roomTypeId: 2,
+        roomTypeName: "Phòng thuyết trình",
+        isBookingByPeriod: false,
+      },
+    ];
+
+    const groups = groupAvailableRoomsByType(rooms);
+    expect(groups).toHaveLength(2);
+    expect(groups[0].roomTypeName).toBe("Phòng học nhóm");
+    expect(groups[0].rooms.map((room) => room.roomCode)).toEqual([
+      "TV01",
+      "TV02",
+    ]);
+    expect(groups[1].rooms[0].roomCode).toBe("TT01");
   });
 });

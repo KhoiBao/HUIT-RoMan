@@ -71,6 +71,22 @@ export function saveSession(
   }
 }
 
+const LOGOUT_MARKER_KEY = "roman.explicit-logout";
+
+/** Đánh dấu người dùng chủ động đăng xuất để không khôi phục trang cũ. */
+export function markExplicitLogout(): void {
+  sessionStorage.setItem(LOGOUT_MARKER_KEY, "1");
+}
+
+/** Xoá đánh dấu sau khi tài khoản mới đăng nhập thành công. */
+export function clearExplicitLogout(): void {
+  sessionStorage.removeItem(LOGOUT_MARKER_KEY);
+}
+
+export function isExplicitLogoutPending(): boolean {
+  return sessionStorage.getItem(LOGOUT_MARKER_KEY) === "1";
+}
+
 export function isStaffRole(role?: string | null): boolean {
   if (!role) return false;
   const normalized = role.trim().toLowerCase();

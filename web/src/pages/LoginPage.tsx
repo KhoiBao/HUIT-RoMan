@@ -1,10 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { validateLoginInput } from "../lib/auth";
+import { clearExplicitLogout, getHomePathForRole, validateLoginInput } from "../lib/auth";
 import {
   ArrowRightIcon,
-  BankIcon,
   ClockIcon,
   EyeIcon,
   EyeOffIcon,
@@ -46,8 +45,12 @@ export default function LoginPage() {
     setFieldError(null);
     setLoading(true);
     try {
-      await login(identifier, password, remember);
-      navigate(location.state?.from ?? "/home", { replace: true });
+      const loggedInUser = await login(identifier, password, remember);
+      clearExplicitLogout();
+      navigate(
+        location.state?.from ?? getHomePathForRole(loggedInUser?.role),
+        { replace: true },
+      );
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Đăng nhập thất bại");
     } finally {
@@ -60,8 +63,11 @@ export default function LoginPage() {
       <div className="portal-grid">
         <aside className="info-card">
           <div className="brand">
-            <div className="brand-logo">
-              <BankIcon />
+            <div className="brand-logo brand-logo-img">
+              <img
+                src="/huit-logo.svg"
+                alt="Logo Trường Đại học Công Thương TP.HCM"
+              />
             </div>
             <div>
               <div className="brand-eyebrow">HUIT • ROOM MANAGEMENT</div>
@@ -120,8 +126,7 @@ export default function LoginPage() {
             <div className="contact-row">
               <PhoneIcon />
               <span>
-                Tổng đài hỗ trợ: <strong>(028) 3816 1673</strong> (Số nội bộ:
-                124)
+                Tổng đài hỗ trợ: <strong>(028) 3816 1673</strong>
               </span>
             </div>
             <div className="contact-row">
@@ -132,7 +137,7 @@ export default function LoginPage() {
             </div>
             <div className="contact-row">
               <ClockIcon />
-              <span>Thời gian phục vụ: Thứ 2 - Thứ 7 (07:30 - 19:30)</span>
+              <span>Thời gian phục vụ: Thứ 2 - Thứ 7, theo khung giờ hệ thống</span>
             </div>
           </div>
         </aside>
