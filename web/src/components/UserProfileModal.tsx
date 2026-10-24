@@ -73,18 +73,12 @@ export default function UserProfileModal({
             id: user.id,
             userName: user.cardCode,
             cardCode: user.cardCode,
-            fullName: user.fullName || "Người dùng HUIT",
-            email: `${user.cardCode.toLowerCase()}@huit.edu.vn`,
-            phoneNumber: "0912 345 678",
-            status: "Hoạt động",
-            role: user.role || "Sinh viên",
-            departmentName:
-              user.role === "Admin"
-                ? "Trường ĐH Công Thương TPHCM"
-                : user.role === "Employee"
-                ? "Trung tâm Thông tin - Thư viện"
-                : "Khoa Công nghệ Thông tin",
-            createdAt: "2024-09-05T08:00:00Z",
+            fullName: user.fullName || user.cardCode,
+            email: "",
+            phoneNumber: "",
+            status: "",
+            role: user.role || "",
+            departmentName: user.departmentName || "",
           };
           setProfile(fallbackData);
           setPhoneInput(fallbackData.phoneNumber || "");

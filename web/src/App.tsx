@@ -1,94 +1,68 @@
-import type { ReactElement } from "react";
-import {
-  BrowserRouter,
-  Navigate,
-  Route,
-  Routes,
-  useLocation,
-} from "react-router-dom";
-import { AuthProvider, useAuth } from "./auth/AuthContext";
-import { isStaffRole } from "./lib/auth";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider } from "./auth/AuthContext";
+import { RequireAuth, RequireStaff } from "./auth/RequireAuth";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import SchedulePage from "./pages/SchedulePage";
 import BookingPage from "./pages/BookingPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
-import ForbiddenPage from "./pages/ForbiddenPage";
+import PortalLayout from "./components/PortalLayout";
 import { LiveChatWidget } from "./components/chat/LiveChatWidget";
-
-function RequireAuth({ children }: { children: ReactElement }) {
-  const { token } = useAuth();
-  const location = useLocation();
-  if (!token) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  }
-  return children;
-}
-
-function RequireStaff({ children }: { children: ReactElement }) {
-  const { token, user } = useAuth();
-  const location = useLocation();
-  if (!token) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  }
-  if (!isStaffRole(user?.role)) {
-    return <ForbiddenPage />;
-  }
-  return children;
-}
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/home"
-            element={
-              <RequireAuth>
-                <HomePage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/dat-phong"
-            element={
-              <RequireAuth>
-                <BookingPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/lich-phong"
-            element={
-              <RequireAuth>
-                <SchedulePage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/staff"
-            element={
-              <RequireStaff>
-                <AdminDashboardPage />
-              </RequireStaff>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <RequireStaff>
-                <AdminDashboardPage />
-              </RequireStaff>
-            }
-          />
+          <Route element={<PortalLayout />}>
+            <Route
+              path="/home"
+              element={
+                <RequireAuth>
+                  <HomePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/dat-phong"
+              element={
+                <RequireAuth>
+                  <BookingPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/lich-phong"
+              element={
+                <RequireAuth>
+                  <SchedulePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/staff"
+              element={
+                <RequireStaff>
+                  <AdminDashboardPage />
+                </RequireStaff>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <RequireStaff>
+                  <AdminDashboardPage />
+                </RequireStaff>
+              }
+            />
+          </Route>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
         <LiveChatWidget />
-      </BrowserRouter>
-    </AuthProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

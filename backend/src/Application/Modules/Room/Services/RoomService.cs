@@ -42,6 +42,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 RoomNumber = r.RoomNumber,
                 Capacity = r.Capacity,
                 Status = r.Status,
+                Description = r.Description,
                 RoomTypeId = r.RoomTypeId,
                 RoomTypeName = r.RoomType?.Name,
                 IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
@@ -74,6 +75,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 RoomNumber = r.RoomNumber,
                 Capacity = r.Capacity,
                 Status = r.Status,
+                Description = r.Description,
                 RoomTypeId = r.RoomTypeId,
                 RoomTypeName = r.RoomType?.Name,
                 IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
@@ -102,6 +104,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 RoomNumber = request.RoomNumber,
                 Capacity = request.Capacity,
                 Status = "Trống",
+                Description = request.Description,
                 RoomTypeId = request.RoomTypeId
             };
 
@@ -132,6 +135,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             r.RoomNumber = request.RoomNumber;
             r.Capacity = request.Capacity;
             r.Status = request.Status;
+            r.Description = request.Description;
             r.RoomTypeId = request.RoomTypeId;
 
             _roomRepo.Update(r);
@@ -213,6 +217,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 RoomNumber = r.RoomNumber,
                 Capacity = r.Capacity,
                 Status = r.Status,
+                Description = r.Description,
                 RoomTypeId = r.RoomTypeId,
                 RoomTypeName = r.RoomType?.Name,
                 IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false

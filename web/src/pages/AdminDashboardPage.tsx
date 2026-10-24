@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, type FormEvent } from "react";
-import SiteHeader from "../components/SiteHeader";
 import { api } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import AdminBookingApprovalTab from "../components/admin/AdminBookingApprovalTab";
@@ -641,8 +640,6 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="admin-page-root">
-      <SiteHeader />
-
       {/* Toast Alert */}
       {toastMsg && (
         <div className={`admin-toast-alert toast-${toastMsg.type || "success"}`}>

@@ -1,6 +1,7 @@
 import { processSteps, type ProcessStep } from "../data/homeContent";
 import {
   CheckCircleIcon,
+  ChevronRightIcon,
   ClipboardCheckIcon,
   SearchIcon,
   UserCheckIcon,
@@ -21,29 +22,47 @@ function StepIcon({ icon }: { icon: ProcessStep["icon"] }) {
 
 export default function ProcessSection() {
   return (
-    <section className="section center">
-      <div className="eyebrow">QUY CHUẨN THỦ TỤC</div>
-      <h2>Quy trình đặt và sử dụng phòng</h2>
-      <p className="section-desc">
-        Vui lòng tuân thủ 4 bước vận hành để bảo đảm quyền lợi và duy trì văn
-        hóa không gian học thuật tại HUIT.
-      </p>
-      <div className="steps-grid">
-        {processSteps.map((s) => (
-          <article key={s.no} className="step-card">
-            <div className="step-top">
-              <span className="step-no">{s.no}</span>
-              <span className={s.tone === "red" ? "step-icon red" : "step-icon"}>
-                <StepIcon icon={s.icon} />
+    <section className="rh-process" id="quy-trinh" aria-labelledby="rh-process-title">
+      <div className="rh-container">
+        <div className="rh-section-head center">
+          <div>
+            <span className="rh-eyebrow">Hướng dẫn thao tác</span>
+            <h2 id="rh-process-title">Quy trình 4 bước đặt &amp; sử dụng phòng</h2>
+            <p className="rh-lead">
+              Thực hiện đúng quy trình để bảo đảm quyền lợi và duy trì văn hóa
+              sử dụng không gian học thuật tại HUIT.
+            </p>
+          </div>
+        </div>
+
+        <div className="rh-process-panel">
+          {processSteps.map((step, index) => (
+            <article key={step.no} className="rh-process-step">
+              <div className="rh-step-top">
+                <span className="rh-step-no">{step.no}</span>
+                <span
+                  className={`rh-step-icon ${
+                    step.tone === "red" ? "is-red" : ""
+                  }`}
+                >
+                  <StepIcon icon={step.icon} />
+                </span>
+              </div>
+              <h3>{step.title}</h3>
+              <p>{step.desc}</p>
+              <span
+                className={`rh-step-foot ${step.tone === "red" ? "is-red" : ""}`}
+              >
+                {step.foot}
               </span>
-            </div>
-            <h3>{s.title}</h3>
-            <p>{s.desc}</p>
-            <div className={s.tone === "red" ? "step-foot red" : "step-foot"}>
-              {s.foot}
-            </div>
-          </article>
-        ))}
+              {index < processSteps.length - 1 && (
+                <span className="rh-step-connector" aria-hidden="true">
+                  <ChevronRightIcon size={18} />
+                </span>
+              )}
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   );

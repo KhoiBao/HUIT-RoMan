@@ -13,6 +13,7 @@ import {
   sendHubMessage,
   sendHubTyping,
   startChatHub,
+  stopChatHub,
 } from "../../lib/chat";
 
 export function LiveChatWidget() {
@@ -44,7 +45,10 @@ export function LiveChatWidget() {
 
   // Lấy danh sách nhân viên trực ban khi đã đăng nhập (chỉ người dùng / sinh viên)
   useEffect(() => {
-    if (!user || isStaff) return;
+    if (!user || isStaff) {
+      setOnDutyStaff([]);
+      return;
+    }
     fetchOnDutyStaff()
       .then((data) => setOnDutyStaff(data))
       .catch((err) => console.warn("Lỗi tải nhân viên trực:", err));
@@ -52,13 +56,31 @@ export function LiveChatWidget() {
 
   // Kết nối SignalR khi đã đăng nhập
   useEffect(() => {
-    if (!user || isStaff) return;
+    if (!user || isStaff) {
+      setConversation(null);
+      setMessages([]);
+      setInputText("");
+      setUnreadCount(0);
+      setIsStaffTyping(false);
+      setIsConnected(false);
+      setIsOpen(false);
+      setIsMinimized(false);
+      return;
+    }
 
+    let active = true;
     let activeConvId: number | null = null;
+
+    setConversation(null);
+    setMessages([]);
+    setUnreadCount(0);
+    setIsStaffTyping(false);
+    setIsConnected(false);
 
     async function initChat() {
       try {
         const hub = await startChatHub();
+        if (!active) return;
         if (hub) {
           setIsConnected(true);
 
@@ -97,6 +119,7 @@ export function LiveChatWidget() {
 
         // Tải hội thoại hoạt động
         const conv = await fetchMyActiveConversation();
+        if (!active) return;
         setConversation(conv);
         setMessages(conv.messages || []);
         activeConvId = conv.id;
@@ -111,9 +134,12 @@ export function LiveChatWidget() {
     initChat();
 
     return () => {
+      active = false;
       if (activeConvId) {
         leaveConversationGroup(activeConvId).catch(() => {});
       }
+      // Ngắt kết nối để tài khoản kế tiếp không dùng lại phiên chat cũ.
+      stopChatHub().catch(() => {});
     };
   }, [user?.id, isStaff, scrollToBottom]);
 
@@ -258,7 +284,7 @@ export function LiveChatWidget() {
             />
           </div>
 
-          <span>Chat nhân viên trực</span>
+          <span className="chat-floating-label">Chat nhân viên trực</span>
 
           {unreadCount > 0 && (
             <span

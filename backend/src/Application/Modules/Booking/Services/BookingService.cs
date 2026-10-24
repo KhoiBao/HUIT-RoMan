@@ -91,6 +91,23 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 if (detail.EndAt <= detail.StartAt)
                     return ApiResponse<BookingResponseDto>.ErrorResponse("Thời gian kết thúc phải sau thời gian bắt đầu.");
 
+                if (StudentBookingPolicy.IsStudent(_currentUser.Role))
+                {
+                    if (!StudentBookingPolicy.IsBookableRoomType(room.RoomType?.Name))
+                    {
+                        return ApiResponse<BookingResponseDto>.ErrorResponse(
+                            "Sinh viên chỉ được đặt phòng học nhóm và phòng thuyết trình của Thư viện.");
+                    }
+
+                    var windowError = StudentBookingPolicy.ValidateWindow(
+                        detail.StartAt,
+                        detail.EndAt,
+                        DateTime.UtcNow);
+
+                    if (windowError != null)
+                        return ApiResponse<BookingResponseDto>.ErrorResponse(windowError);
+                }
+
                 // Check for conflicting approved/pending bookings
                 var conflicts = await _bookingDetailRepo.FindAsync(
                     bd => bd.RoomId == detail.RoomId

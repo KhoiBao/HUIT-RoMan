@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import SiteHeader from "../components/SiteHeader";
-import InfoFooter from "../components/InfoFooter";
 import {
   CalendarIcon,
   ClockIcon,
@@ -50,17 +48,14 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Current time in minutes from midnight (defaults to 09:45 = 585 min for demo/mockup or live)
+  // Current time in minutes from midnight. Only dùng giờ thật cho ngày hôm nay;
+  // các ngày khác dùng mốc 0 để không tự tạo trạng thái "đang sử dụng".
   const currentMinutes = useMemo(() => {
-    const isToday = selectedDate === toISODateString(new Date());
-    if (isToday) {
+    if (selectedDate === toISODateString(new Date())) {
       const now = new Date();
-      const mins = now.getHours() * 60 + now.getMinutes();
-      // If outside 07:30 - 19:30, fallback to 09:45 as shown in mockup for demonstration
-      if (mins < 450 || mins > 1170) return 585;
-      return mins;
+      return now.getHours() * 60 + now.getMinutes();
     }
-    return 585; // 09:45
+    return 0;
   }, [selectedDate]);
 
   // Current time indicator line
@@ -229,8 +224,6 @@ export default function SchedulePage() {
 
   return (
     <div className="schedule-matrix-page">
-      <SiteHeader />
-
       <main className="schedule-matrix-main">
         <div className="matrix-content-wrapper">
           {/* Subheader: Title and Date Nav */}
@@ -337,10 +330,9 @@ export default function SchedulePage() {
           <div className="matrix-notice-banner">
             <InfoIcon size={18} className="notice-icon" />
             <div className="notice-text">
-              <strong>Quy định vận hành:</strong> Giờ phục vụ thư viện từ{" "}
-              <strong>07:30 - 19:30</strong>. Khung giờ học nhóm đăng ký tối đa{" "}
-              <strong>2 giờ/lượt</strong>. Vui lòng check-in thẻ sinh viên/cán
-              bộ tại quầy lễ tân tầng 3 trước 15 phút.
+              <strong>Quy định vận hành:</strong> Khung giờ sử dụng phòng được
+              hiển thị trực tiếp trên lịch. Vui lòng check-in thẻ sinh viên/cán
+              bộ tại quầy lễ tân tầng 3 trong vòng 15 phút kể từ giờ bắt đầu.
             </div>
           </div>
 
@@ -427,7 +419,7 @@ export default function SchedulePage() {
                 <span className="legend-line-current"></span>
                 <span>
                   Hiện tại (
-                  {timeIndicator.timeLabel || "09:45"})
+                  {timeIndicator.timeLabel})
                 </span>
               </div>
             </div>
@@ -767,8 +759,6 @@ export default function SchedulePage() {
           </section>
         </div>
       </main>
-
-      <InfoFooter />
     </div>
   );
 }

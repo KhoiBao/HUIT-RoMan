@@ -18,17 +18,20 @@ namespace HUIT_RoMan.API.Controllers
         private readonly IRoomEquipmentService _roomEquipmentService;
         private readonly IBookingService _bookingService;
         private readonly IStoredProcedureService _storedProcedureService;
+        private readonly ICurrentUserService _currentUser;
 
         public RoomsController(
             IRoomService roomService, 
             IRoomEquipmentService roomEquipmentService, 
             IBookingService bookingService,
-            IStoredProcedureService storedProcedureService)
+            IStoredProcedureService storedProcedureService,
+            ICurrentUserService currentUser)
         {
             _roomService = roomService;
             _roomEquipmentService = roomEquipmentService;
             _bookingService = bookingService;
             _storedProcedureService = storedProcedureService;
+            _currentUser = currentUser;
         }
 
         [HttpGet]
@@ -182,7 +185,53 @@ namespace HUIT_RoMan.API.Controllers
                 }
             }
 
+            var isStudent = StudentBookingPolicy.IsStudent(_currentUser.Role);
+
+            if (isStudent)
+            {
+                if ((!startPeriodId.HasValue || !endPeriodId.HasValue)
+                    && (string.IsNullOrEmpty(startTime) || string.IsNullOrEmpty(endTime)))
+                {
+                    return BadRequest(new
+                    {
+                        Success = false,
+                        Message = "Vui lòng chọn khung giờ đặt phòng."
+                    });
+                }
+
+                if (startPeriodId.HasValue && endPeriodId.HasValue)
+                {
+                    return BadRequest(new
+                    {
+                        Success = false,
+                        Message = "Sinh viên chỉ có thể đặt phòng theo khung giờ."
+                    });
+                }
+
+                var windowError = StudentBookingPolicy.ValidateWindow(
+                    windowStart,
+                    windowEnd,
+                    System.DateTime.UtcNow);
+
+                if (windowError != null)
+                {
+                    return BadRequest(new
+                    {
+                        Success = false,
+                        Message = windowError
+                    });
+                }
+            }
+
             var availableRooms = await _storedProcedureService.GetAvailableRoomsAsync(windowStart, windowEnd, null, 0);
+
+            if (isStudent)
+            {
+                availableRooms = availableRooms
+                    .Where(room => StudentBookingPolicy.IsBookableRoomType(room.RoomTypeName))
+                    .ToList();
+            }
+
             return Ok(new { Success = true, Data = availableRooms, Message = "Danh sách phòng trống" });
         }
 

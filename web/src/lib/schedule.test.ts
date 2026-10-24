@@ -286,8 +286,15 @@ describe("schedule pure functions", () => {
     };
 
     const kpis = computeMatrixKpis(rooms, schedulesByRoom, "2026-10-14", 585);
-    expect(kpis.availableText).toContain("3 Phòng");
+    expect(kpis.availableText).toBe("2 / 3 Phòng");
     expect(kpis.confirmedText).toBe("1 Lượt đặt");
+    expect(kpis.inUseText).toBe("1 Phiên đang dùng");
+    expect(kpis.inUseSub).toContain("A101");
     expect(kpis.checkinTitle).toBe("Check-in Thẻ HUIT");
+
+    const emptyKpis = computeMatrixKpis(rooms, {}, "2026-10-14", 585);
+    expect(emptyKpis.availableText).toBe("3 / 3 Phòng");
+    expect(emptyKpis.inUseText).toBe("0 Phiên đang dùng");
+    expect(emptyKpis.inUseSub).toBe("Không có phiên đang sử dụng");
   });
 });

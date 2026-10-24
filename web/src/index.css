@@ -42,7 +42,7 @@ body {
 
 .portal-grid {
   width: 100%;
-  max-width: 1240px;
+  max-width: 1440px;
   display: grid;
   grid-template-columns: 5fr 7fr;
   gap: 24px;
@@ -382,7 +382,7 @@ body {
 }
 
 .site-header-inner {
-  max-width: 1240px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 12px 20px;
   display: flex;
@@ -458,7 +458,7 @@ body {
 }
 
 .home-main-grid {
-  max-width: 1240px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 36px 20px 48px;
   display: grid;
@@ -731,7 +731,7 @@ body {
 
 /* ── Home sections ─────────────────────────────── */
 .home-sections {
-  max-width: 1240px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 0 20px 8px;
 }
@@ -1078,7 +1078,7 @@ body {
 }
 
 .info-footer-container {
-  max-width: 1240px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 0 24px;
   box-sizing: border-box;
@@ -1094,7 +1094,7 @@ body {
 }
 
 .foot-grid {
-  max-width: 1240px;
+  max-width: 1440px;
   margin: 0 auto;
   display: grid;
   grid-template-columns: 5fr 4fr 3fr;
@@ -1151,7 +1151,7 @@ body {
 }
 
 .foot-bottom {
-  max-width: 1240px;
+  max-width: 1440px;
   margin: 26px auto 0;
   padding: 14px 20px;
   border-top: 1px solid var(--line);
@@ -1226,7 +1226,7 @@ body {
 
 .schedule-container,
 .booking-container {
-  max-width: 1240px;
+  max-width: 1440px;
   margin: 0 auto;
 }
 

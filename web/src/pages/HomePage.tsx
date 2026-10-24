@@ -1,118 +1,179 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import SiteHeader from "../components/SiteHeader";
-import Slider from "../components/Slider";
-import StatusStrip from "../components/StatusStrip";
-import RoomTypesSection from "../components/RoomTypesSection";
+import HomeHero from "../components/HomeHero";
 import ProcessSection from "../components/ProcessSection";
-import InfoFooter from "../components/InfoFooter";
-import { CalendarIcon, PlusIcon } from "../components/Icon";
+import RoomTypesSection from "../components/RoomTypesSection";
+import {
+  buildRoomTypeSummaries,
+  deriveRoomStates,
+  loadHomeSnapshot,
+  pickFeaturedRoomTypes,
+  summarizeStates,
+  type HomeSnapshot,
+} from "../lib/home";
+import { formatVietnameseDate, toISODateString } from "../lib/schedule";
 import { fetchMyUsageSessions, type UsageSessionItem } from "../lib/usage";
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const [snapshot, setSnapshot] = useState<HomeSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const [activeSessions, setActiveSessions] = useState<UsageSessionItem[]>([]);
 
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await loadHomeSnapshot(toISODateString(new Date()), new Date());
+      setSnapshot(data);
+      setNow(new Date());
+    } catch {
+      setError(
+        "Không thể tải dữ liệu phòng từ hệ thống. Vui lòng thử lại sau ít phút."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    let isMounted = true;
+    void loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
     fetchMyUsageSessions()
       .then((list) => {
-        if (!isMounted) return;
-        const relevant = list.filter(
-          (s) => s.status === "Chờ nhận phòng" || s.status === "Đang sử dụng"
+        if (!mounted) return;
+        setActiveSessions(
+          list.filter(
+            (session) =>
+              session.status === "Chờ nhận phòng" ||
+              session.status === "Đang sử dụng"
+          )
         );
-        setActiveSessions(relevant);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (mounted) setActiveSessions([]);
+      });
     return () => {
-      isMounted = false;
+      mounted = false;
     };
   }, []);
 
-  const pendingSession = activeSessions.find((s) => s.status === "Chờ nhận phòng");
-  const inUseSession = activeSessions.find((s) => s.status === "Đang sử dụng");
+  const states = useMemo(
+    () =>
+      snapshot
+        ? deriveRoomStates(snapshot.rooms, snapshot.scheduleByRoom, now)
+        : {},
+    [snapshot, now]
+  );
+
+  const stats = useMemo(
+    () => (snapshot ? summarizeStates(states) : null),
+    [snapshot, states]
+  );
+
+  const summaries = useMemo(
+    () =>
+      snapshot
+        ? buildRoomTypeSummaries(snapshot.roomTypes, snapshot.rooms, states)
+        : [],
+    [snapshot, states]
+  );
+
+  const { featured, others } = useMemo(
+    () => pickFeaturedRoomTypes(summaries),
+    [summaries]
+  );
+
+  const pendingSession = activeSessions.find(
+    (session) => session.status === "Chờ nhận phòng"
+  );
+  const inUseSession = activeSessions.find(
+    (session) => session.status === "Đang sử dụng"
+  );
+
+  const dateLabel = formatVietnameseDate(toISODateString(now));
+  const updatedLabel = now.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   return (
-    <div className="home-page">
-      <SiteHeader />
-      <main className="home-main-grid">
-        <div className="hero-copy">
-          <h1>Không gian học tập và sự kiện HUIT</h1>
-          <p>
-            Tra cứu phòng trống, đăng ký sử dụng phòng và quản lý lịch phòng
-            tại HUIT nhanh chóng, chuẩn hóa theo quy định học thuật.
-          </p>
-          <div className="hero-actions">
+    <div className="rh-page">
+      {(pendingSession || inUseSession) && (
+        <div className="rh-session-wrap">
+          <div
+            className={`rh-session-banner ${
+              inUseSession && !pendingSession ? "is-inuse" : ""
+            }`}
+          >
+            <span className="rh-session-dot" />
+            <div className="rh-session-text">
+              {pendingSession ? (
+                <>
+                  <strong>
+                    Bạn có phòng sẵn sàng nhận: {pendingSession.roomCode} (
+                    {pendingSession.roomName})
+                  </strong>
+                  <p>
+                    Mã nhận phòng: <strong>{pendingSession.confirmationCode}</strong>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <strong>
+                    Bạn đang sử dụng phòng: {inUseSession?.roomCode} (
+                    {inUseSession?.roomName})
+                  </strong>
+                  <p>Đừng quên trả phòng khi kết thúc buổi sử dụng.</p>
+                </>
+              )}
+            </div>
             <button
               type="button"
-              className="btn-primary"
-              onClick={() => navigate("/dat-phong")}
+              className="rh-session-action"
+              onClick={() => navigate("/dat-phong?tab=my-bookings")}
             >
-              <PlusIcon />
-              Đặt phòng ngay
-            </button>
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={() => navigate("/lich-phong")}
-            >
-              <CalendarIcon />
-              Xem lịch phòng
+              {pendingSession ? "Nhận phòng ngay" : "Xem & trả phòng"}
             </button>
           </div>
-
-          {/* Smart banner if user has pending room to check-in */}
-          {pendingSession && (
-            <div className="home-active-banner">
-              <div className="home-banner-content">
-                <span className="banner-pulse-dot"></span>
-                <div>
-                  <strong>Bạn có phòng sẵn sàng nhận: {pendingSession.roomCode} ({pendingSession.roomName})</strong>
-                  <p>Mã nhận phòng: <strong>{pendingSession.confirmationCode}</strong></p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn-banner-action"
-                onClick={() => navigate("/dat-phong?tab=my-bookings")}
-              >
-                Nhận phòng ngay →
-              </button>
-            </div>
-          )}
-
-          {/* Smart banner if user is currently using a room */}
-          {!pendingSession && inUseSession && (
-            <div className="home-active-banner" style={{ borderColor: "rgba(5, 150, 105, 0.4)", background: "linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(0, 90, 158, 0.1))" }}>
-              <div className="home-banner-content">
-                <span className="pulse-dot-green"></span>
-                <div>
-                  <strong>Bạn đang sử dụng phòng: {inUseSession.roomCode} ({inUseSession.roomName})</strong>
-                  <p>Đừng quên thực hiện trả phòng khi kết thúc buổi sử dụng.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn-banner-action"
-                style={{ background: "#059669" }}
-                onClick={() => navigate("/dat-phong?tab=my-bookings")}
-              >
-                Xem & Trả phòng →
-              </button>
-            </div>
-          )}
-
-          <StatusStrip />
         </div>
-        <div className="hero-slider">
-          <Slider />
+      )}
+
+      {error && (
+        <div className="rh-error-wrap">
+          <div className="rh-error">
+            <span>{error}</span>
+            <button type="button" onClick={() => void loadData()}>
+              Thử lại
+            </button>
+          </div>
         </div>
-      </main>
-      <div className="home-sections">
-        <RoomTypesSection />
-        <ProcessSection />
-      </div>
-      <InfoFooter />
+      )}
+
+      <HomeHero
+        stats={stats}
+        loading={loading}
+        dateLabel={dateLabel}
+        updatedLabel={updatedLabel}
+      />
+
+      <RoomTypesSection
+        featured={featured}
+        others={others}
+        loading={loading && !snapshot}
+      />
+
+      <ProcessSection />
     </div>
   );
 }
