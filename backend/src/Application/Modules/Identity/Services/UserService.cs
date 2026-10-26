@@ -182,6 +182,31 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         }
 
         // ─────────────────────────────────────────────────────────────────
+        // ADMIN RESET PASSWORD
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<string>> AdminResetPasswordAsync(int id, string? newPassword)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null)
+                return ApiResponse<string>.ErrorResponse("Không tìm thấy người dùng.");
+
+            var passwordToSet = string.IsNullOrWhiteSpace(newPassword) ? "Huit@123" : newPassword.Trim();
+
+            if (passwordToSet.Length < 6)
+                return ApiResponse<string>.ErrorResponse("Mật khẩu mới phải có ít nhất 6 ký tự.");
+
+            var removeResult = await _userManager.RemovePasswordAsync(user);
+            var addResult = await _userManager.AddPasswordAsync(user, passwordToSet);
+            if (!addResult.Succeeded)
+            {
+                var errors = string.Join("; ", addResult.Errors.Select(e => e.Description));
+                return ApiResponse<string>.ErrorResponse($"Không thể đặt lại mật khẩu: {errors}");
+            }
+
+            return ApiResponse<string>.SuccessResponse(passwordToSet, $"Đã đặt lại mật khẩu cho tài khoản {user.FullName} ({user.CardCode}) thành công!");
+        }
+
+        // ─────────────────────────────────────────────────────────────────
         // PRIVATE HELPERS
         // ─────────────────────────────────────────────────────────────────
         private async Task<UserDto> MapUserDtoAsync(User u, string knownRole = null)

@@ -9,7 +9,6 @@ import {
   UsersIcon,
   DoorIcon,
   CalendarIcon,
-  ClipboardListIcon,
   RefreshCwIcon,
   HourglassIcon,
   CheckIcon,
@@ -17,6 +16,7 @@ import {
   ZapIcon,
   SlashIcon,
 } from "../Icon";
+import { useConfirm } from "../../context/ConfirmContext";
 
 export interface BookingDetail {
   id: number;
@@ -57,6 +57,7 @@ interface Props {
 }
 
 export default function AdminBookingApprovalTab({ onNotify }: Props) {
+  const { alert } = useConfirm();
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -137,7 +138,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
         rejectionReason: "",
       });
       if (res.data?.success) {
-        onNotify(`Đã duyệt đơn đăng ký #${bookingId} thành công!`, "success");
+        onNotify(`Đã duyệt đặt phòng #${bookingId} thành công!`, "success");
         setBookings((prev) =>
           prev.map((b) =>
             b.id === bookingId
@@ -151,7 +152,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
         );
         fetchBookings();
       } else {
-        onNotify(res.data?.message || "Duyệt đơn không thành công.", "warning");
+        onNotify(res.data?.message || "Duyệt đặt phòng không thành công.", "warning");
       }
     } catch (err: any) {
       const msg =
@@ -161,7 +162,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
           ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
           : err.response?.status === 403
           ? "Bạn không có quyền thực hiện thao tác duyệt này."
-          : err.message || "Lỗi xử lý duyệt đơn từ hệ thống.");
+          : err.message || "Lỗi xử lý duyệt đặt phòng từ hệ thống.");
       onNotify(msg, "warning");
     } finally {
       setApprovingBookingId(null);
@@ -182,7 +183,11 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
   const submitReject = async () => {
     if (!rejectTarget) return;
     if (!rejectionReason.trim()) {
-      alert("Vui lòng nhập lý do từ chối để thông báo cho người đặt phòng.");
+      await alert({
+        title: "Thiếu lý do từ chối",
+        message: "Vui lòng nhập lý do từ chối để thông báo cho người đặt phòng.",
+        type: "warning",
+      });
       return;
     }
     try {
@@ -520,13 +525,13 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                           className="btn-action-approve"
                           onClick={() => handleApproveBooking(b.id)}
                           disabled={approvingBookingId === b.id || submittingAction}
-                          title="Duyệt toàn bộ đơn đăng ký này"
+                          title="Duyệt đặt phòng này"
                         >
                           {approvingBookingId === b.id ? (
                             <span>Đang duyệt...</span>
                           ) : (
                             <>
-                              <CheckCircleIcon size={16} /> Duyệt đơn
+                              <CheckCircleIcon size={16} /> Duyệt đặt phòng
                             </>
                           )}
                         </button>
@@ -560,84 +565,110 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                 {isExpanded && (
                   <div className="booking-card-expanded-drawer">
                     <h4 className="expanded-rooms-title">
-                      <DoorIcon size={16} /> Danh sách phòng đăng ký trong đơn:
+                      <DoorIcon size={16} /> Danh sách phòng đăng ký trong đơn ({b.details.length} phòng):
                     </h4>
 
-                    <div className="expanded-details-grid">
-                      {b.details.map((detail) => (
-                        <div
-                          key={detail.id}
-                          className="room-detail-subcard"
-                        >
-                          <div className="subcard-top">
-                            <span className="subcard-room-badge">
-                              {detail.roomCode} — {detail.roomName}
-                            </span>
-                            {getStatusBadge(detail.status)}
-                          </div>
-
-                          <div className="subcard-times">
-                            {detail.startPeriodName ? (
-                              <p className="subcard-time-line">
-                                <CalendarIcon size={14} className="mr-1 inline-block text-slate-500" />{" "}
-                                <strong>Tiết học:</strong> {detail.startPeriodName} đến{" "}
-                                {detail.endPeriodName || detail.startPeriodName}
-                              </p>
-                            ) : null}
-                            <p className="subcard-time-line">
-                              <ClockIcon size={14} className="mr-1 inline-block text-slate-500" />{" "}
-                              <strong>Khung giờ:</strong> {formatDateTime(detail.startAt)} đến{" "}
-                              {formatDateTime(detail.endAt)}
-                            </p>
-                            <p className="subcard-time-line">
-                              <UsersIcon size={14} className="mr-1 inline-block text-slate-500" />{" "}
-                              <strong>Số lượng:</strong> {detail.guestCount} người
-                            </p>
-                            {detail.purpose && (
-                              <p className="subcard-time-line">
-                                <ClipboardListIcon size={14} className="mr-1 inline-block text-slate-500" />{" "}
-                                <strong>Mục đích phòng:</strong> {detail.purpose}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Individual room approval */}
-                          {detail.status === "Chờ duyệt" && (
-                            <div className="subcard-individual-actions">
-                              <button
-                                type="button"
-                                className="btn-mini-approve"
-                                onClick={() =>
-                                  handleApproveDetail(detail.id, detail.roomCode)
-                                }
-                                disabled={approvingDetailId === detail.id || submittingAction}
-                              >
-                                {approvingDetailId === detail.id ? (
-                                  <span>Đang duyệt...</span>
-                                ) : (
-                                  <>
-                                    <CheckIcon size={12} className="mr-1 inline-block" /> Duyệt phòng này
-                                  </>
+                    <div className="admin-table-responsive expanded-details-table-wrap">
+                      <table className="admin-data-table expanded-details-table">
+                        <thead>
+                          <tr>
+                            <th>Phòng đăng ký</th>
+                            <th>Thời gian / Khung giờ</th>
+                            <th>Số lượng</th>
+                            <th>Mục đích phòng</th>
+                            <th>Trạng thái</th>
+                            <th style={{ textAlign: "right" }}>Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {b.details.map((detail) => (
+                            <tr key={detail.id}>
+                              <td>
+                                <div className="room-info-cell">
+                                  <span className="room-code-badge-lg">{detail.roomCode}</span>
+                                  <span className="room-name-text">{detail.roomName}</span>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="time-info-cell">
+                                  <div className="time-line-main">
+                                    <ClockIcon size={13} className="text-slate-500" />
+                                    <span>
+                                      {formatDateTime(detail.startAt)} đến {formatDateTime(detail.endAt)}
+                                    </span>
+                                  </div>
+                                  {detail.startPeriodName && (
+                                    <div className="time-line-sub">
+                                      <CalendarIcon size={12} className="text-slate-400" />
+                                      <span>
+                                        Tiết học: {detail.startPeriodName} đến {detail.endPeriodName || detail.startPeriodName}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td>
+                                <span className="guest-count-cell">
+                                  <UsersIcon size={13} className="text-slate-500" /> {detail.guestCount} người
+                                </span>
+                              </td>
+                              <td>
+                                <span className="purpose-cell-text" title={detail.purpose || b.purpose}>
+                                  {detail.purpose || b.purpose || "—"}
+                                </span>
+                              </td>
+                              <td>
+                                {getStatusBadge(detail.status)}
+                                {detail.rejectionReason && (
+                                  <div className="detail-reject-reason-tooltip" title={detail.rejectionReason}>
+                                    Lý do: {detail.rejectionReason}
+                                  </div>
                                 )}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn-mini-reject"
-                                onClick={() =>
-                                  openRejectModal(
-                                    "detail",
-                                    detail.id,
-                                    `Phòng ${detail.roomCode} (#${detail.id})`
-                                  )
-                                }
-                                disabled={submittingAction}
-                              >
-                                <XIcon size={12} className="mr-1 inline-block" /> Từ chối
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                              </td>
+                              <td style={{ textAlign: "right" }}>
+                                {detail.status === "Chờ duyệt" ? (
+                                  <div className="table-row-actions">
+                                    <button
+                                      type="button"
+                                      className="btn-mini-approve"
+                                      onClick={() =>
+                                        handleApproveDetail(detail.id, detail.roomCode)
+                                      }
+                                      disabled={approvingDetailId === detail.id || submittingAction}
+                                      title="Duyệt phòng này"
+                                    >
+                                      {approvingDetailId === detail.id ? (
+                                        <span>Đang duyệt...</span>
+                                      ) : (
+                                        <>
+                                          <CheckIcon size={12} /> Duyệt phòng này
+                                        </>
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn-mini-reject"
+                                      onClick={() =>
+                                        openRejectModal(
+                                          "detail",
+                                          detail.id,
+                                          `Phòng ${detail.roomCode} (#${detail.id})`
+                                        )
+                                      }
+                                      disabled={submittingAction}
+                                      title="Từ chối phòng này"
+                                    >
+                                      <XIcon size={12} /> Từ chối
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 text-xs italic">Đã xử lý</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}

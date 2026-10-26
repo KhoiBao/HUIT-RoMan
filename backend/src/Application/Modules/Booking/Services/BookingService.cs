@@ -42,10 +42,14 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             if (_currentUser.UserId == null)
                 return ApiResponse<BookingResponseDto>.ErrorResponse("Bạn cần đăng nhập để đặt phòng.");
 
+            var targetUserId = (_currentUser.IsAdmin || _currentUser.Role == "Employee") && request.UserId.HasValue
+                ? request.UserId.Value
+                : _currentUser.UserId.Value;
+
             // Kiểm tra lệnh cấm mượn phòng (UserRestriction)
             var now = DateTime.UtcNow;
             var activeRestrictions = await _userRestrictionRepo.FindAsync(
-                ur => ur.UserId == _currentUser.UserId.Value
+                ur => ur.UserId == targetUserId
                    && ur.Status == "Hoạt động"
                    && ur.StartAt <= now
                    && (ur.EndAt == null || ur.EndAt >= now)
@@ -55,7 +59,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 var r = activeRestrictions.First();
                 var endStr = r.EndAt.HasValue ? $" đến ngày {r.EndAt.Value.AddHours(7):dd/MM/yyyy HH:mm}" : "";
                 return ApiResponse<BookingResponseDto>.ErrorResponse(
-                    $"Tài khoản của bạn hiện đang bị cấm/hạn chế mượn phòng{endStr}. Lý do: {r.Reason}. Vui lòng liên hệ ban quản lý thư viện để được giải quyết biên bản vi phạm.");
+                    $"Tài khoản hiện đang bị cấm/hạn chế mượn phòng{endStr}. Lý do: {r.Reason}. Vui lòng liên hệ ban quản lý thư viện để được giải quyết biên bản vi phạm.");
             }
 
             if (request.Details == null || !request.Details.Any())
@@ -122,6 +126,10 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                         $"Phòng {room.Name} đã có lịch đặt trùng trong khoảng thời gian này.");
             }
 
+            var initialStatus = ((_currentUser.IsAdmin || _currentUser.Role == "Employee") && request.AutoApprove == true)
+                ? "Đã duyệt"
+                : "Chờ duyệt";
+
             // Create Booking
             var booking = new Domain.Entities.Booking
             {
@@ -129,9 +137,9 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 Purpose = request.Purpose,
                 GuestCount = request.GuestCount,
                 Note = request.Note ?? "",
-                Status = "Chờ duyệt",
+                Status = initialStatus,
                 RejectionReason = "",
-                UserId = _currentUser.UserId.Value,
+                UserId = targetUserId,
                 RequestedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow
             };
@@ -151,7 +159,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                     EndPeriodId = detail.EndPeriodId,
                     GuestCount = detail.GuestCount > 0 ? detail.GuestCount : request.GuestCount,
                     Purpose = detail.Purpose ?? request.Purpose,
-                    Status = "Chờ duyệt",
+                    Status = initialStatus,
                     RejectionReason = "",
                     CreatedAt = DateTime.UtcNow
                 };

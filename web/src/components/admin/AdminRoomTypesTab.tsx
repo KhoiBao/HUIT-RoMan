@@ -11,6 +11,7 @@ import {
   XIcon,
   CheckIcon,
 } from "../Icon";
+import { useConfirm } from "../../context/ConfirmContext";
 
 export interface RoomTypeItem {
   id: number;
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export default function AdminRoomTypesTab({ onNotify }: Props) {
+  const { confirm } = useConfirm();
   const [types, setTypes] = useState<RoomTypeItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -131,12 +133,22 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
   };
 
   const handleDelete = async (item: RoomTypeItem) => {
-    if (
-      !window.confirm(
-        `Xác nhận xóa mềm loại phòng "${item.name}"?\n(Lưu ý: Không thể xóa nếu đang có phòng trực thuộc).`
-      )
-    )
-      return;
+    const isConfirmed = await confirm({
+      title: "Xác nhận xóa loại phòng",
+      message: `Bạn có chắc chắn muốn xóa loại phòng "${item.name}"?`,
+      subMessage: "Lưu ý: Không thể xóa nếu loại phòng này đang có các phòng học trực thuộc trong hệ thống.",
+      itemDetails: [
+        { label: "Mã định danh", value: `#${item.id}` },
+        { label: "Tên loại phòng", value: item.name },
+        { label: "Sức chứa chuẩn", value: `${item.defaultCapacity} người` },
+      ],
+      confirmText: "Xác nhận xóa",
+      cancelText: "Hủy bỏ",
+      type: "danger",
+    });
+
+    if (!isConfirmed) return;
+
     try {
       const res = await api.delete(`/api/RoomTypes/${item.id}`);
       if (res.data?.success) {

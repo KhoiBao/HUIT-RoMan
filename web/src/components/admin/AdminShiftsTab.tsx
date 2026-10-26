@@ -32,6 +32,7 @@ import {
   CheckIcon,
   AlertTriangleIcon,
 } from "../Icon";
+import { useConfirm } from "../../context/ConfirmContext";
 
 interface AdminShiftsTabProps {
   onNotify?: (text: string, type?: "success" | "warning" | "info") => void;
@@ -48,6 +49,7 @@ interface EmployeeItem {
 
 export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
   const { user } = useAuth();
+  const { confirm } = useConfirm();
 
   // Data states
   const [shifts, setShifts] = useState<ShiftItem[]>([]);
@@ -246,10 +248,21 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
 
   // Delete shift
   const handleDeleteShift = async (shift: ShiftItem) => {
-    const confirm = window.confirm(
-      `Bạn có chắc chắn muốn xóa ca trực "${shift.name}" ngày ${shift.dateString}?`
-    );
-    if (!confirm) return;
+    const confirmed = await confirm({
+      title: "Xác nhận xóa ca trực",
+      message: `Bạn có chắc chắn muốn xóa ca trực "${shift.name}"?`,
+      subMessage: "Ca trực và các phân công nhân viên liên quan sẽ bị xóa vĩnh viễn khỏi lịch.",
+      itemDetails: [
+        { label: "Tên ca trực", value: shift.name },
+        { label: "Ngày trực", value: shift.dateString },
+        { label: "Thời gian", value: `${shift.startTime} - ${shift.endTime}` },
+        { label: "Trạng thái", value: shift.status },
+      ],
+      type: "danger",
+      confirmText: "Xác nhận xóa",
+      cancelText: "Hủy bỏ",
+    });
+    if (!confirmed) return;
 
     try {
       await deleteShift(shift.id);
@@ -821,12 +834,12 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
           <table className="admin-custom-table">
             <thead>
               <tr>
-                <th style={{ width: "120px" }}>Ngày trực</th>
+                <th style={{ width: "115px" }}>Ngày trực</th>
                 <th style={{ width: "130px" }}>Khung giờ</th>
-                <th>Tên ca trực &amp; Nhiệm vụ</th>
-                <th>Nhân sự phân công</th>
-                <th style={{ width: "130px" }}>Trạng thái</th>
-                <th style={{ width: "160px", textAlign: "right" }}>Thao tác</th>
+                <th style={{ minWidth: "180px" }}>Tên ca trực &amp; Nhiệm vụ</th>
+                <th style={{ minWidth: "220px" }}>Nhân sự phân công</th>
+                <th style={{ width: "140px", textAlign: "center" }}>Trạng thái</th>
+                <th style={{ width: "230px", textAlign: "right" }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -853,55 +866,69 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                       <div style={{ fontWeight: 700, color: "#0f172a" }}>{s.name}</div>
                     </td>
                     <td>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
                         {s.employees.length === 0 ? (
-                          <span style={{ color: "#ef4444", fontStyle: "italic", fontSize: "12px" }}>
-                            Chưa phân công nhân viên
+                          <span style={{ color: "#ef4444", fontStyle: "italic", fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                            <AlertTriangleIcon size={13} />
+                            <span>Chưa phân công nhân viên</span>
                           </span>
                         ) : (
                           s.employees.map((e) => (
                             <span
                               key={e.id}
-                              className="user-badge-pill"
                               style={{
-                                background: "#f1f5f9",
+                                background: "#f8fafc",
                                 border: "1px solid #cbd5e1",
-                                padding: "2px 8px",
-                                borderRadius: "12px",
+                                padding: "3px 9px",
+                                borderRadius: "14px",
                                 fontSize: "12px",
                                 display: "inline-flex",
                                 alignItems: "center",
-                                gap: "4px",
+                                gap: "5px",
+                                color: "#1e293b",
+                                fontWeight: 500,
+                                whiteSpace: "nowrap",
                               }}
+                              title={`${e.fullName} (${e.code}) - ${e.position}`}
                             >
-                              <PersonIcon size={12} />
-                              <span>{e.fullName} ({e.code})</span>
+                              <PersonIcon size={12} className="color-blue" />
+                              <span>{e.fullName}</span>
+                              <span style={{ color: "#0284c7", fontWeight: 600, fontSize: "11px" }}>({e.code})</span>
                             </span>
                           ))
                         )}
                       </div>
                     </td>
-                    <td>
-                      <span
-                        className={`table-status-pill ${
-                          s.status === "Đang trực"
-                            ? "pill-in-use"
-                            : s.status === "Hoàn thành"
-                            ? "pill-approved"
-                            : "pill-pending"
-                        }`}
-                      >
-                        {s.status}
-                      </span>
+                    <td style={{ textAlign: "center" }}>
+                      {s.status === "Đang trực" ? (
+                        <span className="status-badge badge-in-use">
+                          <span className="status-dot in-use-pulse" />
+                          <span>Đang trực</span>
+                        </span>
+                      ) : s.status === "Hoàn thành" ? (
+                        <span className="status-badge badge-completed">
+                          <CheckCircleIcon size={13} />
+                          <span>Hoàn thành</span>
+                        </span>
+                      ) : s.status === "Hủy" ? (
+                        <span className="status-badge badge-cancelled">
+                          <span>Đã hủy</span>
+                        </span>
+                      ) : (
+                        <span className="status-badge badge-scheduled">
+                          <ClockIcon size={13} />
+                          <span>Lên lịch</span>
+                        </span>
+                      )}
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", gap: "6px" }}>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                         {s.status === "Lên lịch" && (
                           <button
                             type="button"
-                            className="btn-action-view"
-                            style={{ background: "#0284c7", color: "#fff", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                            className="btn-shift-action btn-shift-start"
                             onClick={() => handleChangeStatus(s, "Đang trực")}
+                            title="Bắt đầu ca trực"
                           >
                             <PlayIcon size={11} />
                             <span>Bắt đầu</span>
@@ -910,9 +937,9 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                         {s.status === "Đang trực" && (
                           <button
                             type="button"
-                            className="btn-action-view"
-                            style={{ background: "#16a34a", color: "#fff", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                            className="btn-shift-action btn-shift-complete"
                             onClick={() => handleChangeStatus(s, "Hoàn thành")}
+                            title="Hoàn tất ca trực"
                           >
                             <CheckIcon size={12} />
                             <span>Hoàn tất</span>
@@ -920,17 +947,21 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                         )}
                         <button
                           type="button"
-                          className="btn-action-edit"
+                          className="btn-shift-action btn-shift-edit"
                           onClick={() => handleOpenEditModal(s)}
+                          title="Chỉnh sửa ca trực"
                         >
-                          Sửa
+                          <PencilIcon size={12} />
+                          <span>Sửa</span>
                         </button>
                         <button
                           type="button"
-                          className="btn-action-delete"
+                          className="btn-shift-action btn-shift-delete"
                           onClick={() => handleDeleteShift(s)}
+                          title="Xóa ca trực"
                         >
-                          Xóa
+                          <TrashIcon size={12} />
+                          <span>Xóa</span>
                         </button>
                       </div>
                     </td>
@@ -1040,7 +1071,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
               </button>
             </div>
 
-            <form onSubmit={handleSaveShift} className="modal-form-body">
+            <form onSubmit={handleSaveShift} className="modal-form">
               <div className="form-field">
                 <label>
                   Tên ca trực / Nhiệm vụ: <span className="req-star">*</span>
@@ -1054,8 +1085,8 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                 />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
-                <div className="form-field">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+                <div className="form-field" style={{ minWidth: 0 }}>
                   <label>
                     Ngày trực: <span className="req-star">*</span>
                   </label>
@@ -1067,7 +1098,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                   />
                 </div>
 
-                <div className="form-field">
+                <div className="form-field" style={{ minWidth: 0 }}>
                   <label>
                     Giờ bắt đầu: <span className="req-star">*</span>
                   </label>
@@ -1079,7 +1110,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                   />
                 </div>
 
-                <div className="form-field">
+                <div className="form-field" style={{ minWidth: 0 }}>
                   <label>
                     Giờ kết thúc: <span className="req-star">*</span>
                   </label>
@@ -1107,17 +1138,17 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
 
               {/* Multi-employee selection */}
               <div className="form-field">
-                <label style={{ display: "flex", justifyContent: "space-between" }}>
+                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span>
                     Phân công nhân sự trực: <span className="req-star">*</span>
                   </span>
-                  <span style={{ fontSize: "12px", color: "#64748b" }}>
+                  <span style={{ fontSize: "12px", color: "#0284c7", fontWeight: 600 }}>
                     Đã chọn: {shiftForm.selectedEmployeeIds.length} nhân viên
                   </span>
                 </label>
                 <div
                   style={{
-                    maxHeight: "180px",
+                    maxHeight: "190px",
                     overflowY: "auto",
                     border: "1px solid #cbd5e1",
                     borderRadius: "8px",
@@ -1136,33 +1167,48 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: "8px",
-                          padding: "6px 10px",
-                          borderRadius: "6px",
-                          background: isChecked ? "#e0f2fe" : "#ffffff",
-                          border: `1px solid ${isChecked ? "#38bdf8" : "#e2e8f0"}`,
+                          gap: "10px",
+                          padding: "8px 12px",
+                          borderRadius: "8px",
+                          background: isChecked ? "#f0f9ff" : "#ffffff",
+                          border: `1.5px solid ${isChecked ? "#0284c7" : "#e2e8f0"}`,
                           cursor: "pointer",
                           fontSize: "13px",
+                          userSelect: "none",
+                          transition: "all 0.15s ease",
                         }}
                       >
                         <input
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => handleToggleEmployee(emp.id)}
+                          style={{
+                            width: "16px",
+                            height: "16px",
+                            minWidth: "16px",
+                            margin: 0,
+                            cursor: "pointer",
+                            flexShrink: 0,
+                          }}
                         />
-                        <span style={{ fontWeight: 600, color: "#0f172a" }}>
-                          {emp.fullName} ({emp.code})
-                        </span>
-                        <span style={{ color: "#64748b", fontSize: "12px" }}>
-                          — {emp.position || "Nhân viên"}
-                        </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
+                          <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                            {emp.fullName}
+                          </span>
+                          <span style={{ color: "#0284c7", fontSize: "12px", fontWeight: 600 }}>
+                            ({emp.code})
+                          </span>
+                          <span style={{ color: "#64748b", fontSize: "12px", marginLeft: "auto" }}>
+                            — {emp.position || "Nhân viên"}
+                          </span>
+                        </div>
                       </label>
                     );
                   })}
                 </div>
               </div>
 
-              <div className="modal-actions-row">
+              <div className="modal-footer-actions">
                 <button
                   type="button"
                   className="btn-modal-cancel"
@@ -1198,7 +1244,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
               </button>
             </div>
 
-            <form onSubmit={handleSaveLog} className="modal-form-body">
+            <form onSubmit={handleSaveLog} className="modal-form">
               <div className="form-field">
                 <label>Phân loại nhật ký:</label>
                 <select
@@ -1224,7 +1270,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                 />
               </div>
 
-              <div className="modal-actions-row">
+              <div className="modal-footer-actions">
                 <button
                   type="button"
                   className="btn-modal-cancel"

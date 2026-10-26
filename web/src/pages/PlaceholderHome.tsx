@@ -1,4 +1,5 @@
 import { useAuth } from "../auth/AuthContext";
+import { formatRole } from "../lib/auth";
 
 export default function PlaceholderHome({ title }: { title: string }) {
   const { user, logout } = useAuth();
@@ -8,7 +9,7 @@ export default function PlaceholderHome({ title }: { title: string }) {
         <strong>{title}</strong>
         <div className="home-user">
           <span>
-            {user?.fullName ?? user?.cardCode ?? "Người dùng"} — {user?.role ?? ""}
+            {user?.fullName ?? user?.cardCode ?? "Người dùng"} — {user?.role ? formatRole(user.role) : ""}
           </span>
           <button type="button" className="ghost-btn" onClick={logout}>
             Đăng xuất

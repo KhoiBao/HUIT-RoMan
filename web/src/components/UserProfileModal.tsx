@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
+import { formatRole } from "../lib/auth";
 import {
   MailIcon,
   CheckCircleIcon,
@@ -141,12 +142,13 @@ export default function UserProfileModal({
 
   const displayName = profile?.fullName || user?.fullName || "Người dùng HUIT";
   const displayCode = profile?.cardCode || user?.cardCode || "2001230417";
-  const displayRole = profile?.role || user?.role || "Sinh viên";
+  const rawRole = profile?.role || user?.role || "Student";
+  const displayRole = formatRole(rawRole);
   const displayDept =
     profile?.departmentName ||
-    (displayRole === "Admin"
+    (rawRole === "Admin"
       ? "Trường ĐH Công Thương TPHCM"
-      : displayRole === "Employee"
+      : rawRole === "Employee"
       ? "Thư viện HUIT"
       : "Khoa Công nghệ Thông tin");
 
@@ -175,7 +177,7 @@ export default function UserProfileModal({
               <div className="profile-badge-row">
                 <span className="profile-code-pill font-mono">{displayCode}</span>
                 <span
-                  className={`profile-role-pill role-${displayRole.toLowerCase()}`}
+                  className={`profile-role-pill role-${rawRole.toLowerCase()}`}
                 >
                   <ShieldCheckIcon size={13} /> {displayRole}
                 </span>

@@ -22,6 +22,8 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
         public string Purpose { get; set; }
         public int GuestCount { get; set; }
         public string Note { get; set; }
+        public int? UserId { get; set; }
+        public bool? AutoApprove { get; set; }
         public List<BookingDetailItemDto> Details { get; set; } = new();
     }
 

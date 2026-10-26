@@ -30,17 +30,28 @@ if (!string.IsNullOrWhiteSpace(redisConnectionString))
 {
     try
     {
-        signalRBuilder.AddStackExchangeRedis(redisConnectionString, options =>
+        var redisConfig = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
+        redisConfig.ConnectTimeout = 1500;
+        redisConfig.SyncTimeout = 1500;
+        redisConfig.AbortOnConnectFail = true;
+        using var multiplexer = StackExchange.Redis.ConnectionMultiplexer.Connect(redisConfig);
+        if (multiplexer.IsConnected)
         {
-            options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("HUIT_RoMan_Chat");
-            options.Configuration.AbortOnConnectFail = false;
-        });
-        Console.WriteLine($"[SignalR] Ket noi Redis Backplane thanh cong tai: {redisConnectionString}");
+            signalRBuilder.AddStackExchangeRedis(redisConnectionString, options =>
+            {
+                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("HUIT_RoMan_Chat");
+            });
+            Console.WriteLine($"[SignalR] Kết nối Redis Backplane thành công tại: {redisConnectionString}");
+        }
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"[SignalR] Khong the ket noi Redis Backplane ({ex.Message}). Su dung In-memory SignalR.");
+        Console.WriteLine($"[SignalR] Không thể kết nối Redis Backplane ({ex.Message}). Tự động fallback sang In-memory SignalR.");
     }
+}
+else
+{
+    Console.WriteLine("[SignalR] Không cấu hình Redis ConnectionString. Sử dụng In-memory SignalR.");
 }
 
 // PostgreSQL + EF Core (giữ nguyên connection string từ db_Library cũ)
@@ -166,6 +177,12 @@ using (var scope = app.Services.CreateScope())
             throw;
         }
     }
+}
+
+if (args.Contains("--seed-only"))
+{
+    Console.WriteLine("[Seeder] Khoi tao du lieu seed hoan tat.");
+    return;
 }
 
 if (app.Environment.IsDevelopment())

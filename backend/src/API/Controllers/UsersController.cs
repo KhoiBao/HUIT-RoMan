@@ -142,5 +142,17 @@ namespace HUIT_RoMan.API.Controllers
             if (!response.Success) return BadRequest(response);
             return Ok(response);
         }
+
+        /// <summary>
+        /// Người quản lý đặt lại mật khẩu cho sinh viên / giảng viên (Admin, Employee)
+        /// </summary>
+        [HttpPost("{id}/reset-password")]
+        [Authorize(Roles = "Admin,Employee")]
+        public async Task<IActionResult> AdminResetPassword(int id, [FromBody] AdminResetPasswordDto? request)
+        {
+            var response = await _userService.AdminResetPasswordAsync(id, request?.NewPassword);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
     }
 }

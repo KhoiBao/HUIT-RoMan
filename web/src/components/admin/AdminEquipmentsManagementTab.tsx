@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { api } from "../../lib/api";
 import {
   TvIcon,
@@ -7,8 +7,15 @@ import {
   AlertTriangleIcon,
   RefreshCwIcon,
   CheckIcon,
+  CheckCircleIcon,
   XIcon,
+  WrenchIcon,
+  BanIcon,
+  ChevronDownIcon,
+  PencilIcon,
+  TrashIcon,
 } from "../Icon";
+import { useConfirm } from "../../context/ConfirmContext";
 
 export interface WarehouseEquipment {
   id: number;
@@ -29,11 +36,17 @@ export interface EquipmentCategory {
   description: string;
 }
 
-function formatEquipStatus(status?: string): string {
-  if (!status) return "Hoạt động tốt";
+export function isUnderMaintenance(status?: string): boolean {
+  if (!status) return false;
   const s = status.trim().toLowerCase();
-  if (s === "active" || s === "hoạt động" || s === "hoạt động tốt" || s === "available" || s === "sẵn sàng") {
-    return "Hoạt động tốt";
+  return s.includes("bảo trì") || s.includes("maintenance");
+}
+
+export function formatEquipStatus(status?: string): string {
+  if (!status) return "Đang hoạt động";
+  const s = status.trim().toLowerCase();
+  if (s === "active" || s === "hoạt động" || s === "hoạt động tốt" || s === "available" || s === "sẵn sàng" || s === "đang hoạt động") {
+    return "Đang hoạt động";
   }
   if (s.includes("maintenance") || s.includes("bảo trì")) {
     return "Đang bảo trì";
@@ -62,11 +75,210 @@ export interface RoomEquipmentItem {
   status: string;
 }
 
+function WarehouseStatusDropdown({
+  equipment,
+  isUpdating,
+  onChangeStatus,
+}: {
+  equipment: WarehouseEquipment;
+  isUpdating: boolean;
+  onChangeStatus: (eq: WarehouseEquipment, newStatus: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const isMaint = isUnderMaintenance(equipment.status);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (ev: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(ev.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  return (
+    <div className="status-dropdown-container" ref={dropdownRef}>
+      <button
+        type="button"
+        disabled={isUpdating}
+        onClick={() => setOpen((prev) => !prev)}
+        className={`admin-status-pill ${isMaint ? "pill-maintenance" : "pill-approved"}`}
+        title="Bấm để chuyển trạng thái thiết bị (Đang hoạt động / Bảo trì)"
+      >
+        {isUpdating ? (
+          <RefreshCwIcon size={13} className="animate-spin" />
+        ) : isMaint ? (
+          <WrenchIcon size={13} />
+        ) : (
+          <CheckCircleIcon size={13} />
+        )}
+        <span>{isMaint ? "Đang bảo trì" : "Đang hoạt động"}</span>
+        <span
+          style={{
+            display: "inline-flex",
+            transform: open ? "rotate(180deg)" : "none",
+            transition: "transform 0.15s ease",
+            opacity: 0.75,
+            marginLeft: 2,
+          }}
+        >
+          <ChevronDownIcon size={12} />
+        </span>
+      </button>
+
+      {open && (
+        <div className="status-dropdown-menu">
+          <button
+            type="button"
+            className={`status-dropdown-item ${!isMaint ? "active-selected" : ""}`}
+            onClick={() => {
+              setOpen(false);
+              if (isMaint) onChangeStatus(equipment, "Đang hoạt động");
+            }}
+          >
+            <span style={{ color: "#15803d", display: "inline-flex", flexShrink: 0 }}>
+              <CheckCircleIcon size={14} />
+            </span>
+            <span>Đang hoạt động</span>
+          </button>
+          <button
+            type="button"
+            className={`status-dropdown-item ${isMaint ? "maintenance-selected" : ""}`}
+            onClick={() => {
+              setOpen(false);
+              if (!isMaint) onChangeStatus(equipment, "Đang bảo trì");
+            }}
+          >
+            <span style={{ color: "#c2410c", display: "inline-flex", flexShrink: 0 }}>
+              <WrenchIcon size={14} />
+            </span>
+            <span>Đang bảo trì</span>
+          </button>
+        </div>
+      )}
+
+      {isMaint && (
+        <div className="status-dropdown-hint">
+          <span style={{ color: "#c2410c", display: "inline-flex", flexShrink: 0 }}>
+            <AlertTriangleIcon size={11} />
+          </span>
+          <span>(Không thể gán phòng)</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ROOM_STATUS_CONFIG: Record<
+  string,
+  { label: string; icon: (props: { size?: number; className?: string }) => React.ReactNode; iconColor: string; pillClass: string }
+> = {
+  "Hoạt động tốt": { label: "Hoạt động tốt", icon: CheckCircleIcon, iconColor: "#15803d", pillClass: "pill-approved" },
+  "Đang sử dụng ổn định": { label: "Đang sử dụng ổn định", icon: CheckIcon, iconColor: "#15803d", pillClass: "pill-approved" },
+  "Cần bảo trì nhẹ": { label: "Cần bảo trì nhẹ", icon: WrenchIcon, iconColor: "#c2410c", pillClass: "pill-maintenance" },
+  "Đang bảo trì": { label: "Đang bảo trì", icon: WrenchIcon, iconColor: "#c2410c", pillClass: "pill-maintenance" },
+  "Hỏng hóc": { label: "Hỏng hóc", icon: BanIcon, iconColor: "#b91c1c", pillClass: "pill-rejected" },
+};
+
+function RoomEquipStatusDropdown({
+  item,
+  onChangeStatus,
+}: {
+  item: RoomEquipmentItem;
+  onChangeStatus: (item: RoomEquipmentItem, newStatus: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const cfg = ROOM_STATUS_CONFIG[item.status] || {
+    label: item.status,
+    icon: item.status.includes("Hỏng") ? BanIcon : item.status.includes("bảo trì") ? WrenchIcon : CheckCircleIcon,
+    iconColor: item.status.includes("Hỏng") ? "#b91c1c" : item.status.includes("bảo trì") ? "#c2410c" : "#15803d",
+    pillClass: item.status.includes("Hỏng") ? "pill-rejected" : item.status.includes("bảo trì") ? "pill-maintenance" : "pill-approved",
+  };
+  const IconComp = cfg.icon;
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (ev: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(ev.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  return (
+    <div className="status-dropdown-container" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`admin-status-pill ${cfg.pillClass}`}
+        title="Bấm để thay đổi tình trạng thiết bị trong phòng"
+      >
+        <span style={{ color: cfg.iconColor, display: "inline-flex", flexShrink: 0 }}>
+          <IconComp size={13} />
+        </span>
+        <span>{cfg.label}</span>
+        <span
+          style={{
+            display: "inline-flex",
+            transform: open ? "rotate(180deg)" : "none",
+            transition: "transform 0.15s ease",
+            opacity: 0.75,
+            marginLeft: 2,
+          }}
+        >
+          <ChevronDownIcon size={12} />
+        </span>
+      </button>
+
+      {open && (
+        <div className="status-dropdown-menu" style={{ minWidth: "185px" }}>
+          {Object.entries(ROOM_STATUS_CONFIG).map(([val, conf]) => {
+            const OptionIcon = conf.icon;
+            const isSelected = item.status === val;
+            let itemClass = "status-dropdown-item";
+            if (isSelected) {
+              if (val.includes("Hỏng")) itemClass += " broken-selected";
+              else if (val.includes("bảo trì")) itemClass += " maintenance-selected";
+              else itemClass += " active-selected";
+            }
+            return (
+              <button
+                key={val}
+                type="button"
+                className={itemClass}
+                onClick={() => {
+                  setOpen(false);
+                  if (item.status !== val) {
+                    onChangeStatus(item, val);
+                  }
+                }}
+              >
+                <span style={{ color: conf.iconColor, display: "inline-flex", flexShrink: 0 }}>
+                  <OptionIcon size={14} />
+                </span>
+                <span>{conf.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
 }
 
 export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
+  const { confirm, alert } = useConfirm();
   const [subView, setSubView] = useState<"warehouse" | "byRoom" | "categories">("warehouse");
   const [equipments, setEquipments] = useState<WarehouseEquipment[]>([]);
   const [categories, setCategories] = useState<EquipmentCategory[]>([]);
@@ -84,6 +296,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
   const [formDesc, setFormDesc] = useState<string>("");
   const [formCatId, setFormCatId] = useState<number | "">("");
   const [formTotalQty, setFormTotalQty] = useState<number>(10);
+  const [formStatus, setFormStatus] = useState<string>("Đang hoạt động");
 
   // Edit Warehouse Equip modal
   const [editingEquip, setEditingEquip] = useState<WarehouseEquipment | null>(null);
@@ -92,6 +305,9 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
   const [editDesc, setEditDesc] = useState<string>("");
   const [editCatId, setEditCatId] = useState<number | "">("");
   const [editTotalQty, setEditTotalQty] = useState<number>(1);
+  const [editStatus, setEditStatus] = useState<string>("Đang hoạt động");
+
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
 
   // Assign to room modal
   const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
@@ -163,7 +379,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
     if (selectedRoomId) {
       fetchRoomEquips(Number(selectedRoomId));
     }
-  }, [selectedRoomId]);
+  }, [selectedRoomId, subView]);
 
   // Filtered warehouse equipments
   const filteredEquipments = useMemo(() => {
@@ -180,6 +396,48 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
       return true;
     });
   }, [equipments, catFilter, searchTerm]);
+
+  // Quick toggle / update equipment status in warehouse
+  const handleQuickChangeStatus = async (eq: WarehouseEquipment, newStatus: string) => {
+    try {
+      setUpdatingStatusId(eq.id);
+      await api.patch(`/api/Equipments/${eq.id}/status`, {
+        status: newStatus,
+      });
+      onNotify(`Đã chuyển trạng thái thiết bị "${eq.name}" sang "${newStatus}"!`, "success");
+      await fetchData();
+      if (selectedRoomId) {
+        await fetchRoomEquips(Number(selectedRoomId));
+      }
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || err.response?.data || "Lỗi khi cập nhật trạng thái thiết bị.",
+        "warning"
+      );
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  // Update room equipment condition
+  const handleUpdateRoomEquipStatus = async (item: RoomEquipmentItem, newStatus: string) => {
+    if (!selectedRoomId) return;
+    try {
+      await api.post(`/api/Rooms/${selectedRoomId}/equipments`, {
+        equipmentId: item.equipmentId,
+        quantity: item.quantity,
+        status: newStatus,
+      });
+      onNotify(`Đã cập nhật tình trạng thiết bị "${item.equipmentName}" trong phòng thành "${newStatus}".`, "success");
+      await fetchRoomEquips(Number(selectedRoomId));
+      await fetchData();
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || err.response?.data || "Lỗi khi cập nhật tình trạng thiết bị trong phòng.",
+        "warning"
+      );
+    }
+  };
 
   // Handle Create Equipment in Warehouse
   const handleCreateEquip = async (e: React.FormEvent) => {
@@ -201,6 +459,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
         description: formDesc.trim(),
         equipmentCategoryId: Number(formCatId),
         totalQuantity: totalQty,
+        status: formStatus,
       });
       onNotify(`Đã thêm thiết bị "${formName}" vào kho thành công với số lượng ${totalQty}!`, "success");
       setShowAddModal(false);
@@ -208,6 +467,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
       setFormName("");
       setFormDesc("");
       setFormTotalQty(10);
+      setFormStatus("Đang hoạt động");
       await fetchData();
     } catch (err: any) {
       onNotify(
@@ -226,6 +486,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
     setEditDesc(eq.description || "");
     setEditCatId(eq.equipmentCategoryId);
     setEditTotalQty(eq.totalQuantity || 1);
+    setEditStatus(isUnderMaintenance(eq.status) ? "Đang bảo trì" : "Đang hoạt động");
   };
 
   const handleUpdateEquip = async (e: React.FormEvent) => {
@@ -254,10 +515,14 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
         description: editDesc.trim(),
         equipmentCategoryId: Number(editCatId),
         totalQuantity: totalQty,
+        status: editStatus,
       });
       onNotify(`Đã cập nhật thiết bị "${editName}" thành công!`, "success");
       setEditingEquip(null);
       await fetchData();
+      if (selectedRoomId) {
+        await fetchRoomEquips(Number(selectedRoomId));
+      }
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || err.response?.data || "Lỗi khi cập nhật thiết bị.",
@@ -276,6 +541,11 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
       return;
     }
     const selectedEquip = equipments.find((eq) => eq.id === Number(assignEquipId));
+    if (selectedEquip && isUnderMaintenance(selectedEquip.status)) {
+      alert("Thiết bị này đang trong trạng thái bảo trì, không được phép phân bổ vào phòng hoặc sử dụng!");
+      return;
+    }
+
     const currentInRoom = roomEquipments.find((r) => r.equipmentId === Number(assignEquipId))?.quantity || 0;
     const maxAllowed = (selectedEquip?.availableQuantity ?? 0) + currentInRoom;
 
@@ -310,8 +580,23 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
 
   // Handle Remove Equipment from Room
   const handleRemoveFromRoom = async (equipId: number, equipName: string) => {
-    if (!window.confirm(`Xác nhận thu hồi thiết bị "${equipName}" khỏi phòng? Toàn bộ số lượng sẽ được hoàn trả về kho.`))
-      return;
+    if (!selectedRoomId) return;
+    const selectedRoom = rooms.find((r) => r.id === Number(selectedRoomId));
+    const confirmed = await confirm({
+      title: "Xác nhận thu hồi thiết bị khỏi phòng",
+      message: `Bạn có chắc chắn muốn thu hồi thiết bị "${equipName}" khỏi phòng ${selectedRoom?.roomCode || ""}?`,
+      subMessage: "Toàn bộ số lượng thiết bị đang phân bổ trong phòng sẽ được hoàn trả về kho tổng.",
+      itemDetails: [
+        { label: "Phòng", value: selectedRoom ? `${selectedRoom.name} (${selectedRoom.roomCode})` : "—" },
+        { label: "Thiết bị thu hồi", value: equipName },
+      ],
+      type: "warning",
+      confirmText: "Xác nhận thu hồi",
+      cancelText: "Hủy bỏ",
+    });
+
+    if (!confirmed) return;
+
     try {
       const res = await api.delete(`/api/Rooms/${selectedRoomId}/equipments/${equipId}`);
       onNotify(res.data?.message || `Đã thu hồi thiết bị "${equipName}" và hoàn trả về kho thành công!`, "info");
@@ -319,6 +604,89 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || "Lỗi khi thu hồi thiết bị khỏi phòng.",
+        "warning"
+      );
+    }
+  };
+
+  // Handle Delete Equipment from Warehouse
+  const handleDeleteEquipment = async (e: WarehouseEquipment) => {
+    if ((e.allocatedQuantity ?? 0) > 0) {
+      await alert({
+        title: "Không thể xóa thiết bị",
+        message: `Thiết bị "${e.name}" (${e.code || `#${e.id}`}) hiện đang được phân bổ vào các phòng học (Số lượng đang phân bổ: ${e.allocatedQuantity} chiếc).`,
+        subMessage: "Vui lòng thu hồi toàn bộ thiết bị này khỏi các phòng học về kho trước khi thực hiện xóa khỏi hệ thống.",
+        type: "warning",
+      });
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: "Xác nhận xóa thiết bị khỏi kho",
+      message: `Bạn có chắc chắn muốn xóa thiết bị "${e.name}" (${e.code || `#${e.id}`}) khỏi kho thiết bị tổng?`,
+      subMessage: "Hành động này sẽ xóa vĩnh viễn thiết bị khỏi danh mục quản lý kho của thư viện.",
+      itemDetails: [
+        { label: "Mã thiết bị", value: e.code || `#${e.id}` },
+        { label: "Tên thiết bị", value: e.name },
+        { label: "Danh mục", value: e.categoryName || "—" },
+        { label: "Tổng số lượng trong kho", value: `${e.totalQuantity} chiếc` },
+        { label: "Trạng thái", value: formatEquipStatus(e.status) },
+      ],
+      type: "danger",
+      confirmText: "Xác nhận xóa",
+      cancelText: "Hủy bỏ",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/api/Equipments/${e.id}`);
+      onNotify(`Đã xóa thiết bị "${e.name}" khỏi kho thành công!`, "info");
+      await fetchData();
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || err.response?.data || "Không thể xóa thiết bị này.",
+        "warning"
+      );
+    }
+  };
+
+  // Handle Delete Equipment Category
+  const handleDeleteCategory = async (c: EquipmentCategory) => {
+    const attachedCount = equipments.filter((eq) => eq.equipmentCategoryId === c.id).length;
+    if (attachedCount > 0) {
+      await alert({
+        title: "Không thể xóa danh mục",
+        message: `Danh mục "${c.name}" hiện đang chứa ${attachedCount} thiết bị trong kho.`,
+        subMessage: "Vui lòng xóa hoặc di chuyển các thiết bị này sang danh mục khác trước khi xóa danh mục.",
+        type: "warning",
+      });
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: "Xác nhận xóa danh mục thiết bị",
+      message: `Bạn có chắc chắn muốn xóa danh mục thiết bị "${c.name}"?`,
+      subMessage: "Dữ liệu danh mục đã xóa sẽ không thể phục hồi.",
+      itemDetails: [
+        { label: "Mã danh mục", value: `#${c.id}` },
+        { label: "Tên danh mục", value: c.name },
+        { label: "Mô tả", value: c.description || "—" },
+      ],
+      type: "danger",
+      confirmText: "Xác nhận xóa",
+      cancelText: "Hủy bỏ",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/api/EquipmentCategories/${c.id}`);
+      onNotify(`Đã xóa danh mục "${c.name}" thành công!`, "info");
+      await fetchData();
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || err.response?.data || "Không thể xóa danh mục này.",
         "warning"
       );
     }
@@ -381,7 +749,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
               className="btn-toolbar-primary"
               onClick={() => setShowAddModal(true)}
             >
-              <PlusIcon size={16} /> + Thêm thiết bị vào kho
+              <PlusIcon size={16} /> Thêm thiết bị vào kho
             </button>
           )}
           {subView === "byRoom" && (
@@ -390,7 +758,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
               className="btn-toolbar-primary"
               onClick={() => setShowAssignModal(true)}
             >
-              <PlusIcon size={16} /> + Gán thiết bị vào phòng này
+              <PlusIcon size={16} /> Gán thiết bị vào phòng này
             </button>
           )}
           {subView === "categories" && (
@@ -399,7 +767,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
               className="btn-toolbar-primary"
               onClick={() => setShowCatModal(true)}
             >
-              <PlusIcon size={16} /> + Thêm loại danh mục
+              <PlusIcon size={16} /> Thêm loại danh mục
             </button>
           )}
         </div>
@@ -539,20 +907,33 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                       </td>
                       <td className="text-sm text-muted">{e.description || "—"}</td>
                       <td>
-                        <span className="admin-status-pill pill-approved flex items-center gap-1">
-                          <CheckIcon size={12} />
-                          <span>{formatEquipStatus(e.status)}</span>
-                        </span>
+                        <WarehouseStatusDropdown
+                          equipment={e}
+                          isUpdating={updatingStatusId === e.id}
+                          onChangeStatus={handleQuickChangeStatus}
+                        />
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn-action-icon text-highlight"
-                          onClick={() => handleOpenEdit(e)}
-                          title="Chỉnh sửa thông số và số lượng kho"
-                        >
-                          Sửa
-                        </button>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <button
+                            type="button"
+                            className="btn-shift-action btn-shift-edit"
+                            onClick={() => handleOpenEdit(e)}
+                            title="Chỉnh sửa thông số và số lượng kho"
+                          >
+                            <PencilIcon size={12} />
+                            <span>Sửa</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-shift-action btn-shift-delete"
+                            onClick={() => handleDeleteEquipment(e)}
+                            title="Xóa thiết bị khỏi kho"
+                          >
+                            <TrashIcon size={12} />
+                            <span>Xóa</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -581,7 +962,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                     <th>Tên thiết bị</th>
                     <th>Số lượng trang bị</th>
                     <th>Tình trạng thực tế</th>
-                    <th>Thao tác</th>
+                    <th style={{ width: "140px", textAlign: "right" }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -596,27 +977,22 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                         </span>
                       </td>
                       <td>
-                        <span
-                          className={`admin-status-pill flex items-center gap-1 ${
-                            req.status.includes("Hỏng") || req.status.includes("bảo trì")
-                              ? "pill-rejected"
-                              : "pill-approved"
-                          }`}
-                        >
-                          <CheckIcon size={12} />
-                          <span>{formatEquipStatus(req.status)}</span>
-                        </span>
+                        <RoomEquipStatusDropdown
+                          item={req}
+                          onChangeStatus={handleUpdateRoomEquipStatus}
+                        />
                       </td>
-                      <td>
+                      <td style={{ textAlign: "right" }}>
                         <button
                           type="button"
-                          className="btn-danger-outline btn-xs"
+                          className="btn-shift-action btn-shift-delete"
                           onClick={() =>
                             handleRemoveFromRoom(req.equipmentId, req.equipmentName)
                           }
                           title="Thu hồi thiết bị khỏi phòng"
                         >
-                          <XIcon size={12} /> Thu hồi
+                          <TrashIcon size={12} />
+                          <span>Thu hồi</span>
                         </button>
                       </td>
                     </tr>
@@ -633,9 +1009,10 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
           <table className="admin-data-table">
             <thead>
               <tr>
-                <th>ID</th>
+                <th style={{ width: "80px" }}>ID</th>
                 <th>Tên danh mục thiết bị</th>
                 <th>Mô tả quy cách</th>
+                <th style={{ width: "120px", textAlign: "right" }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -646,6 +1023,17 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                   </td>
                   <td className="font-semibold text-highlight">{c.name}</td>
                   <td className="text-sm text-muted">{c.description || "—"}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <button
+                      type="button"
+                      className="btn-shift-action btn-shift-delete"
+                      onClick={() => handleDeleteCategory(c)}
+                      title="Xóa danh mục thiết bị"
+                    >
+                      <TrashIcon size={12} />
+                      <span>Xóa</span>
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -720,6 +1108,18 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                     onChange={(e) => setFormTotalQty(Number(e.target.value))}
                     required
                   />
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Trạng thái ban đầu:</label>
+                  <select
+                    className="admin-input font-medium"
+                    value={formStatus}
+                    onChange={(e) => setFormStatus(e.target.value)}
+                  >
+                    <option value="Đang hoạt động">Đang hoạt động</option>
+                    <option value="Đang bảo trì">Đang bảo trì</option>
+                  </select>
                 </div>
 
                 <div className="form-group-admin">
@@ -810,6 +1210,24 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                 </div>
 
                 <div className="form-group-admin">
+                  <label>Trạng thái hoạt động (*):</label>
+                  <select
+                    className="admin-input font-medium"
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                  >
+                    <option value="Đang hoạt động">Đang hoạt động</option>
+                    <option value="Đang bảo trì">Đang bảo trì</option>
+                  </select>
+                  {isUnderMaintenance(editStatus) && (
+                    <span className="text-xs text-amber-700 flex items-center gap-1.5 mt-1 font-medium bg-amber-50 p-2 rounded border border-amber-200">
+                      <AlertTriangleIcon size={15} className="flex-shrink-0 text-amber-600" />
+                      <span>Thiết bị bảo trì sẽ không được phép thêm vào phòng học hoặc đưa vào sử dụng.</span>
+                    </span>
+                  )}
+                </div>
+
+                <div className="form-group-admin">
                   <label>Tổng số lượng trong kho (*):</label>
                   <input
                     type="number"
@@ -882,19 +1300,31 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                     required
                   >
                     <option value="">-- Chọn thiết bị kho --</option>
-                    {equipments.map((eq) => (
-                      <option key={eq.id} value={eq.id}>
-                        {eq.code ? `[${eq.code}] ` : ""}{eq.name} — Còn trong kho: {eq.availableQuantity ?? 0}/{eq.totalQuantity ?? 0} chiếc ({eq.categoryName})
-                      </option>
-                    ))}
+                    {equipments.map((eq) => {
+                      const isMaint = isUnderMaintenance(eq.status);
+                      return (
+                        <option key={eq.id} value={eq.id} disabled={isMaint}>
+                          {eq.code ? `[${eq.code}] ` : ""}{eq.name} — {isMaint ? "[ĐANG BẢO TRÌ - KHÔNG THỂ PHÂN BỔ]" : `Còn trong kho: ${eq.availableQuantity ?? 0}/${eq.totalQuantity ?? 0} chiếc (${eq.categoryName})`}
+                        </option>
+                      );
+                    })}
                   </select>
                   {assignEquipId && (() => {
                     const targetEq = equipments.find((eq) => eq.id === Number(assignEquipId));
-                    return targetEq ? (
+                    if (!targetEq) return null;
+                    if (isUnderMaintenance(targetEq.status)) {
+                      return (
+                        <div className="p-2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-xs mt-2 font-medium flex items-center gap-1.5">
+                          <BanIcon size={15} className="flex-shrink-0 text-rose-600" />
+                          <span>Thiết bị này đang ở trạng thái <strong>Đang bảo trì</strong>, không được phép phân bổ vào phòng học hoặc đưa vào sử dụng.</span>
+                        </div>
+                      );
+                    }
+                    return (
                       <span className="text-xs text-muted block mt-1">
                         Tồn kho khả dụng: <strong className="text-highlight">{targetEq.availableQuantity ?? 0}</strong> chiếc (Tổng: {targetEq.totalQuantity ?? 0} | Đang phân bổ: {targetEq.allocatedQuantity ?? 0})
                       </span>
-                    ) : null;
+                    );
                   })()}
                 </div>
 

@@ -3,6 +3,7 @@ import {
   globalSearch,
   type GlobalSearchResult,
 } from "../../lib/violations";
+import { formatRole } from "../../lib/auth";
 import {
   SearchIcon,
   DoorIcon,
@@ -279,7 +280,7 @@ export default function AdminGlobalSearchModal({
                               MSSV/Mã: <strong>{u.cardCode}</strong> • {u.email}
                             </span>
                             <span className="item-badge-pill">
-                              {u.role} - {u.departmentName || "Khoa CNTT"}
+                              {formatRole(u.role)} - {u.departmentName || "Khoa CNTT"}
                             </span>
                           </div>
                         </div>

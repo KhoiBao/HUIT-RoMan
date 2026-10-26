@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../../lib/api";
-import { TvIcon, PlusIcon, AlertTriangleIcon, XIcon, CheckIcon } from "../Icon";
+import { TvIcon, PlusIcon, AlertTriangleIcon, XIcon, CheckIcon, WrenchIcon, BanIcon } from "../Icon";
+import { useConfirm } from "../../context/ConfirmContext";
 
 export interface RoomEquipmentItem {
   roomId: number;
@@ -29,11 +30,17 @@ export interface EquipmentCategory {
   description: string;
 }
 
-function formatEquipStatus(status?: string): string {
-  if (!status) return "Hoạt động tốt";
+function isUnderMaintenance(status?: string): boolean {
+  if (!status) return false;
   const s = status.trim().toLowerCase();
-  if (s === "active" || s === "hoạt động" || s === "hoạt động tốt" || s === "available" || s === "sẵn sàng") {
-    return "Hoạt động tốt";
+  return s.includes("bảo trì") || s.includes("maintenance");
+}
+
+function formatEquipStatus(status?: string): string {
+  if (!status) return "Đang hoạt động";
+  const s = status.trim().toLowerCase();
+  if (s === "active" || s === "hoạt động" || s === "hoạt động tốt" || s === "available" || s === "sẵn sàng" || s === "đang hoạt động") {
+    return "Đang hoạt động";
   }
   if (s.includes("maintenance") || s.includes("bảo trì")) {
     return "Đang bảo trì";
@@ -58,6 +65,7 @@ interface Props {
 }
 
 export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props) {
+  const { confirm } = useConfirm();
   const [activeSubTab, setActiveSubTab] = useState<"room" | "warehouse">("room");
   const [roomEquipments, setRoomEquipments] = useState<RoomEquipmentItem[]>([]);
   const [warehouseEquipments, setWarehouseEquipments] = useState<WarehouseEquipment[]>([]);
@@ -128,6 +136,11 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
     }
 
     const selectedEquip = warehouseEquipments.find((w) => w.id === Number(selectedEquipId));
+    if (selectedEquip && isUnderMaintenance(selectedEquip.status)) {
+      alert("Thiết bị này đang trong trạng thái bảo trì, không được phép phân bổ vào phòng hoặc sử dụng!");
+      return;
+    }
+
     const currentInRoom = roomEquipments.find((r) => r.equipmentId === Number(selectedEquipId))?.quantity || 0;
     const maxAllowed = (selectedEquip?.availableQuantity ?? 0) + currentInRoom;
 
@@ -163,12 +176,21 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
 
   // Handle remove equipment from room
   const handleRemoveEquipment = async (equipmentId: number, equipmentName: string) => {
-    if (
-      !window.confirm(
-        `Xác nhận thu hồi thiết bị "${equipmentName}" khỏi phòng ${room.roomCode}? Toàn bộ số lượng sẽ được hoàn trả về kho.`
-      )
-    )
-      return;
+    const confirmed = await confirm({
+      title: "Xác nhận thu hồi thiết bị",
+      message: `Bạn có chắc chắn muốn thu hồi thiết bị "${equipmentName}" khỏi phòng ${room.roomCode}?`,
+      subMessage: "Toàn bộ số lượng thiết bị đang phân bổ trong phòng sẽ được hoàn trả về kho tổng.",
+      itemDetails: [
+        { label: "Phòng", value: `${room.name} (${room.roomCode})` },
+        { label: "Thiết bị thu hồi", value: equipmentName },
+      ],
+      type: "warning",
+      confirmText: "Xác nhận thu hồi",
+      cancelText: "Hủy bỏ",
+    });
+
+    if (!confirmed) return;
+
     try {
       const res = await api.delete(`/api/Rooms/${room.id}/equipments/${equipmentId}`);
       const msg = res.data?.message || `Đã thu hồi thiết bị "${equipmentName}" và hoàn trả về kho thành công!`;
@@ -295,19 +317,31 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                         required
                       >
                         <option value="">-- Chọn thiết bị trong kho --</option>
-                        {warehouseEquipments.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.code ? `[${w.code}] ` : ""}{w.name} — Còn trong kho: {w.availableQuantity ?? 0}/{w.totalQuantity ?? 0} chiếc
-                          </option>
-                        ))}
+                        {warehouseEquipments.map((w) => {
+                          const isMaint = isUnderMaintenance(w.status);
+                          return (
+                            <option key={w.id} value={w.id} disabled={isMaint}>
+                              {w.code ? `[${w.code}] ` : ""}{w.name} — {isMaint ? "[ĐANG BẢO TRÌ - KHÔNG THỂ PHÂN BỔ]" : `Còn trong kho: ${w.availableQuantity ?? 0}/${w.totalQuantity ?? 0} chiếc`}
+                            </option>
+                          );
+                        })}
                       </select>
                       {selectedEquipId && (() => {
                         const targetEq = warehouseEquipments.find((w) => w.id === Number(selectedEquipId));
-                        return targetEq ? (
+                        if (!targetEq) return null;
+                        if (isUnderMaintenance(targetEq.status)) {
+                          return (
+                            <div className="p-2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-xs mt-2 font-medium flex items-center gap-1.5">
+                              <BanIcon size={15} className="flex-shrink-0 text-rose-600" />
+                              <span>Thiết bị này đang ở trạng thái <strong>Đang bảo trì</strong>, không được phép phân bổ vào phòng học hoặc đưa vào sử dụng.</span>
+                            </div>
+                          );
+                        }
+                        return (
                           <span className="text-xs text-muted block mt-1">
                             Tồn kho khả dụng: <strong className="text-highlight">{targetEq.availableQuantity ?? 0}</strong> chiếc (Tổng sở hữu: {targetEq.totalQuantity ?? 0} | Đang phân bổ: {targetEq.allocatedQuantity ?? 0})
                           </span>
-                        ) : null;
+                        );
                       })()}
                     </div>
 
@@ -423,7 +457,11 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                                   : "pill-approved"
                               }`}
                             >
-                              <CheckIcon size={12} />
+                              {eq.status.includes("Hỏng") || eq.status.includes("bảo trì") ? (
+                                <WrenchIcon size={12} />
+                              ) : (
+                                <CheckIcon size={12} />
+                              )}
                               <span>{formatEquipStatus(eq.status)}</span>
                             </span>
                           </td>
@@ -571,13 +609,25 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                                   (w.availableQuantity ?? 0) > 0 ? "pill-approved" : "pill-rejected"
                                 }`}
                               >
-                                <CheckIcon size={12} />
+                                {(w.availableQuantity ?? 0) > 0 ? (
+                                  <CheckIcon size={12} />
+                                ) : (
+                                  <BanIcon size={12} />
+                                )}
                                 <span>{w.availableQuantity ?? 0} chiếc</span>
                               </span>
                             </td>
                             <td>
-                              <span className="admin-status-pill pill-approved flex items-center gap-1">
-                                <CheckIcon size={12} />
+                              <span
+                                className={`admin-status-pill flex items-center gap-1 ${
+                                  isUnderMaintenance(w.status) ? "pill-maintenance" : "pill-approved"
+                                }`}
+                              >
+                                {isUnderMaintenance(w.status) ? (
+                                  <WrenchIcon size={12} />
+                                ) : (
+                                  <CheckIcon size={12} />
+                                )}
                                 <span>{formatEquipStatus(w.status)}</span>
                               </span>
                             </td>

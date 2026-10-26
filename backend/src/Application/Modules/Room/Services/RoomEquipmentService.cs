@@ -25,16 +25,22 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<IEnumerable<RoomEquipmentDto>> GetByRoomIdAsync(int roomId)
         {
-            var rEquipments = await _roomEquipmentRepo.FindAsync(re => re.RoomId == roomId, re => re.Equipment, re => re.Room);
+            var rEquipments = await _roomEquipmentRepo.FindAsync(re => re.RoomId == roomId && !re.IsDeleted, re => re.Equipment, re => re.Room);
             
-            return rEquipments.Select(re => new RoomEquipmentDto
+            return rEquipments.Select(re =>
             {
-                RoomId = re.RoomId,
-                RoomName = re.Room?.Name,
-                EquipmentId = re.EquipmentId,
-                EquipmentName = re.Equipment?.Name,
-                Quantity = re.Quantity,
-                Status = re.Status
+                var isMasterMaint = re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status);
+                var status = isMasterMaint ? "Đang bảo trì" : (string.IsNullOrWhiteSpace(re.Status) ? "Hoạt động tốt" : re.Status);
+
+                return new RoomEquipmentDto
+                {
+                    RoomId = re.RoomId,
+                    RoomName = re.Room?.Name,
+                    EquipmentId = re.EquipmentId,
+                    EquipmentName = re.Equipment?.Name,
+                    Quantity = re.Quantity,
+                    Status = status
+                };
             }).ToList();
         }
 
@@ -53,13 +59,18 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var equipment = await _equipmentRepo.GetByIdAsync(request.EquipmentId);
             if (equipment == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy thông tin thiết bị trong kho.");
 
-            var existing = await _roomEquipmentRepo.FirstOrDefaultAsync(re => re.RoomId == roomId && re.EquipmentId == request.EquipmentId);
+            var existing = await _roomEquipmentRepo.FirstOrDefaultAsync(re => re.RoomId == roomId && re.EquipmentId == request.EquipmentId && !re.IsDeleted);
 
             if (existing != null)
             {
                 int delta = request.Quantity - existing.Quantity;
                 if (delta > 0)
                 {
+                    if (EquipmentService.IsUnderMaintenance(equipment.Status))
+                    {
+                        return ApiResponse<bool>.ErrorResponse(
+                            $"Thiết bị \"{equipment.Name}\" đang trong trạng thái bảo trì trong kho, không thể cấp thêm vào phòng.");
+                    }
                     if (equipment.AvailableQuantity < delta)
                     {
                         return ApiResponse<bool>.ErrorResponse(
@@ -87,6 +98,13 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             }
             else
             {
+                // Thêm mới thiết bị vào phòng: Thiết bị bảo trì trong kho không được phép thêm mới vào phòng
+                if (EquipmentService.IsUnderMaintenance(equipment.Status))
+                {
+                    return ApiResponse<bool>.ErrorResponse(
+                        $"Thiết bị \"{equipment.Name}\" đang trong trạng thái bảo trì, không được phép thêm mới vào phòng hoặc sử dụng.");
+                }
+
                 if (equipment.AvailableQuantity < request.Quantity)
                 {
                     return ApiResponse<bool>.ErrorResponse(

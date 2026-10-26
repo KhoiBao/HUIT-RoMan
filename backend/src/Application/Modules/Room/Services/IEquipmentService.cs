@@ -12,6 +12,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         Task<EquipmentDto> GetByIdAsync(int id);
         Task<EquipmentDto> CreateAsync(CreateEquipmentDto request);
         Task<ApiResponse<bool>> UpdateAsync(int id, CreateEquipmentDto request);
+        Task<ApiResponse<bool>> UpdateStatusAsync(int id, string status);
         Task<bool> DeleteAsync(int id);
     }
 }

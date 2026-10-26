@@ -38,6 +38,11 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
         public string Role { get; set; } // Student | Lecturer | Employee | Admin
     }
 
+    public class AdminResetPasswordDto
+    {
+        public string? NewPassword { get; set; }
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // EMPLOYEE
     // ─────────────────────────────────────────────────────────────────

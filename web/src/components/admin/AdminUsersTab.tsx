@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../../lib/api";
+import { formatRole } from "../../lib/auth";
+import { useConfirm } from "../../context/ConfirmContext";
 import {
   SearchIcon,
   AlertTriangleIcon,
@@ -9,6 +11,10 @@ import {
   RefreshCwIcon,
   CheckIcon,
   XIcon,
+  KeyIcon,
+  EyeIcon,
+  EyeOffIcon,
+  InfoIcon,
 } from "../Icon";
 
 export interface UserItem {
@@ -31,6 +37,7 @@ interface Props {
 }
 
 export default function AdminUsersTab({ onNotify }: Props) {
+  const { confirm } = useConfirm();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [userType, setUserType] = useState<"students" | "lecturers" | "all">("students");
   const [loading, setLoading] = useState<boolean>(true);
@@ -43,6 +50,13 @@ export default function AdminUsersTab({ onNotify }: Props) {
   const [editPhone, setEditPhone] = useState<string>("");
   const [editStatus, setEditStatus] = useState<string>("Hoạt động");
   const [editRole, setEditRole] = useState<string>("Student");
+
+  // Reset password modal
+  const [resettingUser, setResettingUser] = useState<UserItem | null>(null);
+  const [newPassword, setNewPassword] = useState<string>("Huit@123");
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [resetSubmitting, setResetSubmitting] = useState<boolean>(false);
+  const [resetSuccessResult, setResetSuccessResult] = useState<{ user: UserItem; password: string } | null>(null);
 
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -75,7 +89,8 @@ export default function AdminUsersTab({ onNotify }: Props) {
       (u.fullName || "").toLowerCase().includes(q) ||
       (u.email || "").toLowerCase().includes(q) ||
       (u.phoneNumber || "").toLowerCase().includes(q) ||
-      (u.role || "").toLowerCase().includes(q)
+      (u.role || "").toLowerCase().includes(q) ||
+      formatRole(u.role).toLowerCase().includes(q)
     );
   });
 
@@ -138,14 +153,24 @@ export default function AdminUsersTab({ onNotify }: Props) {
     const nextStatus = isLocked ? "Hoạt động" : "Đình chỉ";
     const actionName = isLocked ? "Mở khóa tài khoản" : "Khóa tài khoản";
 
-    if (
-      !window.confirm(
-        `Xác nhận ${actionName} của "${u.fullName}" (${u.cardCode})?\n${
-          !isLocked ? "Người dùng này sẽ bị chặn đăng nhập ngay lập tức." : ""
-        }`
-      )
-    )
-      return;
+    const confirmed = await confirm({
+      title: `Xác nhận ${actionName.toLowerCase()}`,
+      message: `Bạn có chắc chắn muốn ${actionName.toLowerCase()} người dùng "${u.fullName}"?`,
+      subMessage: !isLocked
+        ? "Người dùng này sẽ bị chặn đăng nhập và tạm ngưng quyền mượn phòng ngay lập tức."
+        : "Tài khoản sẽ được kích hoạt lại và có thể đăng nhập bình thường.",
+      itemDetails: [
+        { label: "Họ và tên", value: u.fullName },
+        { label: "Mã thẻ / MSSV", value: u.cardCode || "—" },
+        { label: "Vai trò", value: formatRole(u.role) },
+        { label: "Trạng thái mới", value: nextStatus },
+      ],
+      type: isLocked ? "info" : "warning",
+      confirmText: actionName,
+      cancelText: "Hủy bỏ",
+    });
+
+    if (!confirmed) return;
 
     try {
       await api.patch(`/api/Users/${u.id}/status?status=${nextStatus}`);
@@ -159,20 +184,38 @@ export default function AdminUsersTab({ onNotify }: Props) {
     }
   };
 
-  const formatRole = (role?: string) => {
-    switch (role) {
-      case "Student":
-        return "Sinh viên";
-      case "Lecturer":
-        return "Giảng viên";
-      case "Employee":
-        return "Nhân viên / Thủ thư";
-      case "Admin":
-        return "Quản trị viên";
-      default:
-        return role || "Người dùng";
+  const openResetPassword = (u: UserItem) => {
+    setResettingUser(u);
+    setNewPassword("Huit@123");
+    setShowPassword(false);
+    setResetSuccessResult(null);
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resettingUser) return;
+    if (!newPassword || newPassword.trim().length < 6) {
+      alert("Mật khẩu mới phải có tối thiểu 6 ký tự.");
+      return;
+    }
+    try {
+      setResetSubmitting(true);
+      const res = await api.post(`/api/Users/${resettingUser.id}/reset-password`, {
+        newPassword: newPassword.trim(),
+      });
+      const pwdSet = res.data?.data || newPassword.trim();
+      setResetSuccessResult({ user: resettingUser, password: pwdSet });
+      onNotify(res.data?.message || `Đã đặt lại mật khẩu cho ${resettingUser.fullName}!`, "success");
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || err.response?.data || "Lỗi khi đặt lại mật khẩu.",
+        "warning"
+      );
+    } finally {
+      setResetSubmitting(false);
     }
   };
+
 
   return (
     <div className="admin-subtab-container">
@@ -318,6 +361,15 @@ export default function AdminUsersTab({ onNotify }: Props) {
                         </button>
                         <button
                           type="button"
+                          className="btn-action-icon text-amber-600 hover:text-amber-700"
+                          title="Đặt lại mật khẩu cho tài khoản này"
+                          onClick={() => openResetPassword(u)}
+                        >
+                          <KeyIcon size={14} />
+                          <span>Đặt lại MK</span>
+                        </button>
+                        <button
+                          type="button"
                           className={`btn-action-icon ${
                             isLocked ? "btn-status-restore" : "btn-action-delete"
                           }`}
@@ -408,7 +460,7 @@ export default function AdminUsersTab({ onNotify }: Props) {
                     >
                       <option value="Student">Sinh viên</option>
                       <option value="Lecturer">Giảng viên</option>
-                      <option value="Employee">Nhân viên / Thủ thư</option>
+                      <option value="Employee">Nhân viên</option>
                       <option value="Admin">Quản trị viên</option>
                     </select>
                   </div>
@@ -452,6 +504,152 @@ export default function AdminUsersTab({ onNotify }: Props) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {resettingUser && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-content" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <KeyIcon size={20} className="icon-blue-glow" />
+                <span>Đặt lại mật khẩu</span>
+              </h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setResettingUser(null)}
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            {resetSuccessResult ? (
+              <div className="modal-body" style={{ textAlign: "center", padding: "20px 16px" }}>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", backgroundColor: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", color: "#15803d" }}>
+                  <CheckIcon size={24} />
+                </div>
+                <h4 style={{ fontSize: 16, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                  Đặt lại mật khẩu thành công!
+                </h4>
+                <p style={{ fontSize: 13, color: "#475569", marginBottom: 14 }}>
+                  Mật khẩu mới cho tài khoản <strong>{resetSuccessResult.user.fullName}</strong> ({resetSuccessResult.user.cardCode || resetSuccessResult.user.userName}):
+                </p>
+                <div style={{ backgroundColor: "#f1f5f9", padding: "10px 16px", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, border: "1px solid #cbd5e1", marginBottom: 14 }}>
+                  <code style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", letterSpacing: "0.05em" }}>
+                    {resetSuccessResult.password}
+                  </code>
+                </div>
+                <p style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>
+                  Hãy gửi mật khẩu này cho người dùng. Người dùng có thể dùng để đăng nhập ngay và tự đổi lại mật khẩu sau.
+                </p>
+                <div className="modal-footer" style={{ justifyContent: "center" }}>
+                  <button
+                    type="button"
+                    className="btn-confirm-save"
+                    onClick={() => setResettingUser(null)}
+                  >
+                    Đóng cửa sổ
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleResetPassword}>
+                <div className="modal-body">
+                  <div style={{ backgroundColor: "#f8fafc", padding: 12, borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 16 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>
+                      {resettingUser.fullName}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                      Mã thẻ / MSSV: <strong>{resettingUser.cardCode || resettingUser.userName}</strong> • {formatRole(resettingUser.role)}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      Email: {resettingUser.email || "Chưa cập nhật"}
+                    </div>
+                  </div>
+
+                  <div className="form-group-admin">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label style={{ margin: 0 }}>Mật khẩu mới (*):</label>
+                      <button
+                        type="button"
+                        style={{ background: "none", border: "none", color: "#0284c7", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
+                        onClick={() => setNewPassword("Huit@123")}
+                      >
+                        Dùng mặc định: Huit@123
+                      </button>
+                    </div>
+
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        className="admin-input"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
+                        required
+                        minLength={6}
+                        style={{ paddingRight: 40 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{
+                          position: "absolute",
+                          right: 10,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "#64748b",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                      </button>
+                    </div>
+                    <span style={{ fontSize: 11, color: "#64748b", display: "block", marginTop: 4 }}>
+                      Tối thiểu 6 ký tự, có thể bao gồm chữ hoa, chữ thường và số (Ví dụ: <code>Huit@123</code>).
+                    </span>
+                  </div>
+
+                  <div style={{ backgroundColor: "#eff6ff", padding: "10px 12px", borderRadius: 6, border: "1px solid #bfdbfe", fontSize: 12, color: "#1e40af", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ flexShrink: 0, display: "inline-flex" }}>
+                      <InfoIcon size={16} />
+                    </span>
+                    <span>Sau khi đặt lại, sinh viên / giảng viên có thể dùng mật khẩu mới này để đăng nhập ngay lập tức.</span>
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn-cancel"
+                    onClick={() => setResettingUser(null)}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-confirm-save flex items-center gap-1.5"
+                    disabled={resetSubmitting}
+                  >
+                    {resetSubmitting ? (
+                      "Đang xử lý..."
+                    ) : (
+                      <>
+                        <KeyIcon size={15} />
+                        <span>Xác nhận đặt lại</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

@@ -22,6 +22,7 @@ import {
   RefreshCwIcon,
   ClockIcon,
 } from "../Icon";
+import { useConfirm } from "../../context/ConfirmContext";
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
@@ -29,6 +30,7 @@ interface Props {
 
 export default function AdminChatTab({ onNotify }: Props) {
   const { user } = useAuth();
+  const { confirm } = useConfirm();
   const [conversations, setConversations] = useState<ChatConversationItem[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
   const [activeConv, setActiveConv] = useState<ChatConversationItem | null>(null);
@@ -255,7 +257,15 @@ export default function AdminChatTab({ onNotify }: Props) {
   // Đóng phiên hỗ trợ
   const handleCloseConversation = async () => {
     if (!selectedConvId) return;
-    if (!window.confirm("Bạn có chắc chắn muốn đóng phiên hỗ trợ này không?")) return;
+    const isConfirmed = await confirm({
+      title: "Xác nhận đóng phiên hỗ trợ",
+      message: "Bạn có chắc chắn muốn đóng phiên hỗ trợ này không?",
+      subMessage: "Phiên hỗ trợ sẽ chuyển sang trạng thái Đã đóng và sinh viên sẽ nhận được thông báo kết thúc.",
+      confirmText: "Đóng phiên hỗ trợ",
+      cancelText: "Tiếp tục hỗ trợ",
+      type: "warning",
+    });
+    if (!isConfirmed) return;
 
     try {
       await closeConversation(selectedConvId);

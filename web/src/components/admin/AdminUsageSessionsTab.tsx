@@ -21,18 +21,21 @@ import {
   BanIcon,
   ClipboardListIcon,
   AlertTriangleIcon,
+  CalendarIcon,
 } from "../Icon";
 import {
   fetchViolationTypes,
   recordViolation,
   type ViolationTypeItem,
 } from "../../lib/violations";
+import { useConfirm } from "../../context/ConfirmContext";
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
 }
 
 export default function AdminUsageSessionsTab({ onNotify }: Props) {
+  const { confirm } = useConfirm();
   const [sessions, setSessions] = useState<UsageSessionItem[]>([]);
   const [summary, setSummary] = useState<UsageSummary>({
     totalToday: 0,
@@ -184,11 +187,42 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
 
   // Hủy do No-show
   const handleCancelNoShow = async (session: UsageSessionItem) => {
-    if (
-      !window.confirm(
-        `Xác nhận hủy phiên mượn phòng ${session.roomCode} của ${session.userFullName} do quá 15 phút không đến nhận phòng (No-show)?`
-      )
-    ) {
+    const timeRange = session.startPeriodName
+      ? `${session.startPeriodName} → ${session.endPeriodName}`
+      : `${formatDateTime(session.startAt)} → ${formatDateTime(session.endAt)}`;
+
+    const confirmed = await confirm({
+      title: "Xác nhận hủy phiên mượn phòng (No-show)",
+      message: `Bạn có chắc chắn muốn hủy phiên mượn phòng của ${session.userFullName}?`,
+      subMessage:
+        "Lý do: Quá 15 phút không đến nhận phòng (No-show). Thao tác này sẽ hủy phiên, giải phóng phòng ngay lập tức và ghi nhận lịch sử xử lý.",
+      itemDetails: [
+        {
+          label: "Phòng mượn",
+          value: `${session.roomName} (${session.roomCode})`,
+        },
+        {
+          label: "Người chịu trách nhiệm",
+          value: session.userFullName,
+          badge: session.userCardCode
+            ? `MSSV: ${session.userCardCode}`
+            : undefined,
+        },
+        {
+          label: "Lịch đăng ký",
+          value: timeRange,
+        },
+        {
+          label: "Mục đích sử dụng",
+          value: session.activityName || "Học tập / Nghiên cứu",
+        },
+      ],
+      type: "danger",
+      confirmText: "Xác nhận hủy phiên",
+      cancelText: "Không, giữ lại",
+    });
+
+    if (!confirmed) {
       return;
     }
     try {
@@ -441,14 +475,27 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
             )}
           </form>
 
-          {/* Date filter */}
-          <input
-            type="date"
-            className="usage-date-picker"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            title="Lọc theo ngày sử dụng"
-          />
+          {/* Date filter with modern wrap */}
+          <div className="usage-date-picker-wrap">
+            <CalendarIcon size={16} className="usage-date-icon" />
+            <input
+              type="date"
+              className="usage-date-picker"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              title="Lọc theo ngày sử dụng"
+            />
+            {dateFilter && (
+              <button
+                type="button"
+                className="clear-date-filter-btn"
+                onClick={() => setDateFilter("")}
+                title="Bỏ lọc theo ngày (Xem tất cả)"
+              >
+                <XIcon size={13} />
+              </button>
+            )}
+          </div>
 
           {/* Quick Check-in by Code Button */}
           <button
@@ -937,11 +984,13 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
           <div className="admin-modal-box checkout-modal-card">
             <div className="modal-header">
               <div className="modal-title-with-badge">
-                <h3 className="modal-title text-amber">
-                  Lập biên bản vi phạm #{violationTargetSession.roomCode}
+                <h3 className="modal-title" style={{ display: "flex", alignItems: "center", gap: "8px", color: "#d97706" }}>
+                  <AlertTriangleIcon size={18} />
+                  <span>Lập biên bản vi phạm #{violationTargetSession.roomCode}</span>
                 </h3>
                 <span className="modal-sub-tag">
                   Phiên #{violationTargetSession.id} - {violationTargetSession.userFullName}
+                  {violationTargetSession.userCardCode ? ` (${violationTargetSession.userCardCode})` : ""}
                 </span>
               </div>
               <button
@@ -954,8 +1003,8 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
             </div>
 
             <form onSubmit={handleRecordViolationSubmit} className="modal-form">
-              <div className="form-group">
-                <label className="field-label required">Loại vi phạm</label>
+              <div className="form-field">
+                <label>Loại vi phạm (*):</label>
                 <select
                   value={violationTypeId}
                   onChange={(e) => {
@@ -970,7 +1019,6 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                       else setViolationRestrictDays(0);
                     }
                   }}
-                  className="input-select"
                   required
                 >
                   {violationTypes.map((t) => (
@@ -981,34 +1029,35 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                 </select>
               </div>
 
-              <div className="form-group">
-                <label className="field-label required">Mô tả chi tiết vi phạm</label>
+              <div className="form-field">
+                <label>Mô tả chi tiết vi phạm (*):</label>
                 <textarea
                   rows={3}
                   value={violationDesc}
                   onChange={(e) => setViolationDesc(e.target.value)}
-                  className="input-textarea"
+                  placeholder="Nhập nội dung biên bản vi phạm..."
                   required
                 />
               </div>
 
-              <div className="form-group">
-                <label className="field-label required">Hình thức xử lý / Phạt</label>
+              <div className="form-field">
+                <label>Hình thức xử lý / Phạt (*):</label>
                 <input
                   type="text"
                   value={violationPenalty}
                   onChange={(e) => setViolationPenalty(e.target.value)}
-                  className="input-text"
+                  placeholder="VD: Nhắc nhở / Cảnh cáo lần đầu"
                   required
                 />
               </div>
 
-              <div className="form-group">
-                <label className="field-label">Áp dụng cấm mượn phòng (Khóa đặt phòng)</label>
+              <div className="form-field">
+                <label>Áp dụng cấm mượn phòng (Khóa đặt phòng):</label>
                 <select
                   value={violationRestrictDays}
-                  onChange={(e) => setViolationRestrictDays(Number(e.target.value))}
-                  className="input-select"
+                  onChange={(e) =>
+                    setViolationRestrictDays(Number(e.target.value))
+                  }
                 >
                   <option value={0}>Không cấm mượn</option>
                   <option value={3}>Cấm mượn 3 ngày</option>
@@ -1028,7 +1077,7 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                 </button>
                 <button
                   type="submit"
-                  className="btn-modal-submit btn-submit-violation"
+                  className="btn-modal-submit"
                   disabled={isSubmittingViolation}
                 >
                   {isSubmittingViolation ? "Đang lưu..." : "Lưu biên bản vi phạm"}

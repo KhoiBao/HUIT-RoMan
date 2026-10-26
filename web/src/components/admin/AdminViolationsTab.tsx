@@ -18,6 +18,7 @@ import {
   type ViolationStats,
 } from "../../lib/violations";
 import { api } from "../../lib/api";
+import { formatRole } from "../../lib/auth";
 import {
   AlertTriangleIcon,
   BanIcon,
@@ -32,6 +33,7 @@ import {
   DoorIcon,
   TagIcon,
 } from "../Icon";
+import { useConfirm } from "../../context/ConfirmContext";
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
@@ -59,6 +61,7 @@ export default function AdminViolationsTab({
   initialSessionForViolation,
   onClearInitialSession,
 }: Props) {
+  const { confirm } = useConfirm();
   // Navigation Sub-tabs: 'records' | 'restrictions' | 'types'
   const [activeSubTab, setActiveSubTab] = useState<
     "records" | "restrictions" | "types"
@@ -430,12 +433,22 @@ export default function AdminViolationsTab({
 
   // Delete violation
   const handleDeleteViolation = async (record: ViolationRecordItem) => {
-    if (
-      !window.confirm(
-        `Xác nhận xóa biên bản vi phạm #${record.code} của ${record.userFullName}?`
-      )
-    )
-      return;
+    const confirmed = await confirm({
+      title: "Xác nhận xóa biên bản vi phạm",
+      message: `Bạn có chắc chắn muốn xóa biên bản vi phạm #${record.code} của ${record.userFullName}?`,
+      subMessage: "Dữ liệu biên bản đã xóa sẽ không thể phục hồi.",
+      itemDetails: [
+        { label: "Mã biên bản", value: `#${record.code}` },
+        { label: "Người vi phạm", value: record.userFullName },
+        { label: "Loại vi phạm", value: record.violationTypeName },
+        { label: "Hình thức xử lý", value: record.penaltyApplied || "—" },
+      ],
+      type: "danger",
+      confirmText: "Xác nhận xóa",
+      cancelText: "Hủy bỏ",
+    });
+
+    if (!confirmed) return;
 
     try {
       await deleteViolation(record.id);
@@ -585,12 +598,23 @@ export default function AdminViolationsTab({
   };
 
   const handleDeleteType = async (vt: ViolationTypeItem) => {
-    if (
-      !window.confirm(
-        `Xác nhận xóa loại vi phạm ${vt.code} - ${vt.name}? (Chỉ xóa được nếu chưa có biên bản liên kết)`
-      )
-    )
-      return;
+    const confirmed = await confirm({
+      title: "Xác nhận xóa loại vi phạm",
+      message: `Bạn có chắc chắn muốn xóa loại vi phạm "${vt.name}" (${vt.code})?`,
+      subMessage:
+        "Lưu ý: Chỉ có thể xóa nếu chưa có biên bản vi phạm nào áp dụng loại vi phạm này.",
+      itemDetails: [
+        { label: "Mã loại", value: vt.code },
+        { label: "Tên loại vi phạm", value: vt.name },
+        { label: "Mức phạt mặc định", value: vt.defaultPenalty || "—" },
+      ],
+      type: "danger",
+      confirmText: "Xác nhận xóa",
+      cancelText: "Hủy bỏ",
+    });
+
+    if (!confirmed) return;
+
     try {
       await deleteViolationType(vt.id);
       onNotify(`Đã xóa loại vi phạm ${vt.code}.`, "info");
@@ -1272,7 +1296,7 @@ export default function AdminViolationsTab({
                             {u.fullName} • <strong>{u.cardCode}</strong>
                           </span>
                           <span className="user-picker-role">
-                            {u.role} - {u.departmentName || u.email}
+                            {formatRole(u.role)} - {u.departmentName || u.email}
                           </span>
                           {formUserId === u.id && (
                             <CheckIcon size={14} className="selected-check" />
@@ -1692,7 +1716,7 @@ export default function AdminViolationsTab({
                   <option value={0}>-- Chọn người dùng --</option>
                   {usersList.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.fullName} ({u.cardCode}) - {u.role}
+                      {u.fullName} ({u.cardCode}) - {formatRole(u.role)}
                     </option>
                   ))}
                 </select>

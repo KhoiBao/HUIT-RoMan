@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { api } from "../../lib/api";
+import { formatRole } from "../../lib/auth";
 import { useAuth } from "../../auth/AuthContext";
 import {
   PlusIcon,
@@ -10,6 +11,7 @@ import {
   XIcon,
   CheckIcon,
 } from "../Icon";
+import { useConfirm } from "../../context/ConfirmContext";
 
 export interface EmployeeItem {
   id: number;
@@ -46,6 +48,7 @@ interface Props {
 
 export default function AdminEmployeesTab({ onNotify }: Props) {
   const { user } = useAuth();
+  const { confirm, alert } = useConfirm();
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [allUsers, setAllUsers] = useState<UserOption[]>([]);
@@ -113,7 +116,11 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createUserId) {
-      alert("Vui lòng chọn người dùng để cấp quyền nhân viên.");
+      await alert({
+        title: "Chưa chọn người dùng",
+        message: "Vui lòng chọn một người dùng từ danh sách để cấp quyền nhân sự.",
+        type: "warning",
+      });
       return;
     }
     try {
@@ -176,12 +183,23 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
 
   // Handle Delete Employee
   const handleDelete = async (emp: EmployeeItem) => {
-    if (
-      !window.confirm(
-        `Xác nhận xóa hồ sơ nhân sự của "${emp.fullName}" (${emp.code})?\nVai trò Employee của tài khoản này sẽ được thu hồi.`
-      )
-    )
-      return;
+    const isConfirmed = await confirm({
+      title: "Xác nhận xóa hồ sơ nhân sự",
+      message: `Bạn có chắc chắn muốn xóa hồ sơ nhân sự của "${emp.fullName || emp.userName}" (${emp.code || `#${emp.id}`})?`,
+      subMessage: "Vai trò Nhân sự (Employee) của tài khoản này sẽ được thu hồi. Tài khoản sẽ quay về quyền người dùng thông thường.",
+      itemDetails: [
+        { label: "Mã nhân sự", value: emp.code || `#${emp.id}` },
+        { label: "Họ và tên", value: emp.fullName || emp.userName },
+        { label: "Chức vụ", value: emp.position || "Thủ thư", badge: emp.departmentName || "Thư viện HUIT" },
+        { label: "Email liên hệ", value: emp.email },
+      ],
+      confirmText: "Xác nhận xóa",
+      cancelText: "Hủy bỏ",
+      type: "danger",
+    });
+
+    if (!isConfirmed) return;
+
     try {
       const res = await api.delete(`/api/Employees/${emp.id}`);
       if (res.data?.success) {
@@ -376,7 +394,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                     <option value="">-- Chọn tài khoản từ hệ thống --</option>
                     {allUsers.map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.fullName} ({u.cardCode} - {u.email}) [{u.role}]
+                        {u.fullName} ({u.cardCode} - {u.email}) [{formatRole(u.role)}]
                       </option>
                     ))}
                   </select>

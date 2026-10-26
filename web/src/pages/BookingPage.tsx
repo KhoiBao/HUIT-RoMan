@@ -50,11 +50,13 @@ import {
   checkOutSession,
   type UsageSessionItem,
 } from "../lib/usage";
+import { useConfirm } from "../context/ConfirmContext";
 
 export default function BookingPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { confirm, alert: confirmAlert } = useConfirm();
   const isStudent = isStudentRole(user?.role);
 
   // Active Tab: "create" | "my-bookings" (auto-select from ?tab=my-bookings)
@@ -499,21 +501,26 @@ export default function BookingPage() {
 
   // Handle Cancel Booking
   async function handleCancel(bookingId: number) {
-    const confirm = window.confirm(
-      `Bạn có chắc chắn muốn hủy đơn đặt phòng #${bookingId} không?`
-    );
-    if (!confirm) return;
+    const isConfirmed = await confirm({
+      title: "Xác nhận hủy đơn đặt phòng",
+      message: `Bạn có chắc chắn muốn hủy đơn đặt phòng #${bookingId} không?`,
+      subMessage: "Phòng đã đăng ký sẽ được giải phóng ngay lập tức để phục vụ các yêu cầu khác.",
+      confirmText: "Hủy đơn đặt phòng",
+      cancelText: "Giữ lại đơn",
+      type: "warning",
+    });
+    if (!isConfirmed) return;
 
     try {
       setCancellingId(bookingId);
       await cancelBookingApi(bookingId);
       await loadMyBookings();
     } catch (err: unknown) {
-      alert(
-        err instanceof Error
-          ? err.message
-          : "Hủy đơn thất bại. Vui lòng thử lại."
-      );
+      await confirmAlert({
+        title: "Không thể hủy đơn",
+        message: err instanceof Error ? err.message : "Hủy đơn thất bại. Vui lòng thử lại.",
+        type: "danger",
+      });
     } finally {
       setCancellingId(null);
     }

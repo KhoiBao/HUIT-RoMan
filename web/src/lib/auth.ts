@@ -103,8 +103,24 @@ export function isStaffRole(role?: string | null): boolean {
 }
 
 export function mapRoleToGroup(role?: string | null): RoleGroup {
-  if (role === "Admin") return "quan-tri";
-  if (role === "Employee") return "nhan-su";
+  if (!role) return "nguoi-dung";
+  const normalized = role.trim().toLowerCase();
+  if (
+    normalized === "admin" ||
+    normalized === "quan-tri" ||
+    normalized === "quản trị viên"
+  ) {
+    return "quan-tri";
+  }
+  if (
+    normalized === "employee" ||
+    normalized === "nhan-su" ||
+    normalized === "nhân viên" ||
+    normalized === "thủ thư" ||
+    normalized === "quản lý phòng"
+  ) {
+    return "nhan-su";
+  }
   return "nguoi-dung";
 }
 
@@ -113,5 +129,39 @@ export function getHomePathForRole(role?: string | null): string {
   if (group === "quan-tri") return "/admin";
   if (group === "nhan-su") return "/staff";
   return "/home";
+}
+
+/**
+ * Chuyển đổi mã role hệ thống sang tiếng Việt thân thiện và đồng bộ toàn bộ ứng dụng.
+ */
+export function formatRole(role?: string | null): string {
+  if (!role) return "Người dùng";
+  const normalized = role.trim().toLowerCase();
+  if (
+    normalized === "admin" ||
+    normalized === "quan-tri" ||
+    normalized === "quản trị viên"
+  ) {
+    return "Quản trị viên";
+  }
+  if (
+    normalized === "employee" ||
+    normalized === "nhan-su" ||
+    normalized === "nhân viên" ||
+    normalized === "thủ thư" ||
+    normalized === "quản lý phòng"
+  ) {
+    return "Nhân viên";
+  }
+  if (normalized === "lecturer" || normalized === "giảng viên") {
+    return "Giảng viên";
+  }
+  if (normalized === "student" || normalized === "sinh viên") {
+    return "Sinh viên";
+  }
+  if (normalized === "user" || normalized === "người dùng") {
+    return "Người dùng";
+  }
+  return role;
 }
 

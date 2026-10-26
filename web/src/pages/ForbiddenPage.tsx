@@ -1,12 +1,13 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { formatRole } from "../lib/auth";
 import { LockIcon, ArrowRightIcon, CalendarIcon } from "../components/Icon";
 
 export default function ForbiddenPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const roleName = user?.role || "Sinh viên";
+  const roleName = formatRole(user?.role);
 
   return (
     <div className="forbidden-page-layout">

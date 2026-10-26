@@ -30,5 +30,8 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
 
         /// <summary>Tìm kiếm người mượn / người dùng đa tiêu chí</summary>
         Task<ApiResponse<IEnumerable<UserDto>>> SearchAsync(string? keyword, string? role, string? status, int? departmentId);
+
+        /// <summary>Người quản lý đặt lại mật khẩu cho tài khoản người dùng (Admin, Employee)</summary>
+        Task<ApiResponse<string>> AdminResetPasswordAsync(int id, string? newPassword);
     }
 }

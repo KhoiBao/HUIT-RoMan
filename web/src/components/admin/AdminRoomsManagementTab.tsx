@@ -13,6 +13,7 @@ import {
   XIcon,
 } from "../Icon";
 import AdminEquipmentsModal from "./AdminEquipmentsModal";
+import { useConfirm } from "../../context/ConfirmContext";
 
 export interface RoomItem {
   id: number;
@@ -41,6 +42,7 @@ interface Props {
 }
 
 export default function AdminRoomsManagementTab({ onNotify }: Props) {
+  const { confirm } = useConfirm();
   const [rooms, setRooms] = useState<RoomItem[]>([]);
   const [roomTypes, setRoomTypes] = useState<RoomTypeOption[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -209,12 +211,24 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
   const handleToggleStatus = async (r: RoomItem) => {
     const nextStatus = r.status === "Maintenance" ? "Available" : "Maintenance";
     const statusLabel = nextStatus === "Maintenance" ? "Bảo trì" : "Sẵn sàng (Trống)";
-    if (
-      !window.confirm(
-        `Xác nhận chuyển trạng thái phòng ${r.roomCode} sang "${statusLabel}"?`
-      )
-    )
-      return;
+    
+    const isConfirmed = await confirm({
+      title: "Chuyển trạng thái phòng",
+      message: `Bạn có muốn chuyển trạng thái phòng ${r.roomCode} sang "${statusLabel}"?`,
+      subMessage: nextStatus === "Maintenance"
+        ? "Phòng bảo trì sẽ tạm thời ngừng phục vụ đặt phòng mới."
+        : "Phòng sẽ sẵn sàng tiếp nhận đặt chỗ.",
+      itemDetails: [
+        { label: "Mã phòng", value: r.roomCode },
+        { label: "Tên phòng", value: r.name },
+        { label: "Khu vực", value: `Tòa ${r.building} - Tầng ${r.floor}` },
+      ],
+      confirmText: "Xác nhận chuyển",
+      cancelText: "Hủy bỏ",
+      type: nextStatus === "Maintenance" ? "warning" : "info",
+    });
+
+    if (!isConfirmed) return;
 
     try {
       await api.patch(`/api/Rooms/${r.id}/status`, { status: nextStatus });
@@ -230,12 +244,21 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
 
   // Soft Delete Room
   const handleDeleteRoom = async (r: RoomItem) => {
-    if (
-      !window.confirm(
-        `CẢNH BÁO: Bạn có chắc chắn muốn xóa phòng ${r.roomCode} (${r.name})?\nPhòng sẽ được xóa mềm khỏi hệ thống.`
-      )
-    )
-      return;
+    const isConfirmed = await confirm({
+      title: "Cảnh báo xóa phòng học",
+      message: `Bạn có chắc chắn muốn xóa phòng ${r.roomCode} (${r.name})?`,
+      subMessage: "Phòng sẽ được xóa mềm khỏi hệ thống và không còn khả dụng cho các lượt đặt phòng.",
+      itemDetails: [
+        { label: "Mã phòng", value: r.roomCode },
+        { label: "Tên phòng", value: r.name },
+        { label: "Loại phòng", value: r.roomTypeName || "Phòng học", badge: `Sức chứa ${r.capacity}` },
+      ],
+      confirmText: "Xác nhận xóa",
+      cancelText: "Hủy bỏ",
+      type: "danger",
+    });
+
+    if (!isConfirmed) return;
 
     try {
       const res = await api.delete(`/api/Rooms/${r.id}`);

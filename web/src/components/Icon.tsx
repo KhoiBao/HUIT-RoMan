@@ -59,6 +59,16 @@ export function LockIcon({ size = 18, className }: IconProps) {
   );
 }
 
+export function KeyIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <circle cx="7.5" cy="15.5" r="5.5" />
+      <path d="m21 2-9.6 9.6" />
+      <path d="m15.5 7.5 3 3L22 7l-3-3" />
+    </svg>
+  );
+}
+
 export function EyeIcon({ size = 18, className }: IconProps) {
   return (
     <svg {...base(size, className)}>
@@ -151,6 +161,14 @@ export function ChevronRightIcon({ size = 20, className }: IconProps) {
   return (
     <svg {...base(size, className)}>
       <path d="M9.5 5 16 12l-6.5 7" />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg {...base(size, className)}>
+      <path d="m6 9 6 6 6-6" />
     </svg>
   );
 }

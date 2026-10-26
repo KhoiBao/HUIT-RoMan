@@ -55,6 +55,23 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(response);
         }
 
+        [HttpPatch("{id}/status")]
+        [Authorize(Roles = "Admin,Employee")]
+        public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateEquipmentStatusDto request)
+        {
+            if (string.IsNullOrWhiteSpace(request?.Status))
+            {
+                return BadRequest("Trạng thái không được để trống.");
+            }
+            var response = await _equipmentService.UpdateStatusAsync(id, request.Status);
+            if (!response.Success)
+            {
+                if (response.Message == "Không tìm thấy thiết bị.") return NotFound(response);
+                return BadRequest(response);
+            }
+            return Ok(response);
+        }
+
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin,Employee")]
         public async Task<IActionResult> Delete(int id)

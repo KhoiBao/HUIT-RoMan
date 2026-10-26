@@ -64,12 +64,13 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         public async Task<EquipmentDto> CreateAsync(CreateEquipmentDto request)
         {
             var qty = request.TotalQuantity > 0 ? request.TotalQuantity : 1;
+            var initialStatus = !string.IsNullOrWhiteSpace(request.Status) ? NormalizeStatus(request.Status) : "Đang hoạt động";
             var equipment = new Equipment
             {
                 Code = request.Code,
                 Name = request.Name,
                 Description = request.Description,
-                Status = "Hoạt động",
+                Status = initialStatus,
                 EquipmentCategoryId = request.EquipmentCategoryId,
                 TotalQuantity = qty,
                 AvailableQuantity = qty
@@ -116,9 +117,83 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             e.Description = request.Description;
             e.EquipmentCategoryId = request.EquipmentCategoryId;
 
+            if (!string.IsNullOrWhiteSpace(request.Status))
+            {
+                e.Status = NormalizeStatus(request.Status);
+                var isMaint = IsUnderMaintenance(e.Status);
+                var roomEquipRepo = _unitOfWork.Repository<RoomEquipment>();
+                var roomEquips = await roomEquipRepo.FindAsync(re => re.EquipmentId == id && !re.IsDeleted);
+                foreach (var re in roomEquips)
+                {
+                    if (isMaint)
+                    {
+                        re.Status = "Đang bảo trì";
+                    }
+                    else if (re.Status == "Đang bảo trì")
+                    {
+                        re.Status = "Hoạt động tốt";
+                    }
+                    roomEquipRepo.Update(re);
+                }
+            }
+
             _equipmentRepo.Update(e);
             await _unitOfWork.SaveChangesAsync();
             return ApiResponse<bool>.SuccessResponse(true, "Cập nhật thiết bị thành công.");
+        }
+
+        public async Task<ApiResponse<bool>> UpdateStatusAsync(int id, string status)
+        {
+            var e = await _equipmentRepo.GetByIdAsync(id, eq => eq.RoomEquipments);
+            if (e == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy thiết bị.");
+
+            e.Status = NormalizeStatus(status);
+            _equipmentRepo.Update(e);
+
+            var isMaint = IsUnderMaintenance(e.Status);
+            var roomEquipRepo = _unitOfWork.Repository<RoomEquipment>();
+            var roomEquips = await roomEquipRepo.FindAsync(re => re.EquipmentId == id && !re.IsDeleted);
+            foreach (var re in roomEquips)
+            {
+                if (isMaint)
+                {
+                    re.Status = "Đang bảo trì";
+                }
+                else if (re.Status == "Đang bảo trì")
+                {
+                    re.Status = "Hoạt động tốt";
+                }
+                roomEquipRepo.Update(re);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+            return ApiResponse<bool>.SuccessResponse(true, $"Đã cập nhật trạng thái thiết bị thành \"{e.Status}\".");
+        }
+
+        public static string NormalizeStatus(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status)) return "Đang hoạt động";
+            var s = status.Trim().ToLowerInvariant();
+            if (s.Contains("bảo trì") || s.Contains("maintenance"))
+            {
+                return "Đang bảo trì";
+            }
+            if (s.Contains("hỏng") || s.Contains("broken"))
+            {
+                return "Hỏng hóc";
+            }
+            if (s.Contains("thanh lý") || s.Contains("disposed"))
+            {
+                return "Đã thanh lý";
+            }
+            return "Đang hoạt động";
+        }
+
+        public static bool IsUnderMaintenance(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status)) return false;
+            var s = status.Trim().ToLowerInvariant();
+            return s.Contains("bảo trì") || s.Contains("maintenance");
         }
 
         public async Task<bool> DeleteAsync(int id)

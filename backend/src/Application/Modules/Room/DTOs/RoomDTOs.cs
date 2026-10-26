@@ -83,8 +83,14 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public string Code { get; set; }
         public string Name { get; set; }
         public string Description { get; set; }
+        public string? Status { get; set; }
         public int EquipmentCategoryId { get; set; }
         public int TotalQuantity { get; set; }
+    }
+
+    public class UpdateEquipmentStatusDto
+    {
+        public string Status { get; set; }
     }
 
     public class RoomEquipmentDto

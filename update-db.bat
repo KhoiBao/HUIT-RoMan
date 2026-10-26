@@ -10,4 +10,10 @@ if errorlevel 1 (
   echo      user/pass co dung voi backend\src\API\appsettings.json khong.
   exit /b 1
 )
+
+dotnet run --project src/API --no-build -- --seed-only
+if errorlevel 1 (
+  echo [CANH BAO] Khong the chay seeder tu dong. Seeder se chay khi ban bat backend.
+)
+
 echo OK. Da tao bang + seed tai khoan demo, xem chi tiet o backend\account.md
