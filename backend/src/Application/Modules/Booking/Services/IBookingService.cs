@@ -26,8 +26,14 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         /// <summary>Duyệt / từ chối từng BookingDetail</summary>
         Task<ApiResponse<bool>> ApproveBookingDetailAsync(int detailId, ApproveBookingDetailDto request);
 
-        /// <summary>Hủy đơn (chỉ người tạo hoặc Admin)</summary>
-        Task<ApiResponse<bool>> CancelBookingAsync(int id);
+        /// <summary>Hủy đơn (chỉ người tạo hoặc Admin). Kèm lý do hủy bắt buộc với sinh viên.</summary>
+        Task<ApiResponse<bool>> CancelBookingAsync(int id, CancelBookingRequest? request = null, DateTime? nowUtc = null);
+
+        /// <summary>
+        /// Nhận phòng (check-in) đơn đã duyệt trong cửa sổ [T - 15 phút, T).
+        /// Đánh dấu Booking.CheckedInAt và khởi tạo phiên sử dụng cho các chi tiết đã duyệt.
+        /// </summary>
+        Task<ApiResponse<BookingResponseDto>> CheckInBookingAsync(int id, DateTime? nowUtc = null);
 
         /// <summary>
         /// Kiểm tra lịch phòng.

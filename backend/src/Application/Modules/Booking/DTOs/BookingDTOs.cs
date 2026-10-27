@@ -60,7 +60,44 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
         public int UserId { get; set; }
         public string UserName { get; set; }
         public string UserFullName { get; set; }
+        /// <summary>Thời điểm check-in (UTC). NULL = chưa nhận phòng.</summary>
+        public DateTime? CheckedInAt { get; set; }
+        /// <summary>Mã lý do hủy (CHANGE_PLAN | NO_LONGER_NEEDED | OTHER | NO_SHOW). NULL = đơn cũ chưa có dữ liệu.</summary>
+        public string? CancelReason { get; set; }
+        /// <summary>Nội dung chi tiết khi lý do hủy là OTHER.</summary>
+        public string? CancelReasonDetail { get; set; }
+        /// <summary>Nguồn hủy: STUDENT | AUTO | STAFF. NULL = không ghi nhận.</summary>
+        public string? CancelSource { get; set; }
+        /// <summary>Thông tin cửa sổ nhận phòng tính tại thời điểm request (server time).</summary>
+        public CheckInWindowDto? CheckInWindow { get; set; }
         public List<BookingDetailResponseDto> Details { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Request hủy đơn đặt phòng (mang theo lý do).
+    /// Với Admin/Employee các trường lý do là tùy chọn; sinh viên bắt buộc chọn lý do hợp lệ.
+    /// </summary>
+    public class CancelBookingRequest
+    {
+        /// <summary>Mã lý do: CHANGE_PLAN | NO_LONGER_NEEDED | OTHER (sinh viên).</summary>
+        public string? Reason { get; set; }
+        /// <summary>Nội dung bổ sung, bắt buộc khi Reason = OTHER.</summary>
+        public string? ReasonDetail { get; set; }
+    }
+
+    /// <summary>Trạng thái cửa sổ nhận phòng trả về cho client (chỉ để hiển thị, backend vẫn tự kiểm tra).</summary>
+    public class CheckInWindowDto
+    {
+        /// <summary>Thời điểm bắt đầu đặt phòng T (UTC).</summary>
+        public DateTime StartAt { get; set; }
+        /// <summary>Thời điểm mở nhận phòng T - 15 phút (UTC).</summary>
+        public DateTime OpensAt { get; set; }
+        /// <summary>Hạn cuối nhận phòng = T (UTC).</summary>
+        public DateTime DeadlineAt { get; set; }
+        /// <summary>NotOpen | Open | Expired</summary>
+        public string State { get; set; } = "NotOpen";
+        /// <summary>Thời điểm server tính trạng thái (UTC) — frontend dùng để đồng bộ đếm ngược.</summary>
+        public DateTime ServerTime { get; set; }
     }
 
     public class ApproveBookingDetailDto

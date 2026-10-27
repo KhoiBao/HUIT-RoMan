@@ -1754,162 +1754,6 @@
   margin-top: 60px;
 }
 
-.roman-info-section {
-  padding: 43px 0 34px;
-  border-top: 1px solid #e3ebf3;
-  background: #f7fafd;
-}
-
-.roman-info-grid {
-  width: 100%;
-  max-width: var(--rh-content);
-  margin: 0 auto;
-  padding: 0 24px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 17px;
-}
-
-.roman-info-card {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 21px 20px 18px;
-  border: 1px solid #e1e9f2;
-  border-radius: 17px;
-  background: #ffffff;
-  box-shadow: 0 6px 22px rgba(12, 43, 74, 0.045);
-}
-
-.roman-info-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 39px;
-  height: 39px;
-  margin-bottom: 13px;
-  border-radius: 11px;
-}
-
-.roman-info-icon-blue {
-  background: #eaf4fc;
-  color: var(--rh-blue);
-}
-
-.roman-info-icon-gold {
-  background: #fff5e4;
-  color: var(--rh-gold);
-}
-
-.roman-info-icon-green {
-  background: #eaf8f2;
-  color: var(--rh-green);
-}
-
-.roman-info-body {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.roman-info-kicker {
-  display: block;
-  color: #8a9aab;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-}
-
-.roman-info-card h3 {
-  margin: 5px 0 10px;
-  color: #17324e;
-  font-size: 16px;
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-}
-
-.roman-rule-list {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.roman-rule-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  color: #63758a;
-  font-size: 10.5px;
-  line-height: 1.45;
-}
-
-.roman-rule-list li svg {
-  flex: 0 0 auto;
-  margin-top: 1px;
-  color: #43a886;
-}
-
-.roman-hours-label {
-  margin: 1px 0 7px;
-  color: #17324e;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-
-.roman-info-note {
-  margin: 0 0 5px;
-  color: #74869a;
-  font-size: 10.5px;
-  line-height: 1.55;
-}
-
-.roman-support-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin: 0 0 7px;
-  color: #63758a;
-  font-size: 10.5px;
-  line-height: 1.4;
-}
-
-.roman-support-line svg {
-  flex: 0 0 auto;
-  margin-top: 1px;
-  color: #8da0b2;
-}
-
-.roman-support-line a {
-  color: #3c6b92;
-  text-decoration: none;
-}
-
-.roman-support-line a:hover {
-  color: var(--rh-blue);
-  text-decoration: underline;
-}
-
-.roman-info-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 15px;
-  padding-top: 12px;
-  border-top: 1px solid #edf2f7;
-  color: var(--rh-blue);
-  font-size: 10.5px;
-  font-weight: 750;
-  text-decoration: none;
-}
-
-.roman-info-link:hover {
-  text-decoration: underline;
-}
-
 /* ── Dark footer ───────────────────────────────────────────────────────── */
 
 .roman-footer {
@@ -2188,10 +2032,6 @@
     grid-template-columns: 1.25fr 1fr;
     gap: 27px;
   }
-
-  .roman-info-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 760px) {
@@ -2264,7 +2104,6 @@
   .rh-container,
   .rh-session-wrap,
   .rh-error-wrap,
-  .roman-info-grid,
   .roman-footer-inner {
     padding-left: 16px;
     padding-right: 16px;
@@ -2446,18 +2285,6 @@
 
   .rh-info-grid {
     gap: 12px;
-  }
-
-  .roman-info-section {
-    padding-top: 31px;
-  }
-
-  .roman-info-card {
-    padding: 18px 17px 16px;
-  }
-
-  .roman-info-card h3 {
-    font-size: 15px;
   }
 
   .roman-footer-inner {
@@ -2804,4 +2631,129 @@
   .room-type-selected-pill {
     display: none;
   }
+}
+
+/* ── NHẬN PHÒNG & HỦY ĐẶT PHÒNG (Check-in / Cancel with reason) ─────────── */
+
+.booking-checkin-box {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.booking-checkin-box .btn-user-checkin-action {
+  white-space: nowrap;
+}
+
+.checkin-countdown {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.checkin-countdown.not_open {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.checkin-countdown.open {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.checkin-countdown.expired {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.booking-cancel-info {
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  font-size: 13px;
+  color: #9a3412;
+}
+
+.cancel-deadline-note {
+  margin-right: auto;
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.cancel-booking-modal {
+  max-width: 520px;
+  width: 100%;
+}
+
+.cancel-reason-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cancel-reason-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #334155;
+  background: #f8fafc;
+  transition: all 0.15s ease;
+}
+
+.cancel-reason-option:hover {
+  border-color: #94a3b8;
+}
+
+.cancel-reason-option.selected {
+  border-color: #ef4444;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.cancel-reason-option input[type="radio"] {
+  accent-color: #ef4444;
+}
+
+.cancel-form-error {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.booking-cancel-notice {
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  font-size: 13px;
+  color: #9a3412;
+}
+
+.booking-checkedin-notice {
+  margin-top: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  font-size: 12.5px;
+  color: #15803d;
+  font-weight: 600;
 }

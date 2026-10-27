@@ -6,6 +6,14 @@ export interface SystemOverviewReport {
   pendingBookings: number;
   rejectedBookings: number;
   cancelledBookings: number;
+  /** Số đơn bị sinh viên chủ động hủy (cancelSource = STUDENT) */
+  cancelledByStudent?: number;
+  /** Số đơn bị tự động hủy do không nhận phòng đúng hạn (cancelSource = AUTO) */
+  cancelledByNoShow?: number;
+  /** Số đơn bị quản trị/nhân sự hủy (cancelSource = STAFF) */
+  cancelledByStaff?: number;
+  /** Đơn đã hủy nhưng chưa ghi nhận nguồn (đơn cũ) */
+  cancelledUnknownSource?: number;
   approvalRate: number;
   totalRooms: number;
   activeRooms: number;
@@ -54,6 +62,8 @@ export interface BookingStatsReport {
   statusDistribution: CategoryShare[];
   purposeDistribution: CategoryShare[];
   departmentStats: DepartmentBookingStat[];
+  /** Thống kê hủy theo lý do (chỉ tính đơn đã hủy có ghi nhận lý do) */
+  cancellationReasonStats?: CategoryShare[];
 }
 
 export interface RoomPerformance {

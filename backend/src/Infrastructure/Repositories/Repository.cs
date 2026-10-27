@@ -62,6 +62,15 @@ namespace HUIT_RoMan.Infrastructure.Repositories
             return await query.FirstOrDefaultAsync();
         }
 
+        public async Task<int> UpdateIfAsync(Expression<Func<T, bool>> predicate, Expression<Func<Microsoft.EntityFrameworkCore.Query.SetPropertyCalls<T>, Microsoft.EntityFrameworkCore.Query.SetPropertyCalls<T>>> setPropertyCalls)
+        {
+            // UPDATE có điều kiện chạy nguyên tử tại DB (single-winner khi có request đồng thời),
+            // hoạt động trên cả PostgreSQL và SQLite (EF Core 8 ExecuteUpdateAsync).
+            return await _context.Set<T>()
+                .Where(predicate)
+                .ExecuteUpdateAsync(setPropertyCalls);
+        }
+
         public async Task AddAsync(T entity)
         {
             await _context.Set<T>().AddAsync(entity);

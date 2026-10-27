@@ -53,6 +53,11 @@ namespace HUIT_RoMan.Application.Modules.Usage.DTOs
         public DateTime? ActualCheckIn { get; set; }
         public int? ActualGuestCount { get; set; }
         public string? StaffNote { get; set; }
+        /// <summary>
+        /// Dùng nội bộ khi BookingService đã đánh dấu Booking.CheckedInAt rồi ủy quyền
+        /// khởi tạo phiên sử dụng cho từng chi tiết (không bỏ qua cửa sổ giờ nhận phòng).
+        /// </summary>
+        public bool InternalBookingCheckIn { get; set; }
     }
 
     public class CheckOutRequestDto

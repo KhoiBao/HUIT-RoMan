@@ -6,6 +6,8 @@ using HUIT_RoMan.Application.Common.Exceptions;
 using HUIT_RoMan.Application.Modules.Booking.DTOs;
 using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Common.Models;
+using HUIT_RoMan.Application.Modules.Usage.DTOs;
+using HUIT_RoMan.Application.Modules.Usage.Services;
 using HUIT_RoMan.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,11 +23,13 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         private readonly IRepository<Period> _periodRepo;
         private readonly IRepository<Domain.Entities.User> _userRepo;
         private readonly IRepository<UserRestriction> _userRestrictionRepo;
+        private readonly IUsageService _usageService;
 
-        public BookingService(IUnitOfWork unitOfWork, ICurrentUserService currentUser)
+        public BookingService(IUnitOfWork unitOfWork, ICurrentUserService currentUser, IUsageService usageService)
         {
             _unitOfWork = unitOfWork;
             _currentUser = currentUser;
+            _usageService = usageService;
             _bookingRepo = _unitOfWork.Repository<Domain.Entities.Booking>();
             _bookingDetailRepo = _unitOfWork.Repository<BookingDetail>();
             _roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
@@ -356,21 +360,83 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         }
 
         // ─────────────────────────────────────────────────────────────────
-        // CANCEL BOOKING
+        // CANCEL BOOKING (hủy đơn — sinh viên hủy có lý do, quản trị hủy tùy ý)
         // ─────────────────────────────────────────────────────────────────
-        public async Task<ApiResponse<bool>> CancelBookingAsync(int id)
+        public async Task<ApiResponse<bool>> CancelBookingAsync(int id, CancelBookingRequest? request = null, DateTime? nowUtc = null)
         {
+            var now = nowUtc ?? DateTime.UtcNow;
             var booking = await _bookingRepo.GetByIdAsync(id, b => b.BookingDetails);
             if (booking == null)
                 return ApiResponse<bool>.ErrorResponse("Không tìm thấy đơn đặt phòng.");
 
-            if (!_currentUser.IsAdmin && booking.UserId != _currentUser.UserId)
+            var isOwner = booking.UserId == _currentUser.UserId;
+            var isStaff = _currentUser.IsAdmin || _currentUser.Role == "Employee";
+
+            if (!isStaff && !isOwner)
                 return ApiResponse<bool>.ErrorResponse("Bạn không có quyền hủy đơn này.");
 
             if (booking.Status == "Đã hủy")
                 return ApiResponse<bool>.ErrorResponse("Đơn đã bị hủy trước đó.");
 
+            string? reasonCode = null;
+            string? reasonDetail = null;
+            string cancelSource;
+
+            if (isStaff && !isOwner)
+            {
+                // Quản trị viên / nhân sự hủy đơn: lý do là tùy chọn (giữ nguyên hành vi cũ).
+                cancelSource = BookingCancelPolicy.SourceStaff;
+                reasonCode = string.IsNullOrWhiteSpace(request?.Reason) ? null : request!.Reason!.Trim().ToUpperInvariant();
+                reasonDetail = string.IsNullOrWhiteSpace(request?.ReasonDetail) ? null : request!.ReasonDetail!.Trim();
+            }
+            else
+            {
+                // Sinh viên hủy trực tuyến: bắt buộc có lý do hợp lệ và còn hạn 3 giờ trước giờ bắt đầu.
+                var reasonError = BookingCancelPolicy.ValidateReason(request?.Reason, request?.ReasonDetail);
+                if (reasonError != null)
+                    return ApiResponse<bool>.ErrorResponse(reasonError);
+
+                if (booking.CheckedInAt != null)
+                    return ApiResponse<bool>.ErrorResponse("Đơn đã được nhận phòng, không thể hủy trực tuyến.");
+
+                var isApproved = booking.Status == "Đã duyệt" || booking.Status == "Duyệt một phần";
+                if (!isApproved)
+                    return ApiResponse<bool>.ErrorResponse("Chỉ đơn đã được duyệt mới có thể hủy trực tuyến. Vui lòng liên hệ quản lý thư viện nếu cần hỗ trợ.");
+
+                var startAt = GetBookingStartAt(booking);
+                if (!BookingCancelPolicy.IsWithinDeadline(startAt, now))
+                {
+                    var deadlineLocal = startAt.AddHours(-BookingCancelPolicy.MinLeadTime.TotalHours).AddHours(7);
+                    return ApiResponse<bool>.ErrorResponse(
+                        $"Đã quá hạn hủy trực tuyến (hạn cuối: {deadlineLocal:dd/MM/yyyy HH:mm}). Vui lòng liên hệ quản lý thư viện.");
+                }
+
+                cancelSource = BookingCancelPolicy.SourceStudent;
+                reasonCode = request!.Reason!.Trim().ToUpperInvariant();
+                reasonDetail = string.IsNullOrWhiteSpace(request!.ReasonDetail) ? null : request!.ReasonDetail!.Trim();
+            }
+
+            // Atomic claim: chỉ một request thành công khi đơn chưa bị hủy (và sinh viên thì chưa check-in).
+            var claimPredicate = (isStaff && !isOwner)
+                ? (System.Linq.Expressions.Expression<Func<Domain.Entities.Booking, bool>>)(b => b.Id == id && b.Status != "Đã hủy")
+                : b => b.Id == id && b.Status != "Đã hủy" && b.CheckedInAt == null;
+
+            var claimed = await _bookingRepo.UpdateIfAsync(claimPredicate, set => set
+                .SetProperty(b => b.Status, "Đã hủy")
+                .SetProperty(b => b.CancelReason, reasonCode)
+                .SetProperty(b => b.CancelReasonDetail, reasonDetail)
+                .SetProperty(b => b.CancelSource, cancelSource)
+                .SetProperty(b => b.UpdatedAt, now));
+
+            if (claimed == 0)
+                return ApiResponse<bool>.ErrorResponse("Không thể hủy đơn: đơn đã được xử lý bởi thao tác khác (đã hủy hoặc đã nhận phòng).");
+
+            // Đồng bộ entity đang theo dõi với kết quả claim rồi hủy các chi tiết (giải phóng khung giờ).
             booking.Status = "Đã hủy";
+            booking.CancelReason = reasonCode;
+            booking.CancelReasonDetail = reasonDetail;
+            booking.CancelSource = cancelSource;
+
             foreach (var detail in booking.BookingDetails)
                 detail.Status = "Đã hủy";
 
@@ -378,6 +444,79 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             await _unitOfWork.SaveChangesAsync();
 
             return ApiResponse<bool>.SuccessResponse(true, "Hủy đơn thành công.");
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // CHECK-IN (NHẬN PHÒNG)
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<BookingResponseDto>> CheckInBookingAsync(int id, DateTime? nowUtc = null)
+        {
+            var now = nowUtc ?? DateTime.UtcNow;
+
+            if (_currentUser.UserId == null)
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Bạn cần đăng nhập để nhận phòng.");
+
+            var booking = await _bookingRepo.GetByIdAsync(id, b => b.BookingDetails);
+            if (booking == null)
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Không tìm thấy đơn đặt phòng.");
+
+            if (booking.UserId != _currentUser.UserId)
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Bạn chỉ có thể nhận phòng cho đơn đặt của chính mình.");
+
+            if (booking.CheckedInAt != null)
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Đơn đã được nhận phòng trước đó.");
+
+            if (booking.Status == "Đã hủy")
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Đơn đã bị hủy, không thể nhận phòng.");
+
+            var isApproved = booking.Status == "Đã duyệt" || booking.Status == "Duyệt một phần";
+            if (!isApproved)
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Đơn chưa được duyệt, chưa thể nhận phòng.");
+
+            var activeDetails = (booking.BookingDetails ?? new List<BookingDetail>())
+                .Where(d => d.Status == "Đã duyệt" || d.Status == "Đang sử dụng")
+                .ToList();
+            if (activeDetails.Count == 0)
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Đơn không còn chi tiết phòng nào ở trạng thái có thể nhận.");
+
+            var startAt = GetBookingStartAt(booking);
+            var windowError = BookingCheckInPolicy.ValidateWindow(startAt, now);
+            if (windowError != null)
+                return ApiResponse<BookingResponseDto>.ErrorResponse(windowError);
+
+            // Atomic claim: chỉ một request check-in thành công (chống double check-in khi chạy đồng thời),
+            // đồng thời tranh đua với tác vụ tự động hủy (no-show) đang chạy nền.
+            var claimed = await _bookingRepo.UpdateIfAsync(
+                b => b.Id == id
+                   && b.CheckedInAt == null
+                   && (b.Status == "Đã duyệt" || b.Status == "Duyệt một phần"),
+                set => set
+                    .SetProperty(b => b.CheckedInAt, now)
+                    .SetProperty(b => b.UpdatedAt, now));
+
+            if (claimed == 0)
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Không thể nhận phòng: đơn đã được xử lý bởi thao tác khác.");
+
+            booking.CheckedInAt = now;
+
+            // Khởi tạo phiên sử dụng cho từng chi tiết đã duyệt (tái sử dụng toàn bộ logic check-in hiện có:
+            // cập nhật trạng thái chi tiết/đơn/phòng và tạo UsageSession kèm mã xác nhận).
+            foreach (var detail in activeDetails.Where(d => d.Status == "Đã duyệt"))
+            {
+                await _usageService.CheckInAsync(new CheckInRequestDto
+                {
+                    BookingDetailId = detail.Id,
+                    ActualCheckIn = now,
+                    ActualGuestCount = detail.GuestCount,
+                    StaffNote = "Sinh viên nhận phòng qua nút Nhận phòng",
+                    InternalBookingCheckIn = true
+                });
+            }
+
+            var fresh = await _bookingRepo.GetByIdAsync(id, b => b.BookingDetails);
+            var dto = fresh != null ? await MapBookingAsync(fresh) : await MapBookingAsync(booking);
+
+            return ApiResponse<BookingResponseDto>.SuccessResponse(dto, "Nhận phòng thành công!");
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -550,6 +689,28 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         // ─────────────────────────────────────────────────────────────────
         // PRIVATE HELPERS
         // ─────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// Thời điểm bắt đầu đặt phòng T = StartAt sớm nhất trong các chi tiết còn hiệu lực
+        /// (không tính chi tiết đã từ chối / đã hủy).
+        /// </summary>
+        private static DateTime GetBookingStartAt(Domain.Entities.Booking booking)
+        {
+            var activeStarts = (booking.BookingDetails ?? new List<BookingDetail>())
+                .Where(d => d.Status != "Từ chối" && d.Status != "Đã hủy")
+                .Select(d => d.StartAt)
+                .ToList();
+
+            if (activeStarts.Count == 0)
+            {
+                activeStarts = (booking.BookingDetails ?? new List<BookingDetail>())
+                    .Select(d => d.StartAt)
+                    .ToList();
+            }
+
+            var start = activeStarts.Count > 0 ? activeStarts.Min() : booking.RequestedAt;
+            return DateTime.SpecifyKind(start, DateTimeKind.Utc);
+        }
+
         private async Task<BookingResponseDto> MapBookingAsync(Domain.Entities.Booking booking)
         {
             var detailDtos = new List<BookingDetailResponseDto>();
@@ -580,6 +741,23 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 });
             }
 
+            var startAt = GetBookingStartAt(booking);
+            var isCheckedIn = booking.CheckedInAt != null;
+            var isApproved = booking.Status == "Đã duyệt" || booking.Status == "Duyệt một phần";
+
+            CheckInWindowDto? checkInWindow = null;
+            if (isApproved && !isCheckedIn && booking.Status != "Đã hủy")
+            {
+                checkInWindow = new CheckInWindowDto
+                {
+                    StartAt = startAt,
+                    OpensAt = startAt - BookingCheckInPolicy.OpenBeforeStart,
+                    DeadlineAt = startAt,
+                    State = BookingCheckInPolicy.Evaluate(startAt, DateTime.UtcNow).ToString(),
+                    ServerTime = DateTime.UtcNow
+                };
+            }
+
             return new BookingResponseDto
             {
                 Id = booking.Id,
@@ -594,6 +772,11 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 UserId = booking.UserId,
                 UserName = booking.User?.UserName,
                 UserFullName = booking.User?.FullName ?? booking.User?.UserName,
+                CheckedInAt = booking.CheckedInAt,
+                CancelReason = booking.CancelReason,
+                CancelReasonDetail = booking.CancelReasonDetail,
+                CancelSource = booking.CancelSource,
+                CheckInWindow = checkInWindow,
                 Details = detailDtos
             };
         }

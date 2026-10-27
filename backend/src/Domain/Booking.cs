@@ -29,6 +29,23 @@ namespace HUIT_RoMan.Domain.Entities
         
         public string Note { get; set; }
 
+        // ── Nhận phòng (Check-in) ─────────────────────────────────────
+        /// <summary>Thời điểm sinh viên nhận phòng (UTC). NULL = chưa nhận phòng.</summary>
+        public DateTime? CheckedInAt { get; set; }
+
+        // ── Lý do hủy đơn (không dùng chung với RejectionReason) ──────
+        /// <summary>Mã lý do hủy: CHANGE_PLAN | NO_LONGER_NEEDED | OTHER | NO_SHOW. NULL = đơn cũ chưa có dữ liệu.</summary>
+        [StringLength(50)]
+        public string? CancelReason { get; set; }
+
+        /// <summary>Nội dung bổ sung khi CancelReason = OTHER. NULL nếu không phải OTHER.</summary>
+        [StringLength(1000)]
+        public string? CancelReasonDetail { get; set; }
+
+        /// <summary>Nguồn hủy: STUDENT (sinh viên tự hủy) | AUTO (tự động hết hạn không nhận phòng) | STAFF (quản trị/nhân sự).</summary>
+        [StringLength(20)]
+        public string? CancelSource { get; set; }
+
 
         [ForeignKey("User")]
         public int UserId { get; set; }

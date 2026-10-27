@@ -510,6 +510,102 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
             </div>
           </div>
 
+          {/* Cancellation Breakdown (nguồn hủy + lý do hủy) */}
+          <div
+            className="profile-section-card"
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "12px",
+              padding: "20px",
+              marginBottom: "20px",
+            }}
+          >
+            <h4
+              style={{
+                fontSize: "15px",
+                fontWeight: 800,
+                color: "#1e293b",
+                marginBottom: "14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <PieChartIcon size={17} />
+              <span>HỦY ĐẶT PHÒNG & LÝ DO HỦY</span>
+            </h4>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+                gap: "12px",
+                marginBottom: bookingReport?.cancellationReasonStats?.length ? "16px" : 0,
+              }}
+            >
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "12px 14px" }}>
+                <div style={{ fontSize: "12px", color: "#15803d", fontWeight: 700, marginBottom: "4px" }}>
+                  Sinh viên tự hủy
+                </div>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "#166534" }}>
+                  {bookingReport?.overview?.cancelledByStudent ?? 0}
+                </div>
+              </div>
+              <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "10px", padding: "12px 14px" }}>
+                <div style={{ fontSize: "12px", color: "#c2410c", fontWeight: 700, marginBottom: "4px" }}>
+                  Tự động hủy (không nhận phòng)
+                </div>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "#9a3412" }}>
+                  {bookingReport?.overview?.cancelledByNoShow ?? 0}
+                </div>
+              </div>
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
+                <div style={{ fontSize: "12px", color: "#475569", fontWeight: 700, marginBottom: "4px" }}>
+                  Quản trị / nhân sự hủy
+                </div>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "#334155" }}>
+                  {bookingReport?.overview?.cancelledByStaff ?? 0}
+                </div>
+              </div>
+              <div style={{ background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "10px", padding: "12px 14px" }}>
+                <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 700, marginBottom: "4px" }}>
+                  Đơn cũ chưa rõ lý do
+                </div>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "#94a3b8" }}>
+                  {bookingReport?.overview?.cancelledUnknownSource ?? 0}
+                </div>
+              </div>
+            </div>
+
+            {(bookingReport?.cancellationReasonStats?.length ?? 0) > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155" }}>
+                  Số lượng hủy theo lý do:
+                </div>
+                {bookingReport?.cancellationReasonStats?.map((item) => (
+                  <div
+                    key={item.name}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc", borderRadius: "8px", padding: "8px 12px" }}
+                  >
+                    <span style={{ fontSize: "13px", color: "#334155" }}>{item.name}</span>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        background: "#fee2e2",
+                        color: "#b91c1c",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {item.count} đơn ({item.percentage}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Department Booking Table */}
           <div
             className="profile-section-card"

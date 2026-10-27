@@ -49,6 +49,19 @@ export interface BookingDetailItem {
   createdAt: string;
 }
 
+export interface CheckInWindow {
+  /** Thời điểm bắt đầu đặt phòng T (UTC ISO) */
+  startAt: string;
+  /** T - 15 phút (UTC ISO) */
+  opensAt: string;
+  /** Hạn cuối nhận phòng = T (UTC ISO) */
+  deadlineAt: string;
+  /** NotOpen | Open | Expired */
+  state: "NotOpen" | "Open" | "Expired";
+  /** Thời điểm server tính trạng thái (UTC ISO) — dùng đồng bộ đếm ngược */
+  serverTime: string;
+}
+
 export interface BookingResponse {
   id: number;
   activityName: string;
@@ -62,6 +75,16 @@ export interface BookingResponse {
   userId: number;
   userName?: string;
   userFullName?: string;
+  /** Thời điểm check-in (UTC ISO). NULL = chưa nhận phòng */
+  checkedInAt?: string | null;
+  /** Mã lý do hủy: CHANGE_PLAN | NO_LONGER_NEEDED | OTHER | NO_SHOW. NULL = đơn cũ chưa có dữ liệu */
+  cancelReason?: string | null;
+  /** Nội dung chi tiết khi lý do hủy là OTHER */
+  cancelReasonDetail?: string | null;
+  /** Nguồn hủy: STUDENT | AUTO | STAFF. NULL = không ghi nhận */
+  cancelSource?: string | null;
+  /** Cửa sổ nhận phòng theo thời gian server (chỉ đơn đã duyệt, chưa check-in) */
+  checkInWindow?: CheckInWindow | null;
   details: BookingDetailItem[];
 }
 
@@ -442,6 +465,223 @@ export function canCancelBooking(status: string): boolean {
   return s !== "đã hủy" && s !== "từ chối" && s !== "cancelled" && s !== "rejected";
 }
 
+// ── QUY ĐỊNH NHẬN PHÒNG & HỦY ĐẶT PHÒNG (mirror backend BookingCheckInPolicy / BookingCancelPolicy) ──
+
+/** Nhận phòng mở trước 15 phút so với giờ bắt đầu T */
+export const CHECK_IN_WINDOW_MINUTES = 15;
+/** Hủy trực tuyến muộn nhất 3 giờ trước giờ bắt đầu T (đúng hạn vẫn được hủy) */
+export const CANCEL_LEAD_HOURS = 3;
+
+export type CancelReasonCode = "CHANGE_PLAN" | "NO_LONGER_NEEDED" | "OTHER";
+
+export interface CancelReasonOption {
+  code: CancelReasonCode;
+  label: string;
+  needsDetail: boolean;
+}
+
+export const CANCEL_REASON_OPTIONS: CancelReasonOption[] = [
+  { code: "CHANGE_PLAN", label: "Thay đổi kế hoạch", needsDetail: false },
+  { code: "NO_LONGER_NEEDED", label: "Không còn nhu cầu sử dụng", needsDetail: false },
+  { code: "OTHER", label: "Lý do khác", needsDetail: true },
+];
+
+export const CANCEL_REASON_NO_SHOW = "NO_SHOW";
+
+export function getCancelReasonLabel(code?: string | null): string {
+  const value = (code || "").trim().toUpperCase();
+  if (value === CANCEL_REASON_NO_SHOW) return "Không nhận phòng đúng hạn (tự động hủy)";
+  const option = CANCEL_REASON_OPTIONS.find((o) => o.code === value);
+  return option ? option.label : (code || "");
+}
+
+export type CheckInWindowState = "not_open" | "open" | "expired";
+
+export interface CheckInWindowStateInfo {
+  state: CheckInWindowState;
+  /** Số giây còn lại đến mốc kế tiếp (mở nhận phòng hoặc hết hạn) */
+  remainingSeconds: number;
+  /** Thông báo hiển thị theo quy định, ví dụ "Có thể nhận phòng sau 05:20" */
+  message: string;
+}
+
+function formatCountdown(totalSeconds: number): string {
+  const seconds = Math.max(0, totalSeconds);
+  const mm = Math.floor(seconds / 60);
+  const ss = seconds % 60;
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
+/**
+ * Trạng thái cửa sổ nhận phòng tại thời điểm `now`:
+ * - trước T - 15 phút → not_open ("Có thể nhận phòng sau MM:SS")
+ * - [T - 15 phút, T)  → open ("Vui lòng nhận phòng trong MM:SS")
+ * - từ T              → expired ("Đã quá hạn nhận phòng")
+ */
+export function evaluateCheckInWindow(
+  startAtIso: string,
+  now: Date = new Date()
+): CheckInWindowStateInfo {
+  const startAt = new Date(startAtIso).getTime();
+  const opensAt = startAt - CHECK_IN_WINDOW_MINUTES * 60 * 1000;
+  const nowMs = now.getTime();
+
+  if (nowMs < opensAt) {
+    const remaining = Math.ceil((opensAt - nowMs) / 1000);
+    return {
+      state: "not_open",
+      remainingSeconds: remaining,
+      message: `Có thể nhận phòng sau ${formatCountdown(remaining)}`,
+    };
+  }
+
+  if (nowMs < startAt) {
+    const remaining = Math.ceil((startAt - nowMs) / 1000);
+    return {
+      state: "open",
+      remainingSeconds: remaining,
+      message: `Vui lòng nhận phòng trong ${formatCountdown(remaining)}`,
+    };
+  }
+
+  return {
+    state: "expired",
+    remainingSeconds: 0,
+    message: "Đã quá hạn nhận phòng",
+  };
+}
+
+/** Thời điểm bắt đầu đặt phòng T = StartAt sớm nhất của các chi tiết còn hiệu lực */
+export function getBookingStartAt(booking: BookingResponse): Date | null {
+  const active = (booking.details || [])
+    .filter((d) => d.status !== "Từ chối" && d.status !== "Đã hủy")
+    .map((d) => new Date(d.startAt).getTime())
+    .filter((t) => Number.isFinite(t));
+
+  if (active.length > 0) {
+    return new Date(Math.min(...active));
+  }
+
+  const all = (booking.details || [])
+    .map((d) => new Date(d.startAt).getTime())
+    .filter((t) => Number.isFinite(t));
+  if (all.length > 0) {
+    return new Date(Math.min(...all));
+  }
+
+  const requested = new Date(booking.requestedAt).getTime();
+  return Number.isFinite(requested) ? new Date(requested) : null;
+}
+
+/** Đơn đã được duyệt (kể cả duyệt một phần) — điều kiện cần cho nhận phòng và hủy trực tuyến */
+export function isApprovedBookingStatus(status?: string | null): boolean {
+  const s = (status || "").trim();
+  return s === "Đã duyệt" || s === "Duyệt một phần";
+}
+
+/**
+ * Điều kiện hủy trực tuyến phía client (backend tự kiểm tra lại toàn bộ):
+ * đã duyệt, chưa bị hủy, chưa nhận phòng và now <= T - 3 giờ.
+ */
+export function canCancelBookingOnline(
+  booking: BookingResponse,
+  now: Date = new Date()
+): { allowed: boolean; message?: string } {
+  if (booking.checkedInAt) {
+    return { allowed: false, message: "Đơn đã được nhận phòng, không thể hủy trực tuyến." };
+  }
+  if (!isApprovedBookingStatus(booking.status)) {
+    return {
+      allowed: false,
+      message: "Chỉ đơn đã được duyệt mới có thể hủy trực tuyến.",
+    };
+  }
+  if (booking.status === "Đã hủy") {
+    return { allowed: false, message: "Đơn đã bị hủy trước đó." };
+  }
+
+  const startAt = getBookingStartAt(booking);
+  if (!startAt) {
+    return { allowed: false, message: "Không xác định được giờ bắt đầu của đơn." };
+  }
+
+  const deadline = startAt.getTime() - CANCEL_LEAD_HOURS * 60 * 60 * 1000;
+  if (now.getTime() > deadline) {
+    return {
+      allowed: false,
+      message: `Đã quá hạn hủy trực tuyến (hạn cuối ${new Date(deadline).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}). Vui lòng liên hệ quản lý thư viện.`,
+    };
+  }
+
+  return { allowed: true };
+}
+
+/** Validate lựa chọn lý do hủy (bắt buộc chọn, OTHER phải có nội dung cụ thể) */
+export function validateCancelReasonSelection(
+  reasonCode: string,
+  reasonDetail: string
+): { isValid: boolean; error?: string } {
+  const code = (reasonCode || "").trim().toUpperCase();
+  const option = CANCEL_REASON_OPTIONS.find((o) => o.code === code);
+
+  if (!option) {
+    return { isValid: false, error: "Vui lòng chọn lý do hủy đặt phòng." };
+  }
+
+  if (option.needsDetail && !(reasonDetail || "").trim()) {
+    return {
+      isValid: false,
+      error: "Vui lòng nhập nội dung giải thích cụ thể khi chọn 'Lý do khác'.",
+    };
+  }
+
+  return { isValid: true };
+}
+
+export interface CancelSourceInfo {
+  label: string;
+  cssClass: string;
+}
+
+/** Nhãn nguồn hủy hiển thị cho sinh viên/quản trị viên */
+export function describeCancelSource(
+  booking: Pick<BookingResponse, "cancelSource" | "cancelReason">
+): CancelSourceInfo {
+  const source = (booking.cancelSource || "").trim().toUpperCase();
+  if (source === "STUDENT") return { label: "Sinh viên tự hủy", cssClass: "cancel-student" };
+  if (source === "AUTO" || booking.cancelReason?.trim().toUpperCase() === CANCEL_REASON_NO_SHOW) {
+    return { label: "Tự động hủy (không nhận phòng)", cssClass: "cancel-auto" };
+  }
+  if (source === "STAFF") return { label: "Quản trị viên hủy", cssClass: "cancel-staff" };
+  return { label: "Đã hủy", cssClass: "cancel-unknown" };
+}
+
+/** Nội dung hiển thị lý do hủy (an toàn với đơn cũ chưa có dữ liệu) */
+export function describeCancelReason(
+  booking: Pick<BookingResponse, "cancelReason" | "cancelReasonDetail">
+): string {
+  if (!booking.cancelReason || !booking.cancelReason.trim()) {
+    return "Chưa có thông tin lý do hủy";
+  }
+  const label = getCancelReasonLabel(booking.cancelReason);
+  const detail = (booking.cancelReasonDetail || "").trim();
+  return detail ? `${label}: ${detail}` : label;
+}
+
+/**
+ * Ước lệch đồng hồ giữa server và trình duyệt (ms) dựa trên serverTime của API,
+ * dùng để đếm ngược hiển thị bám sát thời gian server hơn.
+ */
+export function getServerClockOffsetMs(
+  windows: Array<CheckInWindow | null | undefined>
+): number {
+  const first = windows.find((w) => w && w.serverTime);
+  if (!first) return 0;
+  const serverMs = new Date(first.serverTime as string).getTime();
+  if (!Number.isFinite(serverMs)) return 0;
+  return serverMs - Date.now();
+}
+
 /**
  * Hiển thị tóm tắt thời gian của chi tiết đơn đặt phòng
  */
@@ -498,7 +738,16 @@ export async function fetchMyBookingsApi(): Promise<BookingResponse[]> {
   return Array.isArray(data) ? (data as BookingResponse[]) : [];
 }
 
-export async function cancelBookingApi(bookingId: number): Promise<boolean> {
-  const res = await api.patch(`/api/Bookings/${bookingId}/cancel`);
+export async function cancelBookingApi(
+  bookingId: number,
+  payload?: { reason?: string; reasonDetail?: string }
+): Promise<boolean> {
+  const res = await api.patch(`/api/Bookings/${bookingId}/cancel`, payload ?? {});
   return Boolean(res.data?.success ?? true);
+}
+
+/** Nhận phòng (check-in) đơn đã duyệt trong cửa sổ [T - 15 phút, T) */
+export async function checkInBookingApi(bookingId: number): Promise<BookingResponse> {
+  const res = await api.post(`/api/Bookings/${bookingId}/check-in`);
+  return (res.data?.data ?? res.data) as BookingResponse;
 }

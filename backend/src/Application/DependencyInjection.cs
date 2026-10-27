@@ -34,6 +34,8 @@ public static class DependencyInjection
 
         // Booking Services
         services.AddScoped<IBookingService, BookingService>();
+        // Tác vụ nền tự động hủy đơn không nhận phòng đúng hạn (no-show)
+        services.AddScoped<IBookingNoShowService, BookingNoShowService>();
 
         // Usage Module (Quản lý phiên sử dụng & Trả phòng)
         services.AddScoped<IUsageService, UsageService>();

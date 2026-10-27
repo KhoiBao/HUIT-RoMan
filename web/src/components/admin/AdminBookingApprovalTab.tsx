@@ -17,6 +17,7 @@ import {
   SlashIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
+import { describeCancelSource, describeCancelReason } from "../../lib/booking";
 
 export interface BookingDetail {
   id: number;
@@ -49,6 +50,13 @@ export interface BookingItem {
   userId: number;
   userName: string;
   userFullName: string;
+  /** Thời điểm check-in (UTC ISO). NULL = chưa nhận phòng */
+  checkedInAt?: string | null;
+  /** Mã lý do hủy: CHANGE_PLAN | NO_LONGER_NEEDED | OTHER | NO_SHOW. NULL = đơn cũ */
+  cancelReason?: string | null;
+  cancelReasonDetail?: string | null;
+  /** Nguồn hủy: STUDENT | AUTO | STAFF. NULL = không ghi nhận */
+  cancelSource?: string | null;
   details: BookingDetail[];
 }
 
@@ -512,6 +520,24 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                     {b.rejectionReason && (
                       <div className="booking-reject-notice">
                         <strong>Lý do từ chối:</strong> {b.rejectionReason}
+                      </div>
+                    )}
+                    {b.status === "Đã hủy" && (
+                      <div className="booking-cancel-notice">
+                        <strong>{describeCancelSource(b).label}:</strong>{" "}
+                        {describeCancelReason(b)}
+                      </div>
+                    )}
+                    {b.checkedInAt && (
+                      <div className="booking-checkedin-notice">
+                        Đã nhận phòng lúc{" "}
+                        {new Date(b.checkedInAt).toLocaleString("vi-VN", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })}
                       </div>
                     )}
                   </div>
