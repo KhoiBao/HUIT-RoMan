@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Common.Models;
+using HUIT_RoMan.Application.Modules.Booking.Services;
 using HUIT_RoMan.Application.Modules.Report.DTOs;
 using HUIT_RoMan.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -64,6 +65,12 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
             long pending = bookings.Count(b => b.Status == "Chờ duyệt" || b.Status == "Pending");
             long rejected = bookings.Count(b => b.Status == "Từ chối" || b.Status == "Rejected");
             long cancelled = bookings.Count(b => b.Status == "Đã hủy" || b.Status == "Cancelled");
+            // Phân loại nguồn hủy: sinh viên tự hủy / tự động hủy (no-show) / quản trị hủy.
+            // Đơn cũ không có dữ liệu nguồn được đếm riêng, không suy đoán.
+            long cancelledByStudent = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") && b.CancelSource == BookingCancelPolicy.SourceStudent);
+            long cancelledByNoShow = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") && b.CancelSource == BookingCancelPolicy.SourceAuto);
+            long cancelledByStaff = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") && b.CancelSource == BookingCancelPolicy.SourceStaff);
+            long cancelledUnknown = cancelled - cancelledByStudent - cancelledByNoShow - cancelledByStaff;
             double approvalRate = totalBookings > 0 ? Math.Round((double)approved / totalBookings * 100, 1) : 100.0;
 
             // 2. Rooms & Usage
@@ -134,6 +141,10 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
                 PendingBookings = pending,
                 RejectedBookings = rejected,
                 CancelledBookings = cancelled,
+                CancelledByStudent = cancelledByStudent,
+                CancelledByNoShow = cancelledByNoShow,
+                CancelledByStaff = cancelledByStaff,
+                CancelledUnknownSource = cancelledUnknown,
                 ApprovalRate = approvalRate,
                 TotalRooms = totalRooms,
                 ActiveRooms = activeRooms,
@@ -254,10 +265,46 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
                 TimeSeries = timeSeries,
                 StatusDistribution = statusDist,
                 PurposeDistribution = purposeDist,
-                DepartmentStats = deptStats
+                DepartmentStats = deptStats,
+                CancellationReasonStats = BuildCancellationReasonStats(allBookings)
             };
 
             return ApiResponse<BookingStatsReportDto>.SuccessResponse(report);
+        }
+
+        /// <summary>
+        /// Thống kê hủy theo lý do: phân biệt sinh viên tự hủy, tự động hủy (no-show),
+        /// quản trị hủy và đơn cũ chưa có dữ liệu lý do (không suy đoán).
+        /// Đơn "Từ chối" không được tính là đơn đã hủy.
+        /// </summary>
+        private static List<CategoryShareDto> BuildCancellationReasonStats(List<Domain.Entities.Booking> bookings)
+        {
+            var cancelled = bookings
+                .Where(b => b.Status == "Đã hủy" || b.Status == "Cancelled")
+                .ToList();
+
+            if (cancelled.Count == 0)
+                return new List<CategoryShareDto>();
+
+            return cancelled
+                .GroupBy(b =>
+                {
+                    if (string.IsNullOrWhiteSpace(b.CancelReason))
+                        return "Chưa có thông tin lý do hủy";
+
+                    var label = BookingCancelPolicy.GetReasonLabel(b.CancelReason);
+                    return b.CancelSource == BookingCancelPolicy.SourceAuto
+                        ? $"{label} (tự động)"
+                        : label;
+                })
+                .Select(g => new CategoryShareDto
+                {
+                    Name = g.Key,
+                    Count = g.Count(),
+                    Percentage = Math.Round((double)g.Count() / cancelled.Count * 100, 1)
+                })
+                .OrderByDescending(x => x.Count)
+                .ToList();
         }
 
         // ─────────────────────────────────────────────────────────────────

@@ -20,6 +20,14 @@ namespace HUIT_RoMan.Application.Modules.Report.DTOs
         public long PendingBookings { get; set; }
         public long RejectedBookings { get; set; }
         public long CancelledBookings { get; set; }
+        /// <summary>Số đơn bị sinh viên chủ động hủy (CancelSource = STUDENT).</summary>
+        public long CancelledByStudent { get; set; }
+        /// <summary>Số đơn bị hệ thống tự động hủy do không nhận phòng đúng hạn (CancelSource = AUTO).</summary>
+        public long CancelledByNoShow { get; set; }
+        /// <summary>Số đơn bị quản trị/nhân sự hủy (CancelSource = STAFF).</summary>
+        public long CancelledByStaff { get; set; }
+        /// <summary>Số đơn đã hủy nhưng chưa ghi nhận nguồn (đơn cũ trước khi có tính năng).</summary>
+        public long CancelledUnknownSource { get; set; }
         public double ApprovalRate { get; set; }
 
         // 2. Room Usage KPIs
@@ -78,6 +86,8 @@ namespace HUIT_RoMan.Application.Modules.Report.DTOs
         public List<CategoryShareDto> StatusDistribution { get; set; } = new List<CategoryShareDto>();
         public List<CategoryShareDto> PurposeDistribution { get; set; } = new List<CategoryShareDto>();
         public List<DepartmentBookingStatDto> DepartmentStats { get; set; } = new List<DepartmentBookingStatDto>();
+        /// <summary>Thống kê số lượng hủy theo lý do (chỉ tính đơn đã hủy có ghi nhận lý do).</summary>
+        public List<CategoryShareDto> CancellationReasonStats { get; set; } = new List<CategoryShareDto>();
     }
 
     public class RoomPerformanceDto

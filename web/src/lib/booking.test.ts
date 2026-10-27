@@ -9,9 +9,17 @@ import {
   buildBookingPayload,
   canCancelBooking,
   formatDetailTimeRange,
+  evaluateCheckInWindow,
+  canCancelBookingOnline,
+  validateCancelReasonSelection,
+  getBookingStartAt,
+  describeCancelReason,
+  describeCancelSource,
+  isApprovedBookingStatus,
   type BookingFormState,
   type AvailableRoom,
   type BookingDetailItem,
+  type BookingResponse,
 } from "./booking";
 import type { Period } from "./schedule";
 
@@ -312,5 +320,153 @@ describe("booking pure functions", () => {
       "TV02",
     ]);
     expect(groups[1].rooms[0].roomCode).toBe("TT01");
+  });
+});
+
+describe("check-in window & cancellation rules (mirror backend policy)", () => {
+  const START = "2026-10-27T03:00:00.000Z"; // 10:00 giờ Việt Nam
+
+  function makeBooking(
+    overrides: Partial<BookingResponse> = {}
+  ): BookingResponse {
+    return {
+      id: 1,
+      activityName: "Học nhóm",
+      purpose: "Ôn thi",
+      guestCount: 4,
+      status: "Đã duyệt",
+      requestedAt: "2026-10-26T01:00:00.000Z",
+      createdAt: "2026-10-26T01:00:00.000Z",
+      userId: 10,
+      checkedInAt: null,
+      cancelReason: null,
+      cancelReasonDetail: null,
+      cancelSource: null,
+      details: [
+        {
+          id: 100,
+          roomId: 1,
+          roomCode: "TV01",
+          roomName: "Phòng học nhóm TV01",
+          startAt: START,
+          endAt: "2026-10-27T05:00:00.000Z",
+          guestCount: 4,
+          purpose: "Học nhóm",
+          status: "Đã duyệt",
+          createdAt: "2026-10-26T01:00:00.000Z",
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("evaluateCheckInWindow: trước T-15 phút → not_open với đếm ngược", () => {
+    const now = new Date("2026-10-27T02:40:00.000Z"); // 09:40, còn 5 phút nữa mở (09:45)
+    const info = evaluateCheckInWindow(START, now);
+    expect(info.state).toBe("not_open");
+    expect(info.remainingSeconds).toBe(300);
+    expect(info.message).toBe("Có thể nhận phòng sau 05:00");
+  });
+
+  it("evaluateCheckInWindow: đúng T-15 phút → open ('Vui lòng nhận phòng trong 15:00')", () => {
+    const now = new Date("2026-10-27T02:45:00.000Z"); // đúng 09:45
+    const info = evaluateCheckInWindow(START, now);
+    expect(info.state).toBe("open");
+    expect(info.remainingSeconds).toBe(900);
+    expect(info.message).toBe("Vui lòng nhận phòng trong 15:00");
+  });
+
+  it("evaluateCheckInWindow: ngay trước T → vẫn open", () => {
+    const now = new Date("2026-10-27T02:59:59.000Z");
+    const info = evaluateCheckInWindow(START, now);
+    expect(info.state).toBe("open");
+    expect(info.remainingSeconds).toBe(1);
+  });
+
+  it("evaluateCheckInWindow: đúng T → expired", () => {
+    const now = new Date(START);
+    const info = evaluateCheckInWindow(START, now);
+    expect(info.state).toBe("expired");
+    expect(info.message).toBe("Đã quá hạn nhận phòng");
+  });
+
+  it("canCancelBookingOnline: đơn chưa duyệt → không cho hủy", () => {
+    const booking = makeBooking({ status: "Chờ duyệt" });
+    const res = canCancelBookingOnline(booking, new Date("2026-10-26T01:00:00.000Z"));
+    expect(res.allowed).toBe(false);
+  });
+
+  it("canCancelBookingOnline: đơn đã check-in → không cho hủy", () => {
+    const booking = makeBooking({ checkedInAt: "2026-10-27T02:50:00.000Z" });
+    const res = canCancelBookingOnline(booking, new Date("2026-10-26T01:00:00.000Z"));
+    expect(res.allowed).toBe(false);
+    expect(res.message).toContain("đã được nhận phòng");
+  });
+
+  it("canCancelBookingOnline: trước hạn 3 giờ → cho hủy", () => {
+    const booking = makeBooking();
+    const res = canCancelBookingOnline(booking, new Date("2026-10-27T00:00:00.000Z")); // 07:00 (T-3h)
+    expect(res.allowed).toBe(true);
+  });
+
+  it("canCancelBookingOnline: sau hạn 3 giờ → không cho hủy", () => {
+    const booking = makeBooking();
+    const res = canCancelBookingOnline(booking, new Date("2026-10-27T00:01:00.000Z"));
+    expect(res.allowed).toBe(false);
+    expect(res.message).toContain("hạn hủy trực tuyến");
+  });
+
+  it("validateCancelReasonSelection: chưa chọn lý do → lỗi", () => {
+    expect(validateCancelReasonSelection("", "").isValid).toBe(false);
+  });
+
+  it("validateCancelReasonSelection: OTHER không có chi tiết → lỗi", () => {
+    const res = validateCancelReasonSelection("OTHER", "   ");
+    expect(res.isValid).toBe(false);
+    expect(res.error).toContain("Lý do khác");
+  });
+
+  it("validateCancelReasonSelection: OTHER có chi tiết / CHANGE_PLAN → hợp lệ", () => {
+    expect(validateCancelReasonSelection("OTHER", "Bận thi bất ngờ").isValid).toBe(true);
+    expect(validateCancelReasonSelection("CHANGE_PLAN", "").isValid).toBe(true);
+    expect(validateCancelReasonSelection("no_longer_needed", "").isValid).toBe(true);
+  });
+
+  it("getBookingStartAt: lấy StartAt sớm nhất của chi tiết còn hiệu lực", () => {
+    const booking = makeBooking();
+    booking.details = [
+      { ...booking.details[0], id: 1, startAt: "2026-10-27T04:00:00.000Z", status: "Đã hủy" },
+      { ...booking.details[0], id: 2, startAt: "2026-10-27T03:00:00.000Z", status: "Đã duyệt" },
+      { ...booking.details[0], id: 3, startAt: "2026-10-27T05:00:00.000Z", status: "Từ chối" },
+    ];
+    expect(getBookingStartAt(booking)?.toISOString()).toBe("2026-10-27T03:00:00.000Z");
+  });
+
+  it("describeCancelReason: đơn cũ không có lý do → hiển thị an toàn", () => {
+    const booking = makeBooking({ status: "Đã hủy", cancelReason: null });
+    expect(describeCancelReason(booking)).toBe("Chưa có thông tin lý do hủy");
+  });
+
+  it("describeCancelReason: OTHER hiển thị nhãn + nội dung chi tiết", () => {
+    const booking = makeBooking({
+      status: "Đã hủy",
+      cancelReason: "OTHER",
+      cancelReasonDetail: "Bận đi khám bệnh",
+    });
+    expect(describeCancelReason(booking)).toBe("Lý do khác: Bận đi khám bệnh");
+  });
+
+  it("describeCancelSource: phân biệt sinh viên tự hủy / tự động hủy / quản trị hủy", () => {
+    expect(describeCancelSource(makeBooking({ cancelSource: "STUDENT" })).label).toBe("Sinh viên tự hủy");
+    expect(describeCancelSource(makeBooking({ cancelSource: "AUTO", cancelReason: "NO_SHOW" })).label).toContain("Tự động hủy");
+    expect(describeCancelSource(makeBooking({ cancelSource: "STAFF" })).label).toBe("Quản trị viên hủy");
+    expect(describeCancelSource(makeBooking()).label).toBe("Đã hủy");
+  });
+
+  it("isApprovedBookingStatus: chỉ Đã duyệt / Duyệt một phần", () => {
+    expect(isApprovedBookingStatus("Đã duyệt")).toBe(true);
+    expect(isApprovedBookingStatus("Duyệt một phần")).toBe(true);
+    expect(isApprovedBookingStatus("Chờ duyệt")).toBe(false);
+    expect(isApprovedBookingStatus("Đã hủy")).toBe(false);
   });
 });

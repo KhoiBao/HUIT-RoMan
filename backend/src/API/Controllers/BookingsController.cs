@@ -73,11 +73,27 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(response);
         }
 
-        /// <summary>Hủy đơn đặt phòng</summary>
+        /// <summary>
+        /// Hủy đơn đặt phòng.
+        /// Sinh viên: bắt buộc gửi lý do (reason hợp lệ, OTHER kèm reasonDetail) và còn hạn
+        /// 3 giờ trước giờ bắt đầu. Admin/Employee: lý do là tùy chọn.
+        /// </summary>
         [HttpPatch("{id}/cancel")]
-        public async Task<IActionResult> Cancel(int id)
+        public async Task<IActionResult> Cancel(int id, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CancelBookingRequest? request = null)
         {
-            var response = await _bookingService.CancelBookingAsync(id);
+            var response = await _bookingService.CancelBookingAsync(id, request);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
+        /// <summary>
+        /// Nhận phòng (check-in) đơn đã duyệt trong cửa sổ [T - 15 phút, T).
+        /// Backend xác minh lại sở hữu đơn, trạng thái và thời điểm tại thời điểm request.
+        /// </summary>
+        [HttpPost("{id}/check-in")]
+        public async Task<IActionResult> CheckIn(int id)
+        {
+            var response = await _bookingService.CheckInBookingAsync(id);
             if (!response.Success) return BadRequest(response);
             return Ok(response);
         }

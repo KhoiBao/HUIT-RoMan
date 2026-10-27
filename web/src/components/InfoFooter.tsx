@@ -1,126 +1,19 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { roomRules } from "../data/homeContent";
-import { fetchPeriodsApi } from "../lib/schedule";
-import { getServiceHours } from "../lib/home";
 import {
-  ArrowRightIcon,
   CalendarPlusIcon,
-  CheckCircleIcon,
-  ClockIcon,
   GlobeIcon,
-  HeadsetIcon,
   MailIcon,
   PhoneIcon,
   PinIcon,
-  ShieldCheckIcon,
 } from "./Icon";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-export default function InfoFooter({
-  showInfoCards = true,
-}: {
-  showInfoCards?: boolean;
-}) {
-  const [serviceHours, setServiceHours] = useState<{
-    open: string;
-    close: string;
-  } | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    fetchPeriodsApi()
-      .then((periods) => {
-        if (mounted) setServiceHours(getServiceHours(periods));
-      })
-      .catch(() => {
-        if (mounted) setServiceHours(null);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
+export default function InfoFooter() {
   const year = CURRENT_YEAR;
-  const hoursLabel = serviceHours
-    ? `${serviceHours.open} – ${serviceHours.close}`
-    : "Đang cập nhật";
 
   return (
     <div className="roman-footer-wrap">
-      {showInfoCards && (
-      <section className="roman-info-section" aria-label="Thông tin sử dụng phòng">
-        <div className="roman-info-grid">
-          <article className="roman-info-card">
-            <div className="roman-info-icon roman-info-icon-blue">
-              <ShieldCheckIcon size={22} />
-            </div>
-            <div className="roman-info-body">
-              <span className="roman-info-kicker">Nội quy</span>
-              <h3>Quy định đặt phòng</h3>
-              <ul className="roman-rule-list">
-                {roomRules.map((rule) => (
-                  <li key={rule}>
-                    <CheckCircleIcon size={14} />
-                    <span>{rule}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <Link to="/home#quy-trinh" className="roman-info-link">
-              Xem hướng dẫn
-              <ArrowRightIcon size={15} />
-            </Link>
-          </article>
-
-          <article className="roman-info-card">
-            <div className="roman-info-icon roman-info-icon-gold">
-              <ClockIcon size={22} />
-            </div>
-            <div className="roman-info-body">
-              <span className="roman-info-kicker">Thời gian</span>
-              <h3>Khung giờ phục vụ</h3>
-              <div className="roman-hours-label">{hoursLabel}</div>
-              <p className="roman-info-note">
-                Thứ Hai – Thứ Bảy, theo khung tiết học đang cấu hình trong hệ
-                thống.
-              </p>
-              <p className="roman-info-note">
-                Chủ Nhật và ngày lễ nghỉ theo quy định của Nhà trường.
-              </p>
-            </div>
-          </article>
-
-          <article className="roman-info-card">
-            <div className="roman-info-icon roman-info-icon-green">
-              <HeadsetIcon size={22} />
-            </div>
-            <div className="roman-info-body">
-              <span className="roman-info-kicker">Hỗ trợ</span>
-              <h3>Kênh hỗ trợ trực tiếp</h3>
-              <div className="roman-support-line">
-                <PinIcon size={15} />
-                <span>Quầy trực Tầng 3 – Tòa nhà E</span>
-              </div>
-              <div className="roman-support-line">
-                <PhoneIcon size={15} />
-                <a href="tel:02838161673">(028) 3816 1673</a>
-              </div>
-              <div className="roman-support-line">
-                <MailIcon size={15} />
-                <a href="mailto:thuvien@huit.edu.vn">thuvien@huit.edu.vn</a>
-              </div>
-            </div>
-            <a href="mailto:thuvien@huit.edu.vn" className="roman-info-link">
-              Gửi yêu cầu hỗ trợ
-              <ArrowRightIcon size={15} />
-            </a>
-          </article>
-        </div>
-      </section>
-      )}
-
       <footer className="roman-footer">
         <div className="roman-footer-inner">
           <div className="roman-footer-grid">

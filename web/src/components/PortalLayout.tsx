@@ -24,8 +24,6 @@ function ScrollManager() {
 }
 
 export default function PortalLayout() {
-  const { pathname } = useLocation();
-
   return (
     <div className="portal-layout">
       <ScrollManager />
@@ -33,7 +31,7 @@ export default function PortalLayout() {
       <div className="portal-layout-main">
         <Outlet />
       </div>
-      <InfoFooter showInfoCards={pathname !== "/dat-phong"} />
+      <InfoFooter />
     </div>
   );
 }

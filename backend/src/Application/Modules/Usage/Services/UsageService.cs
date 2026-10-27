@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Common.Models;
+using HUIT_RoMan.Application.Modules.Booking.Services;
 using HUIT_RoMan.Application.Modules.Usage.DTOs;
 using HUIT_RoMan.Domain.Entities;
 
@@ -360,6 +361,32 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             if (session.Status == "Đã hủy")
                 return ApiResponse<UsageSessionDto>.ErrorResponse("Phiên sử dụng phòng này đã bị hủy.");
 
+            // ── Quy định nhận phòng (áp dụng cho mọi đường check-in: nút Nhận phòng,
+            // check-in theo từng chi tiết, mã nhận phòng nhanh) ──────────────────
+            if (session.BookingDetail != null)
+            {
+                var policyBooking = session.BookingDetail.Booking
+                    ?? await _bookingRepo.GetByIdAsync(session.BookingDetail.BookingId);
+
+                if (policyBooking != null && policyBooking.Status == "Đã hủy")
+                    return ApiResponse<UsageSessionDto>.ErrorResponse("Đơn đặt phòng đã bị hủy, không thể nhận phòng.");
+
+                var isStaffForPolicy = _currentUser.IsAdmin || _currentUser.Role == "Employee";
+                if (!isStaffForPolicy && policyBooking != null)
+                {
+                    // Không nhận phòng lần hai: đơn đã được nhận (trừ khi chính phiên này đang dùng).
+                    if (policyBooking.CheckedInAt != null
+                        && session.Status != "Đang sử dụng"
+                        && !request.InternalBookingCheckIn)
+                        return ApiResponse<UsageSessionDto>.ErrorResponse("Đơn đặt phòng này đã được nhận phòng trước đó.");
+
+                    // Sinh viên chỉ được nhận phòng trong cửa sổ [T - 15 phút, T).
+                    var windowError = BookingCheckInPolicy.ValidateWindow(session.BookingDetail.StartAt, DateTime.UtcNow);
+                    if (windowError != null)
+                        return ApiResponse<UsageSessionDto>.ErrorResponse(windowError);
+                }
+            }
+
             // Kiểm tra phòng có đang bị bảo trì không
             var room = session.BookingDetail?.Room ?? await _roomRepo.GetByIdAsync(session.BookingDetail?.RoomId ?? 0);
             if (room != null && (room.Status == "Bảo trì" || room.Status == "Maintenance"))
@@ -379,9 +406,14 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                 _bookingDetailRepo.Update(session.BookingDetail);
 
                 var booking = await _bookingRepo.GetByIdAsync(session.BookingDetail.BookingId);
-                if (booking != null && booking.Status != "Đang sử dụng")
+                if (booking != null)
                 {
-                    booking.Status = "Đang sử dụng";
+                    if (booking.Status != "Đang sử dụng")
+                    {
+                        booking.Status = "Đang sử dụng";
+                    }
+                    // Ghi nhận thời điểm nhận phòng ở cấp đơn (chống check-in lặp và chống auto-cancel).
+                    booking.CheckedInAt ??= DateTime.SpecifyKind(checkInTime, DateTimeKind.Utc);
                     _bookingRepo.Update(booking);
                 }
             }

@@ -10058,3 +10058,348 @@ button.admin-status-pill:disabled {
   color: #be123c;
 }
 
+
+
+/* ==========================================================================
+   USER BOOKINGS LIST VIEW (TABLE / COMPACT LIST)
+   ========================================================================== */
+
+.user-bookings-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.user-bookings-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.user-bookings-filter-tab {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.user-bookings-filter-tab:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.user-bookings-filter-tab.active {
+  background: var(--primary, #005a9e);
+  color: #ffffff;
+  border-color: var(--primary, #005a9e);
+  box-shadow: 0 2px 6px rgba(0, 90, 158, 0.2);
+}
+
+.user-bookings-search-input {
+  min-width: 250px;
+  padding: 7px 12px;
+  font-size: 13px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+  background: #ffffff;
+  transition: all 0.15s ease;
+}
+
+.user-bookings-search-input:focus {
+  border-color: var(--primary, #005a9e);
+  box-shadow: 0 0 0 3px rgba(0, 90, 158, 0.12);
+}
+
+.user-bookings-table-wrapper {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow-x: auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.user-bookings-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.user-bookings-table thead {
+  background: #f8fafc;
+  border-bottom: 1.5px solid #e2e8f0;
+}
+
+.user-bookings-table th {
+  padding: 12px 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.user-bookings-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.15s ease;
+}
+
+.user-bookings-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.user-bookings-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.user-bookings-table td {
+  padding: 13px 16px;
+  font-size: 13.5px;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.table-booking-id-col {
+  min-width: 140px;
+}
+
+.table-id-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary, #005a9e);
+  margin-bottom: 2px;
+}
+
+.table-act-title {
+  font-weight: 600;
+  color: #1e293b;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-room-col {
+  min-width: 180px;
+}
+
+.table-room-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-room-code-tag {
+  display: inline-block;
+  padding: 2px 7px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+
+.table-room-name {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.table-time-col {
+  min-width: 170px;
+}
+
+.table-time-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.table-time-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.table-time-date {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.table-code-col {
+  min-width: 160px;
+}
+
+.table-code-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-code-val {
+  padding: 3px 8px;
+  background: #f1f5f9;
+  border: 1px dashed #94a3b8;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+  font-size: 13px;
+  color: #0f172a;
+  letter-spacing: 0.5px;
+}
+
+.btn-copy-mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border-radius: 4px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-copy-mini:hover {
+  background: #f1f5f9;
+  color: var(--primary, #005a9e);
+  border-color: var(--primary, #005a9e);
+}
+
+.table-empty-code {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.table-status-col {
+  min-width: 140px;
+}
+
+.table-actions-col {
+  min-width: 250px;
+  text-align: right;
+}
+
+.table-actions-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.btn-table-checkin {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: var(--primary, #005a9e);
+  color: #ffffff;
+  border: 1px solid var(--primary, #005a9e);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-table-checkin:hover:not(:disabled) {
+  background: #004578;
+  border-color: #004578;
+  box-shadow: 0 2px 6px rgba(0, 90, 158, 0.25);
+}
+
+.btn-table-checkin:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-table-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-table-detail:hover {
+  background: #f8fafc;
+  color: #1e293b;
+  border-color: #94a3b8;
+}
+
+/* Nút HỦY: Thiết kế viền đỏ phân biệt rõ ràng với hành động chính */
+.btn-table-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #dc2626;
+  border: 1.5px solid #ef4444;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-table-cancel:hover {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #b91c1c;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.15);
+}
+
+.btn-table-checkout {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: #059669;
+  color: #ffffff;
+  border: 1px solid #059669;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-table-checkout:hover {
+  background: #047857;
+  border-color: #047857;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+}
+
+@media (max-width: 768px) {
+  .user-bookings-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .user-bookings-search-input {
+    width: 100%;
+  }
+}

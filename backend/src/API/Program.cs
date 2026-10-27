@@ -146,6 +146,10 @@ builder.Services.AddApplication();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.ICurrentUserService, HUIT_RoMan.API.Services.CurrentUserService>();
 
+// Tác vụ nền: tự động hủy đơn đã duyệt không nhận phòng đúng hạn (no-show).
+// Chạy độc lập với trình duyệt; an toàn khi chạy lặp lại hoặc chạy nhiều instance backend.
+builder.Services.AddHostedService<HUIT_RoMan.API.Services.BookingNoShowWatcher>();
+
 var app = builder.Build();
 
 // Docker/CI có thể bật Database__AutoMigrate=true để áp migration trước khi seed.
