@@ -14,6 +14,7 @@ import {
 } from "../Icon";
 import AdminEquipmentsModal from "./AdminEquipmentsModal";
 import { useConfirm } from "../../context/ConfirmContext";
+import { useAuth } from "../../auth/AuthContext";
 
 export interface RoomItem {
   id: number;
@@ -42,6 +43,8 @@ interface Props {
 }
 
 export default function AdminRoomsManagementTab({ onNotify }: Props) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
   const { confirm } = useConfirm();
   const [rooms, setRooms] = useState<RoomItem[]>([]);
   const [roomTypes, setRoomTypes] = useState<RoomTypeOption[]>([]);
@@ -322,13 +325,15 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
             <RefreshCwIcon size={14} />
             <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
           </button>
-          <button
-            type="button"
-            className="btn-toolbar-primary"
-            onClick={openCreateModal}
-          >
-            <PlusIcon size={16} /> + Thêm phòng mới
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn-toolbar-primary"
+              onClick={openCreateModal}
+            >
+              <PlusIcon size={16} /> + Thêm phòng mới
+            </button>
+          )}
         </div>
       </div>
 
@@ -461,25 +466,29 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                         {r.status === "Maintenance" ? "Mở phòng" : "Bảo trì"}
                       </button>
 
-                      {/* Edit */}
-                      <button
-                        type="button"
-                        className="btn-action-icon"
-                        title="Chỉnh sửa thông tin phòng"
-                        onClick={() => openEditModal(r)}
-                      >
-                        Sửa
-                      </button>
+                      {/* Edit (Admin only) */}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="btn-action-icon"
+                          title="Chỉnh sửa thông tin phòng"
+                          onClick={() => openEditModal(r)}
+                        >
+                          Sửa
+                        </button>
+                      )}
 
-                      {/* Delete */}
-                      <button
-                        type="button"
-                        className="btn-action-icon btn-action-delete"
-                        title="Xóa mềm phòng"
-                        onClick={() => handleDeleteRoom(r)}
-                      >
-                        <XIcon size={14} />
-                      </button>
+                      {/* Delete (Admin only) */}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="btn-action-icon btn-action-delete"
+                          title="Xóa mềm phòng"
+                          onClick={() => handleDeleteRoom(r)}
+                        >
+                          <XIcon size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

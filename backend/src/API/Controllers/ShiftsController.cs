@@ -53,8 +53,9 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(res);
         }
 
-        /// <summary>Tạo ca trực mới</summary>
+        /// <summary>Tạo ca trực mới (Chỉ Quản lý / Admin có quyền)</summary>
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Create([FromBody] CreateShiftDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -63,8 +64,9 @@ namespace HUIT_RoMan.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = res.Data?.Id }, res);
         }
 
-        /// <summary>Cập nhật thông tin ca trực</summary>
+        /// <summary>Cập nhật thông tin ca trực (Chỉ Quản lý / Admin có quyền)</summary>
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateShiftDto dto)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -73,8 +75,9 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(res);
         }
 
-        /// <summary>Xóa ca trực</summary>
+        /// <summary>Xóa ca trực (Chỉ Quản lý / Admin có quyền)</summary>
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int id)
         {
             var res = await _shiftService.DeleteShiftAsync(id);
@@ -94,8 +97,9 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(res);
         }
 
-        /// <summary>Gán hoặc thay đổi nhân viên trực cho ca</summary>
+        /// <summary>Gán hoặc thay đổi nhân viên trực cho ca (Chỉ Quản lý / Admin có quyền phân công)</summary>
         [HttpPost("{id}/assign")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> AssignEmployees(int id, [FromBody] AssignEmployeesRequest request)
         {
             var res = await _shiftService.AssignEmployeesAsync(id, request.EmployeeIds ?? new List<int>());

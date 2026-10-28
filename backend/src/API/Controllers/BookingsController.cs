@@ -180,6 +180,15 @@ namespace HUIT_RoMan.API.Controllers
         // ─────────────────────────────────────────────────────────────────
 
         /// <summary>Lấy danh sách tiết học (lọc theo loại phòng nếu cần)</summary>
+        /// <summary>Lấy lịch sử duyệt của một đơn đặt phòng</summary>
+        [HttpGet("{id}/approval-history")]
+        public async Task<IActionResult> GetApprovalHistory(int id)
+        {
+            var response = await _bookingService.GetApprovalHistoryAsync(id);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
         [HttpGet("periods")]
         [AllowAnonymous]
         public async Task<IActionResult> GetPeriods([FromQuery] int? roomTypeId = null)

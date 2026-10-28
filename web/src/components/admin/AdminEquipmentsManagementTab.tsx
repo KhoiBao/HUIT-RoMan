@@ -16,6 +16,7 @@ import {
   TrashIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
+import { useAuth } from "../../auth/AuthContext";
 
 export interface WarehouseEquipment {
   id: number;
@@ -278,6 +279,8 @@ interface Props {
 }
 
 export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
   const { confirm, alert } = useConfirm();
   const [subView, setSubView] = useState<"warehouse" | "byRoom" | "categories">("warehouse");
   const [equipments, setEquipments] = useState<WarehouseEquipment[]>([]);
@@ -743,7 +746,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
             <RefreshCwIcon size={14} />
             <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
           </button>
-          {subView === "warehouse" && (
+          {subView === "warehouse" && isAdmin && (
             <button
               type="button"
               className="btn-toolbar-primary"
@@ -1024,15 +1027,19 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                   <td className="font-semibold text-highlight">{c.name}</td>
                   <td className="text-sm text-muted">{c.description || "—"}</td>
                   <td style={{ textAlign: "right" }}>
-                    <button
-                      type="button"
-                      className="btn-shift-action btn-shift-delete"
-                      onClick={() => handleDeleteCategory(c)}
-                      title="Xóa danh mục thiết bị"
-                    >
-                      <TrashIcon size={12} />
-                      <span>Xóa</span>
-                    </button>
+                    {isAdmin ? (
+                      <button
+                        type="button"
+                        className="btn-shift-action btn-shift-delete"
+                        onClick={() => handleDeleteCategory(c)}
+                        title="Xóa danh mục thiết bị"
+                      >
+                        <TrashIcon size={12} />
+                        <span>Xóa</span>
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: "11.5px", color: "#64748b" }}>Mặc định</span>
+                    )}
                   </td>
                 </tr>
               ))}

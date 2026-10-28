@@ -8,6 +8,8 @@ using HUIT_RoMan.Application.Modules.Violation.Services;
 using HUIT_RoMan.Application.Modules.Shift.Services;
 using HUIT_RoMan.Application.Modules.Report.Services;
 using HUIT_RoMan.Application.Modules.Chat.Services;
+using HUIT_RoMan.Application.Modules.Notification.Services;
+using HUIT_RoMan.Application.Modules.Feedback.Services;
 
 namespace HUIT_RoMan.Application;
 
@@ -36,6 +38,8 @@ public static class DependencyInjection
         services.AddScoped<IBookingService, BookingService>();
         // Tác vụ nền tự động hủy đơn không nhận phòng đúng hạn (no-show)
         services.AddScoped<IBookingNoShowService, BookingNoShowService>();
+        // Tác vụ nền nhắc lịch sắp đến / sắp kết thúc
+        services.AddScoped<IBookingReminderService, BookingReminderService>();
 
         // Usage Module (Quản lý phiên sử dụng & Trả phòng)
         services.AddScoped<IUsageService, UsageService>();
@@ -51,6 +55,12 @@ public static class DependencyInjection
 
         // Chat Module (Chat realtime SignalR với nhân viên trực)
         services.AddScoped<IChatService, ChatService>();
+
+        // Notification Module (Notification Center)
+        services.AddScoped<INotificationService, NotificationService>();
+
+        // Feedback Module (Đánh giá sau khi sử dụng phòng)
+        services.AddScoped<IFeedbackService, FeedbackService>();
 
         return services;
     }

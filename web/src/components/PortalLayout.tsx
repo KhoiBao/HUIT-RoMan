@@ -24,6 +24,20 @@ function ScrollManager() {
 }
 
 export default function PortalLayout() {
+  const location = useLocation();
+  const isAdminRoute =
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/staff");
+
+  if (isAdminRoute) {
+    return (
+      <div className="admin-portal-root">
+        <ScrollManager />
+        <Outlet />
+      </div>
+    );
+  }
+
   return (
     <div className="portal-layout">
       <ScrollManager />
@@ -35,4 +49,3 @@ export default function PortalLayout() {
     </div>
   );
 }
-

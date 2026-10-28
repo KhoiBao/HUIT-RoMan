@@ -13,7 +13,11 @@ import {
   CopyIcon,
   HourglassIcon,
   RefreshCwIcon,
+  StarIcon,
+  HistoryIcon,
 } from "../components/Icon";
+import { FeedbackModal } from "../components/FeedbackModal";
+import { ApprovalHistoryModal } from "../components/ApprovalHistoryModal";
 import { useAuth } from "../auth/AuthContext";
 import { checkMyEligibility, type UserEligibility } from "../lib/violations";
 import {
@@ -295,6 +299,28 @@ export default function BookingPage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  // Feedback modal state
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [feedbackBookingId, setFeedbackBookingId] = useState<number | undefined>();
+  const [feedbackRoomName, setFeedbackRoomName] = useState<string | undefined>();
+
+  const openFeedbackModal = (bookingId: number, roomName?: string) => {
+    setFeedbackBookingId(bookingId);
+    setFeedbackRoomName(roomName);
+    setFeedbackModalOpen(true);
+  };
+
+  // Approval history modal state
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyBookingId, setHistoryBookingId] = useState<number | undefined>();
+  const [historyActivityName, setHistoryActivityName] = useState<string | undefined>();
+
+  const openApprovalHistoryModal = (bookingId: number, activityName?: string) => {
+    setHistoryBookingId(bookingId);
+    setHistoryActivityName(activityName);
+    setHistoryModalOpen(true);
+  };
 
 
   // 1. Initial Load: Periods
@@ -2503,6 +2529,30 @@ export default function BookingPage() {
                                         Chi tiết
                                       </button>
                                     )}
+
+                                    {/* Lịch sử duyệt đơn */}
+                                    <button
+                                      type="button"
+                                      className="btn-table-history"
+                                      onClick={() => openApprovalHistoryModal(item.booking.id, item.booking.activityName)}
+                                      title="Xem lịch sử duyệt đơn"
+                                    >
+                                      <HistoryIcon size={13} />
+                                      <span>Lịch sử</span>
+                                    </button>
+
+                                    {/* Đánh giá sau khi sử dụng */}
+                                    {(item.booking.checkedInAt || item.isInUse || item.detail.status === "Hoàn thành" || item.session?.status === "Đã kết thúc") && (
+                                      <button
+                                        type="button"
+                                        className="btn-table-feedback"
+                                        onClick={() => openFeedbackModal(item.booking.id, item.detail.roomName)}
+                                        title="Đánh giá chất lượng và trải nghiệm phòng"
+                                      >
+                                        <StarIcon size={13} />
+                                        <span>Đánh giá</span>
+                                      </button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -2625,6 +2675,36 @@ export default function BookingPage() {
                 </div>
 
                 <div className="modal-footer" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={() => {
+                      const bId = viewingDetailItem.booking.id;
+                      const act = viewingDetailItem.booking.activityName;
+                      setViewingDetailItem(null);
+                      openApprovalHistoryModal(bId, act);
+                    }}
+                  >
+                    <HistoryIcon size={13} />
+                    <span>Lịch sử duyệt</span>
+                  </button>
+
+                  {(viewingDetailItem.booking.checkedInAt || viewingDetailItem.isInUse || viewingDetailItem.detail.status === "Hoàn thành" || viewingDetailItem.session?.status === "Đã kết thúc") && (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        const bId = viewingDetailItem.booking.id;
+                        const rName = viewingDetailItem.detail.roomName;
+                        setViewingDetailItem(null);
+                        openFeedbackModal(bId, rName);
+                      }}
+                    >
+                      <StarIcon size={13} />
+                      <span>Đánh giá phòng</span>
+                    </button>
+                  )}
+
                   {viewingDetailItem.isCancelExpired && (
                     <span className="cancel-deadline-note">
                       Đã quá hạn hủy trực tuyến — liên hệ quản lý thư viện
@@ -3019,6 +3099,24 @@ export default function BookingPage() {
               </div>
             </div>
           )}
+          {/* FEEDBACK MODAL */}
+          <FeedbackModal
+            isOpen={feedbackModalOpen}
+            bookingId={feedbackBookingId}
+            roomName={feedbackRoomName}
+            onClose={() => setFeedbackModalOpen(false)}
+            onSuccess={() => {
+              loadMyBookings();
+            }}
+          />
+
+          {/* APPROVAL HISTORY AUDIT TRAIL MODAL */}
+          <ApprovalHistoryModal
+            isOpen={historyModalOpen}
+            bookingId={historyBookingId}
+            activityName={historyActivityName}
+            onClose={() => setHistoryModalOpen(false)}
+          />
         </div>
       </main>
     </div>

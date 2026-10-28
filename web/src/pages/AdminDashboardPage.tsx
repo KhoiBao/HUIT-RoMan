@@ -15,6 +15,7 @@ import AdminShiftsTab from "../components/admin/AdminShiftsTab";
 import AdminReportsTab from "../components/admin/AdminReportsTab";
 import AdminChatTab from "../components/admin/AdminChatTab";
 import AdminGlobalSearchModal from "../components/admin/AdminGlobalSearchModal";
+import NotificationCenter from "../components/NotificationCenter";
 import { checkInSession, checkOutSession } from "../lib/usage";
 import { useConfirm } from "../context/ConfirmContext";
 import {
@@ -43,9 +44,15 @@ import {
   CalendarIcon,
   XIcon,
   ChatIcon,
+  GridIcon,
+  SunIcon,
+  MoonIcon,
+  SidebarIcon,
+  LogOutIcon,
 } from "../components/Icon";
 
 export type AdminTabType =
+  | "overview"
   | "approvals"
   | "sessions"
   | "violations"
@@ -272,10 +279,15 @@ const TIME_SLOTS = [
 ];
 
 export default function AdminDashboardPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
   const { confirm } = useConfirm();
-  // Navigation active tab: approvals | rooms | roomTypes | departments | employees | users | timeline
-  const [activeTab, setActiveTab] = useState<AdminTabType>("approvals");
+  // Navigation active tab: overview | approvals | rooms | roomTypes | departments | employees | users | timeline
+  const [activeTab, setActiveTab] = useState<AdminTabType>("overview");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+
+
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [approvalRefreshKey, setApprovalRefreshKey] = useState<number>(0);
 
@@ -869,8 +881,127 @@ export default function AdminDashboardPage() {
     });
   }, [rooms, filterStatus, filterSearch]);
 
+  const tabConfigList = useMemo(() => {
+    const list = [
+    {
+      id: "overview" as AdminTabType,
+      label: "Tổng quan",
+      title: "Tổng quan điều hành & Báo cáo thống kê",
+      subtitle: "Báo cáo số liệu tổng quan, phân tích tần suất sử dụng và hiệu suất khai thác phòng học HUIT.",
+      icon: GridIcon,
+    },
+    {
+      id: "approvals" as AdminTabType,
+      label: "Duyệt đơn đặt",
+      title: "Duyệt đơn đăng ký mượn phòng",
+      subtitle: "Xét duyệt và phân luồng đơn đăng ký mượn phòng từ sinh viên, giảng viên.",
+      icon: ClipboardListIcon,
+      badge: pendingCount,
+      badgeVariant: "primary" as const,
+    },
+    {
+      id: "sessions" as AdminTabType,
+      label: "Phiên sử dụng",
+      title: "Phiên phòng & Khảo sát bàn giao",
+      subtitle: "Giám sát quy trình Check-in, khảo sát hiện trạng và hoàn tất trả phòng.",
+      icon: ShieldCheckIcon,
+    },
+    {
+      id: "rooms" as AdminTabType,
+      label: "Quản lý phòng",
+      title: "Quản lý phòng & Cơ sở vật chất",
+      subtitle: "Danh mục phòng học, hội trường và cấu hình trạng thái sử dụng.",
+      icon: DoorIcon,
+    },
+    {
+      id: "equipments" as AdminTabType,
+      label: "Thiết bị",
+      title: "Quản lý thiết bị & Tài sản",
+      subtitle: "Theo dõi tình trạng Smart TV, micro, hub kết nối và thiết bị hỗ trợ.",
+      icon: TvIcon,
+    },
+    {
+      id: "roomTypes" as AdminTabType,
+      label: "Loại phòng",
+      title: "Cấu hình phân loại phòng",
+      subtitle: "Quản lý nhóm phòng học nhóm, hội thảo và nghiên cứu chuyên sâu.",
+      icon: TagIcon,
+    },
+    {
+      id: "departments" as AdminTabType,
+      label: "Khoa / Đơn vị",
+      title: "Khoa & Đơn vị trực thuộc",
+      subtitle: "Cơ cấu tổ chức các khoa và phòng ban chức năng Trường ĐH Công Thương TP.HCM.",
+      icon: BankIcon,
+    },
+    {
+      id: "employees" as AdminTabType,
+      label: "Nhân sự",
+      title: "Quản lý Nhân sự & Thủ thư",
+      subtitle: "Danh sách cán bộ quản trị, thủ thư trực ca và phân quyền vận hành.",
+      icon: BriefcaseIcon,
+    },
+    {
+      id: "users" as AdminTabType,
+      label: "Người dùng",
+      title: "Tài khoản Sinh viên & Giảng viên",
+      subtitle: "Tra cứu hồ sơ, phân quyền và lịch sử hoạt động của người dùng hệ thống.",
+      icon: GraduationCapIcon,
+    },
+    {
+      id: "shifts" as AdminTabType,
+      label: "Ca trực & Sổ trực",
+      title: "Ca trực & Sổ trực nhật ký",
+      subtitle: "Phân bổ lịch trực ca, ghi nhận bàn giao và lưu trữ sự cố trong ca.",
+      icon: CalendarIcon,
+    },
+    {
+      id: "violations" as AdminTabType,
+      label: "Xử lý vi phạm",
+      title: "Xử lý vi phạm & Chế tài mượn",
+      subtitle: "Ghi nhận vi phạm quy chế, chế tài điểm rèn luyện và tạm khóa quyền mượn.",
+      icon: AlertTriangleIcon,
+      badge: pendingViolationsCount,
+      badgeVariant: "warning" as const,
+    },
+    {
+      id: "chat" as AdminTabType,
+      label: "Tin nhắn hỗ trợ",
+      title: "Trung tâm tin nhắn trực tuyến",
+      subtitle: "Hỗ trợ giải đáp thắc mắc và tiếp nhận yêu cầu từ người mượn phòng.",
+      icon: ChatIcon,
+    },
+    {
+      id: "timeline" as AdminTabType,
+      label: "Lịch tổng thể",
+      title: "Lịch tổng thể & Giám sát trực quan",
+      subtitle: "Ma trận biểu đồ thời gian thực trực quan từng phòng học và khung giờ.",
+      icon: ClockIcon,
+    },
+    ];
+
+    if (!isAdmin) {
+      const adminOnlyTabs = new Set(["roomTypes", "departments", "employees", "users"]);
+      return list.filter((t) => !adminOnlyTabs.has(t.id));
+    }
+
+    return list;
+  }, [pendingCount, pendingViolationsCount, isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin && ["roomTypes", "departments", "employees", "users"].includes(activeTab)) {
+      setActiveTab("overview");
+    }
+  }, [isAdmin, activeTab]);
+
+  const activeTabConfig = useMemo(() => {
+    return tabConfigList.find((t) => t.id === activeTab) || tabConfigList[0];
+  }, [tabConfigList, activeTab]);
+
+  const CurrentTabIcon = activeTabConfig.icon;
+
   return (
-    <div className="admin-page-root">
+    <div className={`admin-workspace-layout ${isDarkMode ? "dark-mode" : ""}`}>
       {/* Toast Alert */}
       {toastMsg && (
         <div className={`admin-toast-alert toast-${toastMsg.type || "success"}`}>
@@ -894,234 +1025,246 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      <main className="admin-main-container">
-        {/* ── 1. Top Super-header & Title Row ────────────────────────────── */}
-        <section className="admin-command-hero">
-          <div className="hero-eyebrow-row">
-            <span className="badge-command-center">TRUNG TÂM ĐIỀU HÀNH</span>
-            <span className="badge-command-sub">
-              {user?.role === "Employee"
-                ? `Nhân sự quản trị: ${user?.departmentName || "Đơn vị được phân công"}`
-                : "Khu vực kiểm soát quyền Quản trị viên"}
-            </span>
+      {/* ── Left Sidebar Modern ───────────────────────────────── */}
+      <aside className={`admin-sidebar-modern ${sidebarCollapsed ? "is-collapsed" : ""}`}>
+        <div className="admin-sidebar-top-section">
+          {/* Brand header */}
+          <div className="admin-sidebar-brand">
+            <div className="admin-brand-icon-box">R</div>
+            {!sidebarCollapsed && (
+              <div className="admin-brand-info">
+                <span className="admin-brand-title">RoMan</span>
+                <span className="admin-brand-sub">HỆ THỐNG PHÒNG HUIT</span>
+              </div>
+            )}
           </div>
 
-          <div className="hero-main-flex">
-            <div className="hero-headings">
-              <h1 className="admin-hero-title">
-                {user?.role === "Employee"
-                  ? `Bảng điều khiển Nhân sự — ${user?.departmentName || "Đơn vị HUIT"}`
-                  : "Bảng điều khiển Quản lý phòng Thư viện HUIT (Admin)"}
-              </h1>
-              <p className="admin-hero-subtitle">
-                {user?.role === "Employee"
-                  ? `Bạn đang quản lý dữ liệu và xét duyệt phòng thuộc phạm vi: ${user?.departmentName || "Đơn vị của bạn"}.`
-                  : "Giám sát thời gian thực, điều phối nhận phòng và xử lý sự cố toàn hệ thống."}
-              </p>
-            </div>
-
-            <div className="hero-toolbar-actions">
-              {/* Live sync pill */}
-              <div className="live-sync-pill" title="Tự động đồng bộ thời gian thực">
-                <span className="live-pulse-dot" />
-                <span className="live-sync-label">
-                  ĐỒNG BỘ TRỰC TIẾP: <strong>{liveClock}</strong>
+          {!sidebarCollapsed && (
+            <div style={{ padding: "0 14px 6px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                <span className="admin-sidebar-section-title" style={{ padding: 0 }}>WORKSPACE</span>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 800,
+                    letterSpacing: "0.4px",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    background: isAdmin ? "#DBEAFE" : "#FEF3C7",
+                    color: isAdmin ? "#1D4ED8" : "#B45309",
+                  }}
+                >
+                  {isAdmin ? "QUẢN LÝ" : "NHÂN VIÊN"}
                 </span>
               </div>
+              <div style={{ fontSize: "11px", color: "#8C8275", fontWeight: 600, paddingLeft: "2px" }}>
+                {user?.departmentName || (isAdmin ? "Ban Quản lý HUIT" : "Đơn vị Thư viện")}
+              </div>
+            </div>
+          )}
 
-              {/* Global Search button */}
+          {/* Nav Items */}
+          <nav className="admin-sidebar-nav-list">
+            {tabConfigList.map((t) => {
+              const IconComp = t.icon;
+              const isActive = activeTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`admin-nav-item-btn ${isActive ? "is-active" : ""}`}
+                  onClick={() => setActiveTab(t.id)}
+                  title={sidebarCollapsed ? t.label : undefined}
+                >
+                  <IconComp size={18} className="admin-nav-icon" />
+                  {!sidebarCollapsed && (
+                    <>
+                      <span className="admin-nav-label">{t.label}</span>
+                      {t.badge != null && t.badge > 0 && (
+                        <span
+                          className={`admin-nav-badge ${
+                            t.badgeVariant === "warning" ? "badge-warning" : ""
+                          }`}
+                        >
+                          {t.badge}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Sidebar Footer User Capsule */}
+        <div className="admin-sidebar-footer">
+          {!sidebarCollapsed ? (
+            <div className="admin-user-capsule">
+              <div className="admin-user-avatar-circle">
+                {user?.fullName ? user.fullName[0].toUpperCase() : "A"}
+              </div>
+              <div className="admin-user-details">
+                <span className="admin-user-name" title={user?.fullName || "Admin"}>
+                  {user?.fullName || user?.cardCode || "Admin RoMan"}
+                </span>
+                <span className="admin-user-sub" title={user?.departmentName || formatRole(user?.role || "Admin")}>
+                  {isAdmin ? "Quản lý đơn vị" : `Nhân viên • ${user?.departmentName || "Thư viện"}`}
+                </span>
+              </div>
               <button
                 type="button"
-                className="btn-toolbar-search-global"
-                onClick={() => setShowGlobalSearchModal(true)}
-                title="Tra cứu nhanh phòng, người mượn, phiếu mượn, biên bản vi phạm (Phím tắt: Ctrl+K)"
+                className="admin-user-action-btn"
+                title="Đăng xuất khỏi hệ thống"
+                onClick={() => logout()}
               >
-                <SearchIcon size={16} />
-                <span>Tra cứu nhanh</span>
-                <kbd className="kbd-shortcut-chip">Ctrl+K</kbd>
-              </button>
-
-              {/* Advanced Filter button */}
-              <button
-                type="button"
-                className={`btn-toolbar-filter ${
-                  filterStatus !== "ALL" || filterSearch ? "active-filter" : ""
-                }`}
-                onClick={() => setShowFilterModal(true)}
-              >
-                <FilterIcon size={16} />
-                <span>Bộ lọc nâng cao</span>
-                {(filterStatus !== "ALL" || filterSearch) && (
-                  <span className="filter-count-badge" />
-                )}
-              </button>
-
-              {/* Manual Booking button */}
-              <button
-                type="button"
-                className="btn-toolbar-primary"
-                onClick={() => setShowManualModal(true)}
-              >
-                <PlusIcon size={16} />
-                <span>+ Khởi tạo đặt phòng thủ công</span>
+                <LogOutIcon size={16} />
               </button>
             </div>
+          ) : (
+            <button
+              type="button"
+              className="admin-user-action-btn"
+              style={{ width: "100%", justifyContent: "center" }}
+              title="Đăng xuất khỏi hệ thống"
+              onClick={() => logout()}
+            >
+              <LogOutIcon size={18} />
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* ── Main Workspace Body ───────────────────────────────── */}
+      <div className="admin-main-wrapper">
+        {/* Topbar Modern */}
+        <header className="admin-topbar-modern">
+          <div className="admin-topbar-left">
+            <button
+              type="button"
+              className="admin-sidebar-toggle-btn"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              title={sidebarCollapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+            >
+              <SidebarIcon size={18} />
+            </button>
+
+            {/* Pill Search Button (Ctrl+K) */}
+            <button
+              type="button"
+              className="admin-search-pill-btn"
+              onClick={() => setShowGlobalSearchModal(true)}
+              title="Tìm kiếm nhanh phòng, đơn đặt, người dùng (Ctrl+K)"
+            >
+              <SearchIcon size={16} />
+              <span className="admin-search-placeholder-text">
+                Tìm phòng, đơn mượn, sinh viên, cán bộ... (Ctrl+K)
+              </span>
+              <kbd className="admin-search-shortcut-kbd">Ctrl+K</kbd>
+            </button>
           </div>
-        </section>
 
-        {/* ── Admin Navigation Tabs Bar ──────────────────────────────────── */}
-        <nav className="admin-nav-tabs-bar">
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "approvals" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("approvals")}
-          >
-            <ClipboardListIcon size={18} />
-            <span>Duyệt đơn đăng ký</span>
-            {pendingCount > 0 && (
-              <span className="tab-badge-pulse">{pendingCount}</span>
-            )}
-          </button>
+          <div className="admin-topbar-right">
+            {/* Notification Center */}
+            <NotificationCenter />
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "sessions" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("sessions")}
-          >
-            <ShieldCheckIcon size={18} />
-            <span>Sử dụng &amp; Trả phòng</span>
-          </button>
+            {/* Theme Toggle (Sun/Moon) */}
+            <button
+              type="button"
+              className="admin-topbar-icon-action"
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              title={isDarkMode ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}
+            >
+              {isDarkMode ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+            </button>
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "violations" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("violations")}
-          >
-            <AlertTriangleIcon size={18} />
-            <span>Xử lý vi phạm</span>
-            {pendingViolationsCount > 0 && (
-              <span className="tab-badge-pulse badge-warning">{pendingViolationsCount}</span>
-            )}
-          </button>
+            {/* User Circle Avatar */}
+            <div
+              className="admin-topbar-user-avatar"
+              title={`${user?.fullName || "Admin"} (${formatRole(user?.role || "Admin")})`}
+              onClick={() => setActiveTab("users")}
+            >
+              {user?.fullName ? user.fullName[0].toUpperCase() : "N"}
+            </div>
+          </div>
+        </header>
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "shifts" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("shifts")}
-          >
-            <CalendarIcon size={18} />
-            <span>Lịch trực nhân viên</span>
-          </button>
+        {/* Content Body */}
+        <div className="admin-workspace-content">
+          {/* Breadcrumb */}
+          <nav className="admin-breadcrumb-bar" aria-label="Breadcrumb">
+            <span className="admin-breadcrumb-root">Không gian làm việc</span>
+            <span className="admin-breadcrumb-separator">&gt;</span>
+            <span className="admin-breadcrumb-current">{activeTabConfig.label}</span>
+          </nav>
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "reports" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("reports")}
-          >
-            <BarChartIcon size={18} />
-            <span>Báo cáo &amp; Thống kê</span>
-          </button>
+          {/* Page Header Row */}
+          <div className="admin-page-hero-row">
+            <div className="admin-page-hero-headings">
+              <div className="admin-hero-icon-square">
+                <CurrentTabIcon size={22} />
+              </div>
+              <div className="admin-hero-text-wrap">
+                <h1 className="admin-hero-main-title">{activeTabConfig.title}</h1>
+                <p className="admin-hero-sub-desc">{activeTabConfig.subtitle}</p>
+              </div>
+            </div>
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "chat" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("chat")}
-          >
-            <ChatIcon size={18} />
-            <span>Hỗ trợ trực tuyến</span>
-          </button>
+            <div className="admin-hero-actions-group">
+              <button
+                type="button"
+                className="btn-admin-pill-primary"
+                onClick={() => setShowManualModal(true)}
+              >
+                <PlusIcon size={15} />
+                <span>+ Đặt phòng nhanh</span>
+              </button>
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "rooms" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("rooms")}
-          >
-            <DoorIcon size={18} />
-            <span>Quản lý phòng</span>
-          </button>
+              {activeTab !== "timeline" ? (
+                <button
+                  type="button"
+                  className="btn-admin-pill-secondary"
+                  onClick={() => setActiveTab("timeline")}
+                >
+                  <span>Xem lịch phòng →</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={`btn-admin-pill-secondary ${
+                    filterStatus !== "ALL" || filterSearch ? "active-filter" : ""
+                  }`}
+                  onClick={() => setShowFilterModal(true)}
+                  title="Mở bộ lọc nâng cao"
+                >
+                  <FilterIcon size={14} />
+                  <span>Bộ lọc nâng cao</span>
+                </button>
+              )}
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "equipments" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("equipments")}
-          >
-            <TvIcon size={18} />
-            <span>Quản lý thiết bị</span>
-          </button>
+              {activeTab !== "overview" && activeTab !== "reports" && (
+                <button
+                  type="button"
+                  className="btn-admin-pill-secondary"
+                  onClick={() => setActiveTab("overview")}
+                >
+                  <BarChartIcon size={14} />
+                  <span>Xem báo cáo & tổng quan</span>
+                </button>
+              )}
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "roomTypes" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("roomTypes")}
-          >
-            <TagIcon size={18} />
-            <span>Loại phòng</span>
-          </button>
+              <div className="live-sync-pill" style={{ marginLeft: "4px" }} title="Thời gian thực">
+                <span className="live-pulse-dot" />
+                <span className="live-sync-label">{liveClock}</span>
+              </div>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "departments" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("departments")}
-          >
-            <BankIcon size={18} />
-            <span>Quản lý đơn vị</span>
-          </button>
+          {/* ── Active Tab Contents ────────────────────────── */}
+          {(activeTab === "overview" || activeTab === "reports") && (
+          <AdminReportsTab onNotify={showToast} />
+        )}
 
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "employees" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("employees")}
-          >
-            <BriefcaseIcon size={18} />
-            <span>Nhân sự / Thủ thư</span>
-          </button>
-
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "users" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("users")}
-          >
-            <GraduationCapIcon size={18} />
-            <span>Sinh viên &amp; Giảng viên</span>
-          </button>
-
-          <button
-            type="button"
-            className={`admin-nav-tab-item ${
-              activeTab === "timeline" ? "active-tab" : ""
-            }`}
-            onClick={() => setActiveTab("timeline")}
-          >
-            <ClockIcon size={18} />
-            <span>Giám sát trực quan (Live Timeline)</span>
-          </button>
-        </nav>
-
-        {/* ── Tab Views ─────────────────────────────────────────────────── */}
         {activeTab === "approvals" && (
           <AdminBookingApprovalTab key={approvalRefreshKey} onNotify={showToast} />
         )}
@@ -1138,10 +1281,6 @@ export default function AdminDashboardPage() {
           <AdminShiftsTab onNotify={showToast} />
         )}
 
-        {activeTab === "reports" && (
-          <AdminReportsTab onNotify={showToast} />
-        )}
-
         {activeTab === "chat" && (
           <AdminChatTab onNotify={showToast} />
         )}
@@ -1154,19 +1293,19 @@ export default function AdminDashboardPage() {
           <AdminEquipmentsManagementTab onNotify={showToast} />
         )}
 
-        {activeTab === "roomTypes" && (
+        {activeTab === "roomTypes" && isAdmin && (
           <AdminRoomTypesTab onNotify={showToast} />
         )}
 
-        {activeTab === "departments" && (
+        {activeTab === "departments" && isAdmin && (
           <AdminDepartmentsTab onNotify={showToast} />
         )}
 
-        {activeTab === "employees" && (
+        {activeTab === "employees" && isAdmin && (
           <AdminEmployeesTab onNotify={showToast} />
         )}
 
-        {activeTab === "users" && (
+        {activeTab === "users" && isAdmin && (
           <AdminUsersTab onNotify={showToast} />
         )}
 
@@ -1807,7 +1946,29 @@ export default function AdminDashboardPage() {
         </section>
       </>
     )}
-  </main>
+        </div>
+      </div>
+
+      {/* Floating Chat Trigger on bottom-right */}
+      <div className="admin-floating-chat-wrap">
+        {activeTab === "overview" && (
+          <button
+            type="button"
+            className="btn-floating-chat-pill"
+            onClick={() => setActiveTab("chat")}
+          >
+            + Chat mới
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn-floating-chat-bubble"
+          onClick={() => setActiveTab("chat")}
+          title="Mở tin nhắn trực tuyến"
+        >
+          <ChatIcon size={18} />
+        </button>
+      </div>
 
       {/* ── Modal 1: Khởi tạo đặt phòng thủ công (+ Đặt phòng) ──────────── */}
       {showManualModal && (

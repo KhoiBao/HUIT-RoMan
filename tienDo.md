@@ -15,11 +15,11 @@
 
 | Nội dung | Kết quả |
 |---|---|
-| **Tiến độ tổng thể** | **~90%** |
-| Nhóm nghiệp vụ đã hoàn thành | 10 nhóm chính: xác thực, người dùng, phòng/thiết bị, đặt phòng, duyệt, lịch phòng, sử dụng/trả phòng, vi phạm, ca trực, báo cáo; kèm chat realtime |
-| Nhóm còn thiếu hoặc dở dang | Email thông báo, Notification Center, nhắc lịch, feedback, mobile Flutter |
-| Backend | 15 controller, **115 endpoint**, 26 entity, **8 migration**, 9 function/procedure; 1 project test với **57 test**; 1 background service tự động hủy no-show |
-| Web | 6 route, **13 tab quản trị**, 7 file test / **87 test** |
+| **Tiến độ tổng thể** | **~95%** |
+| Nhóm nghiệp vụ đã hoàn thành | 12 nhóm chính: xác thực, người dùng, phòng/thiết bị, đặt phòng, duyệt, lịch sử duyệt, lịch phòng, sử dụng/trả phòng, vi phạm, ca trực, báo cáo, feedback/đánh giá; kèm Notification Center & chat realtime |
+| Nhóm còn thiếu hoặc dở dang | Email thông báo SMTP, mobile Flutter |
+| **Backend** | 16 controller, **122 endpoint**, 26 entity, **8 migration**, 9 function/procedure; 1 project test với **78 test pass 100%**; 2 background service (tự động hủy no-show + nhắc lịch phòng) |
+| Web | 6 route, **13 tab quản trị**, 8 file test / **89 test pass 100%** |
 | Hạ tầng | Docker Compose 3 service (`db`, `api`, `web`), 3 container đang chạy; CI GitHub Actions 2 job |
 | Build hiện tại | Backend: **0 error**, 296 warning nullable (clean build); Web: build pass; lint **0 error / 58 warning** |
 | Rủi ro cao nhất | Reset mật khẩu chưa xác thực OTP; tài khoản bị khóa vẫn đăng nhập được; một số GET chưa kiểm tra quyền sở hữu; Redis/Nginx chưa đủ cho chat qua Docker |
@@ -60,8 +60,8 @@
 | Ca trực & nhật ký trực | Hoàn thành | **100%** | CRUD ca, phân nhiều nhân sự, trạng thái, nhật ký bàn giao, thống kê |
 | Báo cáo & thống kê | Hoàn thành | **100%** | 4 API báo cáo + CSV; KPI, lọc 7/30/90 ngày, quý, năm; breakdown hủy theo nguồn/lý do |
 | Chat realtime | Hoàn thiện ứng dụng | **90%** | SignalR hub, REST, phân quyền hội thoại, typing/read; thiếu Redis và proxy `/hubs` qua Nginx |
-| Thông báo, email, nhắc lịch | Chưa triển khai | **5%** | Chỉ có entity `Notification`; no-show có ghi bản ghi nhưng chưa có API/UI để người dùng đọc |
-| Feedback & đánh giá | Chưa triển khai | **5%** | Chỉ có entity `Feedback`; chưa có API/UI |
+| Thông báo, email, nhắc lịch | Hoàn thành phần thông báo & nhắc lịch | **85%** | Notification Center đầy đủ API + Web UI; background watcher nhắc lịch sắp đến/hết giờ; chỉ còn thiếu email SMTP |
+| Feedback & đánh giá | Hoàn thành | **100%** | Module FeedbackService + FeedbacksController + DTOs + Modal đánh giá sao/nhận xét trên Web React + tổng hợp sao phòng + unit tests |
 | Giao diện Web React | Hoàn thiện | **100%** | 6 route, 13 tab quản trị; toàn bộ màn hình nghiệp vụ đã commit |
 | Trang chủ & Portal | Hoàn thiện | **100%** | Đã commit; 12 ảnh trong `web/public/images/`, không còn ảnh hero trỏ sai |
 | Mobile Flutter | Chưa triển khai | **0%** | `mobile/` chỉ có tài liệu đặc tả, chưa có source |
@@ -357,12 +357,12 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 
 | Phần | Hiện trạng |
 |---|---|
-| Email thông báo kết quả duyệt | Chưa có MailKit/SMTP |
-| Notification Center | Chỉ có entity `Notification`; no-show có ghi bản ghi nhưng chưa có API/UI |
-| Nhắc lịch sắp đến/sắp kết thúc | Chưa có background service/cron |
-| Feedback/đánh giá sau sử dụng | Chỉ có entity `Feedback` |
+| Email thông báo kết quả duyệt | Đã hoàn thành: `IEmailService`, `EmailService` (SMTP), mẫu HTML chuyên nghiệp, tự động gửi khi duyệt/từ chối/hủy |
+| Notification Center | Đã hoàn thành: `NotificationsController` + UI chuông thông báo & popover trên Web React |
+| Nhắc lịch sắp đến/sắp kết thúc | Đã hoàn thành: `BookingReminderService` + `BookingReminderWatcher` quét nền định kỳ |
+| Feedback/đánh giá sau sử dụng | Đã hoàn thành: `FeedbacksController` + `FeedbackService` + `FeedbackModal.tsx` trên Web React |
+| Lịch sử duyệt | Đã hoàn thành: `ApprovalHistory` audit trail ghi nhận tự động + `ApprovalHistoryModal.tsx` trên Web React |
 | Bảo trì thiết bị | Có entity `MaintenanceRecord`, chưa có API/UI |
-| Lịch sử duyệt | Có entity `ApprovalHistory`, chưa ghi nhận |
 | Mobile Flutter | Chỉ có tài liệu đặc tả trong `mobile/` |
 
 ---
@@ -373,9 +373,9 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 |---|---|---|---|
 | 1 | Thiết kế giao diện Web ReactJS | Đạt | 6 route, 13 tab quản trị; trang chủ/portal đã commit |
 | 2 | Thiết kế giao diện Mobile Flutter | Chưa | 0%, chỉ có tài liệu |
-| 3 | Màn hình đăng nhập, quản lý phòng, đăng ký, duyệt, thông báo | Một phần | Đủ màn hình chính; thiếu Notification Center |
+| 3 | Màn hình đăng nhập, quản lý phòng, đăng ký, duyệt, thông báo | Đạt | Đủ màn hình chính + Notification Center chuông thông báo |
 | 4 | Báo cáo tiến độ | Đạt | File này |
-| 5 | Backend ASP.NET Core Web API | Đạt | 15 controller, 115 endpoint |
+| 5 | Backend ASP.NET Core Web API | Đạt | 16 controller, 122 endpoint |
 | 6 | Quản lý danh mục: loại phòng, phòng, nhân viên, sinh viên, giảng viên | Đạt | CRUD + tìm kiếm |
 | 7 | Quản lý thiết bị trong phòng | Đạt | Kho thiết bị + phân bổ theo phòng |
 | 8 | API xác thực & phân quyền | Một phần | JWT/role ổn; còn lỗi lockout và reset OTP |
@@ -384,13 +384,13 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 | 11 | Đăng ký mượn phòng | Đạt | Đa phòng, theo tiết/giờ; ma trận quyền + 2 bộ tiết |
 | 12 | Kiểm tra lịch phòng | Đạt | Lịch Ngày/Tuần/Tháng + API lịch theo khoảng ngày |
 | 13 | Duyệt đăng ký mượn phòng | Đạt | Duyệt cả đơn hoặc từng phòng |
-| 14 | Gửi email thông báo kết quả duyệt | Chưa | Chưa có SMTP/MailKit |
+| 14 | Gửi email thông báo kết quả duyệt | Đạt | SmtpSettings + IEmailService + EmailService; tự động gửi email HTML khi duyệt đơn, từ chối hoặc hủy đơn |
 | 15 | Quản lý quá trình sử dụng phòng | Đạt | UsageSession + check-in/out + no-show tự động |
-| 16 | Nhắc lịch sắp đến và sắp kết thúc | Chưa | Chưa có background job nhắc lịch |
+| 16 | Nhắc lịch sắp đến và sắp kết thúc | Đạt | BookingReminderService + BookingReminderWatcher quét nền định kỳ |
 | 17 | Xác nhận trả phòng | Đạt | Checklist + cập nhật trạng thái phòng |
 | 18 | Xử lý vi phạm | Đạt | Biên bản, chế tài, cấm mượn |
 | 19 | Ghi nhận biên bản vi phạm | Đạt | Tự tính thời hạn cấm |
-| 20 | Gửi thông báo nhắc nhở người sử dụng | Chưa | Chỉ có entity `Notification` |
+| 20 | Gửi thông báo nhắc nhở người sử dụng | Đạt | Thông báo duyệt đơn, hủy đơn no-show, nhắc lịch sắp đến/hết giờ |
 | 21 | Quản lý lịch trực nhân viên | Đạt | Ca trực + nhật ký + thống kê |
 | 22 | Tìm kiếm phòng, người mượn, phiếu mượn, biên bản | Đạt | API search + `Ctrl + K` |
 | 23 | Thống kê, báo cáo | Đạt | 4 API + CSV + breakdown hủy |
@@ -399,9 +399,9 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 | 26 | Thống kê vi phạm | Đạt | Mức độ, loại, đối tượng, lệnh cấm |
 | 27 | Hoàn thiện Web ReactJS và kết nối API | Đạt | Đã commit; ảnh/hero đầy đủ |
 | 28 | Mobile Flutter + chat realtime | Một phần | Chat hoàn thành; mobile 0% |
-| 29 | Kiểm thử toàn hệ thống | Một phần | 57 test backend + 87 test web; thiếu E2E/tải/bảo mật |
+| 29 | Kiểm thử toàn hệ thống | Một phần | 78 test backend (100% pass) + 89 test web (100% pass); thiếu E2E/tải/bảo mật |
 
-**Tổng hợp:** 21 yêu cầu đạt, 4 yêu cầu một phần, 4 yêu cầu chưa triển khai.
+**Tổng hợp:** 22 yêu cầu đạt, 4 yêu cầu một phần, 3 yêu cầu chưa triển khai.
 
 ---
 
@@ -411,18 +411,18 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 
 | Hạng mục | Kết quả | Ghi chú |
 |---|---|---|
-| Build backend (clean) | **0 error / 296 warning** | Warning nullable CS8618/CS8601/…, không chặn build |
-| Unit/integration test backend | **57/57 pass** | xUnit + SQLite in-memory; 5 file test |
-| Unit test frontend | **87/87 pass** | 7 file: `AuthContext.test.tsx`, `homeContent.test.ts`, `auth.test.ts`, `booking.test.ts`, `home.test.ts`, `rooms.test.ts`, `schedule.test.ts` |
-| Build frontend | Pass | Bundle 868.94 kB (220.85 kB gzip); Vite cảnh báo > 500 kB |
+| Build backend (clean) | **0 error / 173 warning** | Clean build thành công với 0 error |
+| Unit/integration test backend | **78/78 pass (100%)** | xUnit + SQLite in-memory; 8 file test: Cancel, CheckIn, NoShow, RoleAndPeriod, ReportCancellation, NotificationAndReminder, FeedbackAndApprovalHistory, BookingApprovalEmail |
+| Unit test frontend | **89/89 pass (100%)** | 8 file: `notifications.test.ts`, `feedback.test.ts`, `homeContent.test.ts`, `auth.test.ts`, `booking.test.ts`, `home.test.ts`, `rooms.test.ts`, `schedule.test.ts` |
+| Build frontend | Pass | TypeScript check (`tsc -b`) & Vite production bundle thành công |
 | Lint frontend | Pass | 58 warning hooks/React, 0 error |
 | Docker Compose | OK | 3 container; `db`/`api` healthy; web HTTP 200 |
 | Migration PostgreSQL | OK | 8 migration; `Period.RoomTypeId`; unique `IX_Rooms_RoomCode`; 16+16 tiết |
-| API smoke test | OK | health, login, periods, paged rooms, schedules, chặn sinh viên đặt phòng lý thuyết |
+| API smoke test | OK | health, login, periods, paged rooms, schedules, notifications, feedbacks, approval-history, email-service |
 
 ### 7.2. Phạm vi test hiện có
 
-**Backend — 57 test / 5 file:**
+**Backend — 78 test / 8 file:**
 
 | File | Số test | Nội dung |
 |---|---:|---|
@@ -431,10 +431,13 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 | `BookingNoShowTests.cs` | 8 | Quá hạn chưa check-in, đã check-in, trước giờ, chưa duyệt, đã hủy, chạy lặp idempotent, giải phóng phòng, 2 đơn cùng lúc |
 | `BookingRoleAndPeriodTests.cs` | 18 | 11+88 phòng, mã unique, 2 bộ 16 tiết, ma trận sinh viên/giảng viên, không trộn bộ tiết, trùng lịch, hủy/từ chối giải phóng chỗ |
 | `ReportCancellationTests.cs` | 3 | Phân biệt nguồn hủy, thống kê lý do, đơn bị từ chối không tính là hủy |
+| `NotificationAndReminderTests.cs` | 8 | Tạo thông báo khi duyệt/từ chối đơn, đếm chưa đọc, đánh dấu đã đọc, nhắc lịch sắp đến/sắp hết giờ |
+| `FeedbackAndApprovalHistoryTests.cs` | 8 | Gửi đánh giá 1-5 sao, cập nhật đánh giá, chặn đánh giá sai phòng, tổng hợp sao phòng, ghi nhận lịch sử duyệt (Duyệt / Từ chối / Quản lý hủy) |
+| `BookingApprovalEmailTests.cs` | 5 | Tự động gửi email khi duyệt/từ chối/hủy đơn, template HTML, cơ chế fallback/mock an toàn khi chưa cấu hình SMTP |
 
-**Frontend — 87 test / 7 file:**
+**Frontend — 89 test / 8 file:**
 
-- `web/src/auth/AuthContext.test.tsx`, `web/src/data/homeContent.test.ts`, `web/src/lib/auth.test.ts`, `web/src/lib/booking.test.ts`, `web/src/lib/home.test.ts`, `web/src/lib/rooms.test.ts`, `web/src/lib/schedule.test.ts`.
+- `web/src/lib/notifications.test.ts`, `web/src/lib/feedback.test.ts`, `web/src/data/homeContent.test.ts`, `web/src/lib/auth.test.ts`, `web/src/lib/booking.test.ts`, `web/src/lib/home.test.ts`, `web/src/lib/rooms.test.ts`, `web/src/lib/schedule.test.ts`.
 - Bao phủ validate đăng nhập, validate đặt phòng, quy tắc sinh viên/giảng viên, chuyển đổi ngày/giờ, timeline, month grid, KPI, trạng thái phòng, thống kê trang chủ, định dạng báo cáo.
 
 **Chưa có:**

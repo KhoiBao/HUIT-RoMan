@@ -28,6 +28,18 @@ namespace HUIT_RoMan.Tests
                 });
             }
 
+            if (!db.Employees.Any(e => e.UserId == AdminId))
+            {
+                db.Employees.Add(new Employee
+                {
+                    Id = 1,
+                    UserId = AdminId,
+                    Code = "NV001",
+                    Position = "Quản trị viên",
+                    Status = "Hoạt động"
+                });
+            }
+
             if (!db.Users.Any(u => u.Id == StudentAId))
             {
                 db.Users.Add(new User

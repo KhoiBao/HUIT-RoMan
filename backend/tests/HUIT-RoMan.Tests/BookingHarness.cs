@@ -1,5 +1,7 @@
 using System;
 using HUIT_RoMan.Application.Modules.Booking.Services;
+using HUIT_RoMan.Application.Modules.Feedback.Services;
+using HUIT_RoMan.Application.Modules.Notification.Services;
 using HUIT_RoMan.Application.Modules.Report.Services;
 using HUIT_RoMan.Application.Modules.Usage.Services;
 using HUIT_RoMan.Infrastructure.Persistence;
@@ -24,6 +26,7 @@ namespace HUIT_RoMan.Tests
         public UsageService UsageService { get; }
         public BookingService BookingService { get; }
         public BookingNoShowService NoShowService { get; }
+        public Mock<IEmailService> EmailMock { get; } = new();
 
         public BookingHarness()
         {
@@ -35,19 +38,35 @@ namespace HUIT_RoMan.Tests
             var loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<BookingNoShowService>>();
 
             UsageService = new UsageService(UoW, CurrentUser, spMock.Object);
-            BookingService = new BookingService(UoW, CurrentUser, UsageService);
+            BookingService = new BookingService(UoW, CurrentUser, UsageService, EmailMock.Object);
             NoShowService = new BookingNoShowService(UoW, loggerMock.Object);
         }
 
         public ReportService CreateReportService()
         {
             var spMock = new Mock<IStoredProcedureService>();
-            // UserManager<User> có ctor 10 tham số; Moq không proxy được khi truyền null
-            // → tự dựng instance thật (các service phía sau không được dùng trong test này).
             var userStoreMock = new Mock<IUserStore<User>>();
             var userManager = new UserManager<User>(
                 userStoreMock.Object, null!, null!, null!, null!, null!, null!, null!, null!);
             return new ReportService(UoW, userManager, spMock.Object, CurrentUser);
+        }
+
+        public NotificationService CreateNotificationService()
+        {
+            var loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<NotificationService>>();
+            return new NotificationService(UoW, CurrentUser, loggerMock.Object);
+        }
+
+        public BookingReminderService CreateReminderService()
+        {
+            var loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<BookingReminderService>>();
+            return new BookingReminderService(UoW, loggerMock.Object);
+        }
+
+        public FeedbackService CreateFeedbackService()
+        {
+            var loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<FeedbackService>>();
+            return new FeedbackService(UoW, CurrentUser, loggerMock.Object);
         }
 
         public void Dispose()

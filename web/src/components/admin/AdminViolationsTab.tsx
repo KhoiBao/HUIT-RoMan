@@ -34,6 +34,7 @@ import {
   TagIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
+import { useAuth } from "../../auth/AuthContext";
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
@@ -61,6 +62,8 @@ export default function AdminViolationsTab({
   initialSessionForViolation,
   onClearInitialSession,
 }: Props) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
   const { confirm } = useConfirm();
   // Navigation Sub-tabs: 'records' | 'restrictions' | 'types'
   const [activeSubTab, setActiveSubTab] = useState<
@@ -1001,14 +1004,16 @@ export default function AdminViolationsTab({
                           >
                             Xử lý
                           </button>
-                          <button
-                            type="button"
-                            className="btn-table-action btn-action-delete"
-                            onClick={() => handleDeleteViolation(v)}
-                            title="Xóa biên bản này"
-                          >
-                            <XIcon size={14} />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              className="btn-table-action btn-action-delete"
+                              onClick={() => handleDeleteViolation(v)}
+                              title="Xóa biên bản này"
+                            >
+                              <XIcon size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1220,13 +1225,16 @@ export default function AdminViolationsTab({
                         >
                           Sửa
                         </button>
-                        <button
-                          type="button"
-                          className="btn-table-action btn-action-delete"
-                          onClick={() => handleDeleteType(vt)}
-                        >
-                          <XIcon size={14} />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className="btn-table-action btn-action-delete"
+                            onClick={() => handleDeleteType(vt)}
+                            title="Xóa quy chế vi phạm"
+                          >
+                            <XIcon size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

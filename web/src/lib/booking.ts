@@ -1009,3 +1009,23 @@ export async function checkInBookingApi(bookingId: number): Promise<BookingRespo
   const res = await api.post(`/api/Bookings/${bookingId}/check-in`);
   return (res.data?.data ?? res.data) as BookingResponse;
 }
+
+export interface ApprovalHistoryItem {
+  id: number;
+  bookingId: number;
+  status: number;
+  statusName: string;
+  comment: string;
+  decidedAt: string;
+  employeeId?: number;
+  employeeName: string;
+  employeeCode: string;
+  employeePosition: string;
+}
+
+/** Lấy lịch sử phê duyệt / từ chối / hủy đơn đặt phòng */
+export async function fetchApprovalHistoryApi(bookingId: number): Promise<ApprovalHistoryItem[]> {
+  const res = await api.get(`/api/Bookings/${bookingId}/approval-history`);
+  const data = res.data?.data ?? res.data;
+  return Array.isArray(data) ? (data as ApprovalHistoryItem[]) : [];
+}

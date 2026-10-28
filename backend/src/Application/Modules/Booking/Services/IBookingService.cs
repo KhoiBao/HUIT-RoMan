@@ -62,5 +62,8 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             DateTime? fromDate,
             DateTime? toDate,
             int? roomId);
+
+        /// <summary>Lấy lịch sử duyệt của một đơn đặt phòng</summary>
+        Task<ApiResponse<List<ApprovalHistoryDto>>> GetApprovalHistoryAsync(int bookingId);
     }
 }

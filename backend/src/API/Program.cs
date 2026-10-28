@@ -62,6 +62,10 @@ builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.IUnitOfWork,
 builder.Services.AddScoped(typeof(HUIT_RoMan.Application.Common.Interfaces.IRepository<>), typeof(HUIT_RoMan.Infrastructure.Repositories.Repository<>));
 builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.IStoredProcedureService, HUIT_RoMan.Infrastructure.Repositories.StoredProcedureService>();
 
+// Email Service (SMTP)
+builder.Services.Configure<HUIT_RoMan.Application.Common.Models.SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
+builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.IEmailService, HUIT_RoMan.Infrastructure.Services.EmailService>();
+
 
 // Identity (User : IdentityUser<int> trong Domain)
 builder.Services.AddIdentity<User, IdentityRole<int>>()
@@ -149,6 +153,7 @@ builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.ICurrentUser
 // Tác vụ nền: tự động hủy đơn đã duyệt không nhận phòng đúng hạn (no-show).
 // Chạy độc lập với trình duyệt; an toàn khi chạy lặp lại hoặc chạy nhiều instance backend.
 builder.Services.AddHostedService<HUIT_RoMan.API.Services.BookingNoShowWatcher>();
+builder.Services.AddHostedService<HUIT_RoMan.API.Services.BookingReminderWatcher>();
 
 var app = builder.Build();
 

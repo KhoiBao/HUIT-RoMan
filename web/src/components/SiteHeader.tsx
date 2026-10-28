@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import { isStaffRole } from "../lib/auth";
 import { LogOutIcon, PlusIcon } from "./Icon";
 import UserProfileModal from "./UserProfileModal";
+import NotificationCenter from "./NotificationCenter";
 
 function roleLabel(role?: string | null): string {
   const value = (role ?? "").trim().toLowerCase();
@@ -136,6 +137,7 @@ export default function SiteHeader() {
           </nav>
 
           <div className="roman-header-actions">
+            <NotificationCenter />
             <Link to="/dat-phong" className="roman-header-cta">
               <PlusIcon size={15} />
               Đặt phòng

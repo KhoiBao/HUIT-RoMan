@@ -27,7 +27,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         private readonly IRepository<Domain.Entities.Booking> _bookingRepo;
         private readonly IRepository<BookingDetail> _bookingDetailRepo;
         private readonly IRepository<UsageSession> _usageSessionRepo;
-        private readonly IRepository<Notification> _notificationRepo;
+        private readonly IRepository<Domain.Entities.Notification> _notificationRepo;
 
         public BookingNoShowService(IUnitOfWork unitOfWork, ILogger<BookingNoShowService> logger)
         {
@@ -36,7 +36,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             _bookingRepo = _unitOfWork.Repository<Domain.Entities.Booking>();
             _bookingDetailRepo = _unitOfWork.Repository<BookingDetail>();
             _usageSessionRepo = _unitOfWork.Repository<UsageSession>();
-            _notificationRepo = _unitOfWork.Repository<Notification>();
+            _notificationRepo = _unitOfWork.Repository<Domain.Entities.Notification>();
         }
 
         public async Task<int> CancelExpiredBookingsAsync(DateTime? nowUtc = null, CancellationToken cancellationToken = default)
@@ -103,7 +103,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                     // Thông báo cho sinh viên (entity Notification đã tồn tại trong schema).
                     var booking = await _bookingRepo.GetByIdAsync(bookingId);
                     var startLocal = GetBookingStartAt(candidate).AddHours(7);
-                    await _notificationRepo.AddAsync(new Notification
+                    await _notificationRepo.AddAsync(new Domain.Entities.Notification
                     {
                         UserId = booking?.UserId ?? candidate.UserId,
                         Title = "Đơn đặt phòng bị tự động hủy",

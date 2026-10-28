@@ -37,6 +37,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
         public DbSet<ChatMessage> ChatMessages { get; set; }
         public DbSet<UserRestriction> UserRestrictions { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<ApprovalHistory> ApprovalHistories { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

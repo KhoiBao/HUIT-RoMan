@@ -23,19 +23,31 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         private readonly IRepository<Period> _periodRepo;
         private readonly IRepository<Domain.Entities.User> _userRepo;
         private readonly IRepository<UserRestriction> _userRestrictionRepo;
+        private readonly IRepository<Domain.Entities.Notification> _notificationRepo;
+        private readonly IRepository<ApprovalHistory> _approvalHistoryRepo;
+        private readonly IRepository<Employee> _employeeRepo;
         private readonly IUsageService _usageService;
+        private readonly IEmailService? _emailService;
 
-        public BookingService(IUnitOfWork unitOfWork, ICurrentUserService currentUser, IUsageService usageService)
+        public BookingService(
+            IUnitOfWork unitOfWork,
+            ICurrentUserService currentUser,
+            IUsageService usageService,
+            IEmailService? emailService = null)
         {
             _unitOfWork = unitOfWork;
             _currentUser = currentUser;
             _usageService = usageService;
+            _emailService = emailService;
             _bookingRepo = _unitOfWork.Repository<Domain.Entities.Booking>();
             _bookingDetailRepo = _unitOfWork.Repository<BookingDetail>();
             _roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
             _periodRepo = _unitOfWork.Repository<Period>();
             _userRepo = _unitOfWork.Repository<Domain.Entities.User>();
             _userRestrictionRepo = _unitOfWork.Repository<UserRestriction>();
+            _notificationRepo = _unitOfWork.Repository<Domain.Entities.Notification>();
+            _approvalHistoryRepo = _unitOfWork.Repository<ApprovalHistory>();
+            _employeeRepo = _unitOfWork.Repository<Employee>();
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -314,18 +326,70 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             else
             {
                 booking.Status = newStatus;
-                booking.RejectionReason = request.RejectionReason;
+                booking.RejectionReason = request.RejectionReason ?? string.Empty;
 
                 foreach (var detail in booking.BookingDetails)
                 {
                     detail.Status = newStatus;
-                    detail.RejectionReason = request.RejectionReason;
+                    detail.RejectionReason = request.RejectionReason ?? string.Empty;
                 }
 
                 _bookingRepo.Update(booking);
             }
 
             await _unitOfWork.SaveChangesAsync();
+
+            var notifTitle = booking.Status switch
+            {
+                "Đã duyệt" => "Đơn đặt phòng đã được duyệt",
+                "Từ chối" => "Đơn đặt phòng bị từ chối",
+                "Duyệt một phần" => "Đơn đặt phòng được duyệt một phần",
+                _ => "Cập nhật trạng thái đơn đặt phòng"
+            };
+            var notifContent = booking.Status switch
+            {
+                "Đã duyệt" => $"Đơn #{booking.Id} cho hoạt động '{booking.ActivityName}' đã được duyệt thành công.",
+                "Từ chối" => $"Đơn #{booking.Id} cho hoạt động '{booking.ActivityName}' đã bị từ chối. Lý do: {request.RejectionReason ?? "Không có lý do cụ thể"}",
+                "Duyệt một phần" => $"Đơn #{booking.Id} cho hoạt động '{booking.ActivityName}' đã được duyệt một số phòng yêu cầu.",
+                _ => $"Đơn #{booking.Id} đã chuyển sang trạng thái '{booking.Status}'."
+            };
+
+            var employeeId = await GetDecidingEmployeeIdAsync();
+            if (employeeId.HasValue)
+            {
+                var historyStatus = booking.Status switch
+                {
+                    "Đã duyệt" => ApprovalStatus.Approved,
+                    "Từ chối" => ApprovalStatus.Rejected,
+                    "Duyệt một phần" => ApprovalStatus.PartiallyApproved,
+                    _ => ApprovalStatus.Approved
+                };
+                await _approvalHistoryRepo.AddAsync(new ApprovalHistory
+                {
+                    BookingId = booking.Id,
+                    EmployeeId = employeeId.Value,
+                    Status = historyStatus,
+                    Comment = string.IsNullOrWhiteSpace(request.RejectionReason)
+                        ? (newStatus == "Đã duyệt" ? "Duyệt đơn đặt phòng" : "Từ chối đơn đặt phòng")
+                        : request.RejectionReason,
+                    DecidedAt = DateTime.UtcNow
+                });
+            }
+
+            await _notificationRepo.AddAsync(new Domain.Entities.Notification
+            {
+                UserId = booking.UserId,
+                Title = notifTitle,
+                Content = notifContent,
+                Type = 1,
+                IsRead = false,
+                SentAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _unitOfWork.SaveChangesAsync();
+
+            // Gửi email thông báo kết quả duyệt (chạy ngầm an toàn)
+            _ = SendApprovalEmailSafelyAsync(booking, newStatus, request.RejectionReason);
 
             var message = newStatus == "Đã duyệt" ? "Duyệt đơn thành công." : "Từ chối đơn thành công.";
             return ApiResponse<bool>.SuccessResponse(true, message);
@@ -376,6 +440,47 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             }
 
             await _unitOfWork.SaveChangesAsync();
+
+            if (booking != null)
+            {
+                var room = await _roomRepo.GetByIdAsync(detail.RoomId);
+                var roomName = room?.Name ?? $"phòng #{detail.RoomId}";
+                var notifTitle = newStatus == "Đã duyệt"
+                    ? $"Chi tiết {roomName} đã được duyệt"
+                    : $"Chi tiết {roomName} bị từ chối";
+                var notifContent = newStatus == "Đã duyệt"
+                    ? $"Yêu cầu sử dụng {roomName} trong đơn #{booking.Id} đã được duyệt."
+                    : $"Yêu cầu sử dụng {roomName} trong đơn #{booking.Id} đã bị từ chối. Lý do: {request.RejectionReason ?? "Không có lý do cụ thể"}.";
+
+                var detailEmpId = await GetDecidingEmployeeIdAsync();
+                if (detailEmpId.HasValue)
+                {
+                    var detailStatus = newStatus == "Đã duyệt" ? ApprovalStatus.Approved : ApprovalStatus.Rejected;
+                    await _approvalHistoryRepo.AddAsync(new ApprovalHistory
+                    {
+                        BookingId = detail.BookingId,
+                        EmployeeId = detailEmpId.Value,
+                        Status = detailStatus,
+                        Comment = $"[Chi tiết #{detail.Id}] {detail.Status}. {request.RejectionReason ?? ""}".Trim(),
+                        DecidedAt = DateTime.UtcNow
+                    });
+                }
+
+            await _notificationRepo.AddAsync(new Domain.Entities.Notification
+                {
+                    UserId = booking.UserId,
+                    Title = notifTitle,
+                    Content = notifContent,
+                    Type = 1,
+                    IsRead = false,
+                    SentAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _unitOfWork.SaveChangesAsync();
+
+                // Gửi email thông báo kết quả duyệt chi tiết phòng (chạy ngầm an toàn)
+                _ = SendApprovalDetailEmailSafelyAsync(booking, detail, newStatus, request.RejectionReason);
+            }
 
             var message = newStatus == "Đã duyệt" ? "Duyệt chi tiết thành công." : "Từ chối chi tiết thành công.";
             return ApiResponse<bool>.SuccessResponse(true, message);
@@ -464,6 +569,37 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
 
             _bookingRepo.Update(booking);
             await _unitOfWork.SaveChangesAsync();
+
+            if (isStaff && !isOwner)
+            {
+                var cancelEmpId = await GetDecidingEmployeeIdAsync();
+                if (cancelEmpId.HasValue)
+                {
+                    await _approvalHistoryRepo.AddAsync(new ApprovalHistory
+                    {
+                        BookingId = booking.Id,
+                        EmployeeId = cancelEmpId.Value,
+                        Status = ApprovalStatus.CancelledByStaff,
+                        Comment = $"Quản lý hủy đơn: {reasonDetail ?? reasonCode ?? "Không có lý do cụ thể"}",
+                        DecidedAt = now
+                    });
+                }
+
+            await _notificationRepo.AddAsync(new Domain.Entities.Notification
+                {
+                    UserId = booking.UserId,
+                    Title = "Đơn đặt phòng bị hủy bởi quản lý/nhân sự",
+                    Content = $"Đơn #{booking.Id} cho hoạt động '{booking.ActivityName}' đã bị hủy bởi nhân sự/quản trị viên. Lý do: {reasonDetail ?? reasonCode ?? "Không có lý do cụ thể"}.",
+                    Type = 1,
+                    IsRead = false,
+                    SentAt = now,
+                    CreatedAt = now
+                });
+                await _unitOfWork.SaveChangesAsync();
+
+                // Gửi email thông báo hủy bởi quản lý (chạy ngầm an toàn)
+                _ = SendCancellationEmailSafelyAsync(booking, reasonDetail ?? reasonCode ?? "Không có lý do cụ thể");
+            }
 
             return ApiResponse<bool>.SuccessResponse(true, "Hủy đơn thành công.");
         }
@@ -962,6 +1098,191 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
 
             var dtos = await MapBookingListAsync(query);
             return ApiResponse<IEnumerable<BookingResponseDto>>.SuccessResponse(dtos);
+        }
+
+        private async Task<int?> GetDecidingEmployeeIdAsync()
+        {
+            if (_currentUser.UserId.HasValue)
+            {
+                var emp = (await _employeeRepo.FindAsync(e => e.UserId == _currentUser.UserId.Value)).FirstOrDefault();
+                if (emp != null) return emp.Id;
+            }
+            var firstEmp = (await _employeeRepo.GetAllAsync()).FirstOrDefault();
+            return firstEmp?.Id;
+        }
+
+        public async Task<ApiResponse<List<ApprovalHistoryDto>>> GetApprovalHistoryAsync(int bookingId)
+        {
+            var booking = await _bookingRepo.GetByIdAsync(bookingId);
+            if (booking == null)
+            {
+                return ApiResponse<List<ApprovalHistoryDto>>.ErrorResponse("Không tìm thấy đơn đặt phòng.");
+            }
+
+            var isOwner = _currentUser.UserId.HasValue && booking.UserId == _currentUser.UserId.Value;
+            var isStaff = _currentUser.IsAdmin || _currentUser.Role == "Employee" || _currentUser.Role == "quan-tri" || _currentUser.Role == "Quản trị viên";
+            if (!isOwner && !isStaff)
+            {
+                return ApiResponse<List<ApprovalHistoryDto>>.ErrorResponse("Bạn không có quyền xem lịch sử duyệt đơn này.");
+            }
+
+            var histories = await _approvalHistoryRepo.FindAsync(
+                h => h.BookingId == bookingId,
+                h => h.Employee,
+                h => h.Employee.User
+            );
+
+            var dtos = histories
+                .OrderBy(h => h.DecidedAt)
+                .Select(h => new ApprovalHistoryDto
+                {
+                    Id = h.Id,
+                    BookingId = h.BookingId,
+                    Status = h.Status,
+                    StatusName = h.Status switch
+                    {
+                        ApprovalStatus.Approved => "Đã duyệt",
+                        ApprovalStatus.Rejected => "Từ chối",
+                        ApprovalStatus.PartiallyApproved => "Duyệt một phần",
+                        ApprovalStatus.CancelledByStaff => "Đã hủy bởi quản trị",
+                        _ => "Không xác định"
+                    },
+                    Comment = h.Comment ?? string.Empty,
+                    DecidedAt = h.DecidedAt,
+                    EmployeeId = h.EmployeeId,
+                    EmployeeName = h.Employee?.User?.FullName ?? h.Employee?.User?.UserName ?? "Nhân sự",
+                    EmployeeCode = h.Employee?.Code ?? string.Empty,
+                    EmployeePosition = h.Employee?.Position ?? string.Empty
+                })
+                .ToList();
+
+            if (!dtos.Any() && booking.Status != "Chờ duyệt")
+            {
+                dtos.Add(new ApprovalHistoryDto
+                {
+                    Id = 0,
+                    BookingId = booking.Id,
+                    Status = booking.Status switch
+                    {
+                        "Đã duyệt" => ApprovalStatus.Approved,
+                        "Từ chối" => ApprovalStatus.Rejected,
+                        "Duyệt một phần" => ApprovalStatus.PartiallyApproved,
+                        "Đã hủy" => ApprovalStatus.CancelledByStaff,
+                        _ => ApprovalStatus.Approved
+                    },
+                    StatusName = booking.Status,
+                    Comment = string.IsNullOrWhiteSpace(booking.RejectionReason)
+                        ? (booking.Status == "Đã duyệt" ? "Đơn đặt phòng đã được phê duyệt hợp lệ." : "Đã cập nhật trạng thái đơn.")
+                        : booking.RejectionReason,
+                    DecidedAt = booking.UpdatedAt ?? booking.CreatedAt,
+                    EmployeeName = "Ban Quản lý HUIT",
+                    EmployeeCode = "BQL",
+                    EmployeePosition = "Cán bộ xét duyệt"
+                });
+            }
+
+            return ApiResponse<List<ApprovalHistoryDto>>.SuccessResponse(dtos);
+        }
+
+        private async Task SendApprovalEmailSafelyAsync(Domain.Entities.Booking booking, string decision, string? reason)
+        {
+            if (_emailService == null) return;
+
+            try
+            {
+                var user = booking.User ?? await _userRepo.GetByIdAsync(booking.UserId);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+                var details = booking.BookingDetails ?? (await _bookingDetailRepo.FindAsync(d => d.BookingId == booking.Id, d => d.Room)).ToList();
+                var rooms = details
+                    .Select(d => d.Room?.Name ?? (d.RoomId > 0 ? $"Phòng #{d.RoomId}" : null))
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .Distinct()
+                    .ToList();
+                var roomSummary = rooms.Count > 0 ? string.Join(", ", rooms) : null;
+                var startAt = details.OrderBy(d => d.StartAt).Select(d => (DateTime?)d.StartAt).FirstOrDefault();
+                var endAt = details.OrderByDescending(d => d.EndAt).Select(d => (DateTime?)d.EndAt).FirstOrDefault();
+
+                await _emailService.SendBookingApprovalEmailAsync(
+                    user.Email,
+                    user.FullName ?? user.UserName ?? "Quý người dùng",
+                    booking.Id,
+                    booking.ActivityName,
+                    decision,
+                    reason,
+                    roomSummary,
+                    startAt,
+                    endAt);
+            }
+            catch
+            {
+                // Bỏ qua lỗi gửi email để không chặn luồng duyệt chính
+            }
+        }
+
+        private async Task SendApprovalDetailEmailSafelyAsync(Domain.Entities.Booking booking, BookingDetail detail, string detailDecision, string? reason)
+        {
+            if (_emailService == null) return;
+
+            try
+            {
+                var user = booking.User ?? await _userRepo.GetByIdAsync(booking.UserId);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+                var room = detail.Room ?? await _roomRepo.GetByIdAsync(detail.RoomId);
+                var roomName = room?.Name ?? $"Phòng #{detail.RoomId}";
+
+                await _emailService.SendBookingApprovalEmailAsync(
+                    user.Email,
+                    user.FullName ?? user.UserName ?? "Quý người dùng",
+                    booking.Id,
+                    $"{booking.ActivityName} ({roomName})",
+                    detailDecision,
+                    reason,
+                    roomName,
+                    detail.StartAt,
+                    detail.EndAt);
+            }
+            catch
+            {
+                // Bỏ qua lỗi gửi email
+            }
+        }
+
+        private async Task SendCancellationEmailSafelyAsync(Domain.Entities.Booking booking, string? reason)
+        {
+            if (_emailService == null) return;
+
+            try
+            {
+                var user = booking.User ?? await _userRepo.GetByIdAsync(booking.UserId);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+                var details = booking.BookingDetails ?? (await _bookingDetailRepo.FindAsync(d => d.BookingId == booking.Id, d => d.Room)).ToList();
+                var rooms = details
+                    .Select(d => d.Room?.Name ?? (d.RoomId > 0 ? $"Phòng #{d.RoomId}" : null))
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .Distinct()
+                    .ToList();
+                var roomSummary = rooms.Count > 0 ? string.Join(", ", rooms) : null;
+                var startAt = details.OrderBy(d => d.StartAt).Select(d => (DateTime?)d.StartAt).FirstOrDefault();
+                var endAt = details.OrderByDescending(d => d.EndAt).Select(d => (DateTime?)d.EndAt).FirstOrDefault();
+
+                await _emailService.SendBookingApprovalEmailAsync(
+                    user.Email,
+                    user.FullName ?? user.UserName ?? "Quý người dùng",
+                    booking.Id,
+                    booking.ActivityName,
+                    "Đã hủy bởi quản trị",
+                    reason,
+                    roomSummary,
+                    startAt,
+                    endAt);
+            }
+            catch
+            {
+                // Bỏ qua lỗi gửi email
+            }
         }
     }
 }

@@ -49,6 +49,7 @@ interface EmployeeItem {
 
 export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
   const { user } = useAuth();
+  const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
   const { confirm } = useConfirm();
 
   // Data states
@@ -499,14 +500,17 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
             <span>Ghi nhật ký trực</span>
           </button>
 
-          <button
-            type="button"
-            className="btn-toolbar-primary"
-            onClick={handleOpenCreateModal}
-          >
-            <PlusIcon size={16} />
-            <span>Phân ca trực mới</span>
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn-toolbar-primary"
+              onClick={handleOpenCreateModal}
+              title="Quản lý toàn quyền thiết lập và phân công ca trực mới"
+            >
+              <PlusIcon size={16} />
+              <span>Phân ca trực mới</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -782,42 +786,46 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                                 <span>Hoàn tất</span>
                               </button>
                             )}
-                            <button
-                              type="button"
-                              style={{
-                                fontSize: "10.5px",
-                                padding: "3px 6px",
-                                borderRadius: "4px",
-                                background: "#f8fafc",
-                                border: "1px solid #cbd5e1",
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                color: "#475569",
-                              }}
-                              onClick={() => handleOpenEditModal(s)}
-                              title="Chỉnh sửa ca trực"
-                            >
-                              <PencilIcon size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              style={{
-                                fontSize: "10.5px",
-                                padding: "3px 6px",
-                                borderRadius: "4px",
-                                background: "#fff1f2",
-                                border: "1px solid #fecdd3",
-                                color: "#e11d48",
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                              }}
-                              onClick={() => handleDeleteShift(s)}
-                              title="Xóa ca trực"
-                            >
-                              <TrashIcon size={12} />
-                            </button>
+                            {isAdmin && (
+                              <>
+                                <button
+                                  type="button"
+                                  style={{
+                                    fontSize: "10.5px",
+                                    padding: "3px 6px",
+                                    borderRadius: "4px",
+                                    background: "#f8fafc",
+                                    border: "1px solid #cbd5e1",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    color: "#475569",
+                                  }}
+                                  onClick={() => handleOpenEditModal(s)}
+                                  title="Chỉnh sửa ca trực"
+                                >
+                                  <PencilIcon size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  style={{
+                                    fontSize: "10.5px",
+                                    padding: "3px 6px",
+                                    borderRadius: "4px",
+                                    background: "#fff1f2",
+                                    border: "1px solid #fecdd3",
+                                    color: "#e11d48",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                  }}
+                                  onClick={() => handleDeleteShift(s)}
+                                  title="Xóa ca trực"
+                                >
+                                  <TrashIcon size={12} />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       );
@@ -945,24 +953,28 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                             <span>Hoàn tất</span>
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="btn-shift-action btn-shift-edit"
-                          onClick={() => handleOpenEditModal(s)}
-                          title="Chỉnh sửa ca trực"
-                        >
-                          <PencilIcon size={12} />
-                          <span>Sửa</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-shift-action btn-shift-delete"
-                          onClick={() => handleDeleteShift(s)}
-                          title="Xóa ca trực"
-                        >
-                          <TrashIcon size={12} />
-                          <span>Xóa</span>
-                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn-shift-action btn-shift-edit"
+                              onClick={() => handleOpenEditModal(s)}
+                              title="Chỉnh sửa ca trực"
+                            >
+                              <PencilIcon size={12} />
+                              <span>Sửa</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-shift-action btn-shift-delete"
+                              onClick={() => handleDeleteShift(s)}
+                              title="Xóa ca trực"
+                            >
+                              <TrashIcon size={12} />
+                              <span>Xóa</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
