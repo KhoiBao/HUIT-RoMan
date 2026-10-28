@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   CalendarIcon,
@@ -12,12 +12,14 @@ import {
   CheckIcon,
   CopyIcon,
   HourglassIcon,
+  RefreshCwIcon,
 } from "../components/Icon";
 import { useAuth } from "../auth/AuthContext";
 import { checkMyEligibility, type UserEligibility } from "../lib/violations";
 import {
   type AvailableRoom,
   type AvailableRoomGroup,
+  type AvailableRoomScope,
   type BookingResponse,
   type BookingFormState,
   type BookingDetailItem,
@@ -25,8 +27,13 @@ import {
   validateStudentBookingWindow,
   getNextStudentBookingSlot,
   groupAvailableRoomsByType,
+  groupAvailableRoomsByBuilding,
+  filterAvailableRoomsByScope,
+  summarizeRoomLocations,
   isStudentBookableRoomType,
   isStudentRole,
+  isLecturerRole,
+  groupPeriodsByRoomType,
   STUDENT_OPEN_TIME,
   STUDENT_CLOSE_TIME,
   buildBookingPayload,
@@ -46,13 +53,21 @@ import {
   describeCancelReason,
   CANCEL_REASON_OPTIONS,
   validateCancelReasonSelection,
+  parseDdMmYyyy,
+  formatDdMmYyyy,
+  getBookingDatePresetRange,
+  isIsoDateInRange,
+  type BookingDateRange,
+  type BookingDatePreset,
 } from "../lib/booking";
 import {
   type Period,
   toISODateString,
+  toVietnamDateKey,
   formatVietnameseDate,
   getScheduleStatusBadge,
   fetchPeriodsApi,
+  formatPeriodLabel,
 } from "../lib/schedule";
 import {
   fetchMyUsageSessions,
@@ -68,6 +83,7 @@ export default function BookingPage() {
   const { user } = useAuth();
   const { confirm } = useConfirm();
   const isStudent = isStudentRole(user?.role);
+  const isLecturer = isLecturerRole(user?.role);
 
   // Active Tab: "create" | "my-bookings" (auto-select from ?tab=my-bookings)
   const activeTab: "create" | "my-bookings" =
@@ -111,6 +127,79 @@ export default function BookingPage() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Mỗi loại phòng (lý thuyết / thực hành) có bộ 16 tiết riêng; chỉ hiển thị
+  // các tiết thuộc bộ lịch đang chọn để tránh trộn lịch.
+  const periodGroups = useMemo(() => groupPeriodsByRoomType(periods), [periods]);
+  const [periodRoomTypeId, setPeriodRoomTypeId] = useState<number | null>(null);
+  const activePeriodGroup = useMemo(() => {
+    const explicit = periodGroups.find(
+      (group) => group.roomTypeId === periodRoomTypeId
+    );
+    if (explicit) return explicit;
+    const matching = periodGroups.find((group) =>
+      group.periods.some((period) => period.id === form.startPeriodId)
+    );
+    return matching ?? periodGroups[0] ?? null;
+  }, [periodGroups, periodRoomTypeId, form.startPeriodId]);
+  const activePeriods = activePeriodGroup?.periods ?? periods;
+
+  useEffect(() => {
+    if (
+      form.bookingMode !== "period" ||
+      !activePeriodGroup ||
+      activePeriodGroup.periods.length === 0
+    ) {
+      return;
+    }
+    const ids = new Set(activePeriodGroup.periods.map((period) => period.id));
+    if (
+      !ids.has(form.startPeriodId ?? -1) ||
+      !ids.has(form.endPeriodId ?? -1)
+    ) {
+      const first = activePeriodGroup.periods[0];
+      const second = activePeriodGroup.periods[1] ?? first;
+      setForm((prev) => ({
+        ...prev,
+        startPeriodId: first.id,
+        endPeriodId: second.id,
+      }));
+    }
+  }, [
+    activePeriodGroup,
+    form.bookingMode,
+    form.startPeriodId,
+    form.endPeriodId,
+  ]);
+
+  function handlePeriodScheduleChange(value: string) {
+    const roomTypeId = Number(value);
+    const group = periodGroups.find((item) => item.roomTypeId === roomTypeId);
+    if (!group || group.periods.length === 0) return;
+
+    const first = group.periods[0];
+    const second = group.periods[1] ?? first;
+    setPeriodRoomTypeId(roomTypeId);
+    setForm((prev) => ({
+      ...prev,
+      startPeriodId: first.id,
+      endPeriodId: second.id,
+    }));
+    setAvailableRooms([]);
+    setSelectedRoomIds([]);
+    setHasSearched(false);
+    setSubmitError(null);
+    if (!isInitializing) {
+      void searchRooms({ startPeriodId: first.id, endPeriodId: second.id });
+    }
+  }
+
+  const selectedStartPeriod = activePeriods.find(
+    (period) => period.id === form.startPeriodId
+  );
+  const selectedEndPeriod = activePeriods.find(
+    (period) => period.id === form.endPeriodId
+  );
+
   // Room search & selection
   const [availableRooms, setAvailableRooms] = useState<AvailableRoom[]>([]);
   const [selectedRoomIds, setSelectedRoomIds] = useState<number[]>(
@@ -119,6 +208,15 @@ export default function BookingPage() {
   const [isSearchingRooms, setIsSearchingRooms] = useState<boolean>(false);
   const [hasSearched, setHasSearched] = useState<boolean>(false);
   const [expandedRoomTypes, setExpandedRoomTypes] = useState<number[]>([]);
+  const [timeRoomScope, setTimeRoomScope] = useState<AvailableRoomScope>(
+    isStudent ? "library" : "hall"
+  );
+  const [activeRoomBuilding, setActiveRoomBuilding] = useState<
+    Record<number, string>
+  >({});
+  const [activeRoomFloor, setActiveRoomFloor] = useState<Record<number, string>>(
+    {}
+  );
 
   // Submitting
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -172,6 +270,14 @@ export default function BookingPage() {
   // List View states (search, status filter & detail modal)
   const [historySearch, setHistorySearch] = useState<string>("");
   const [historyStatusFilter, setHistoryStatusFilter] = useState<string>("ALL");
+  const [historyDateFilter, setHistoryDateFilter] = useState<
+    "all" | BookingDatePreset | "custom"
+  >("all");
+  const [historyCustomRange, setHistoryCustomRange] =
+    useState<BookingDateRange | null>(null);
+  const [customDateFrom, setCustomDateFrom] = useState<string>("");
+  const [customDateTo, setCustomDateTo] = useState<string>("");
+  const [dateFilterError, setDateFilterError] = useState<string>("");
   const [viewingDetailItem, setViewingDetailItem] = useState<{
     booking: BookingResponse;
     detail: BookingDetailItem;
@@ -219,11 +325,38 @@ export default function BookingPage() {
   }, []);
 
   // 2. Search Available Rooms
-  async function searchRooms() {
+  async function searchRooms(overrides?: Partial<BookingFormState>) {
+    const searchForm = overrides ? { ...form, ...overrides } : form;
     setSubmitError(null);
 
+    // Chuẩn hóa khung tiết trước khi gọi API: bỏ tiết đã qua và không cho
+    // tiết kết thúc đứng trước tiết bắt đầu.
+    let periodStartId = searchForm.startPeriodId;
+    let periodEndId = searchForm.endPeriodId;
+    if (searchForm.bookingMode === "period") {
+      const resolved = resolvePeriodSelection(searchForm);
+      if (resolved.error || resolved.startId == null || resolved.endId == null) {
+        setSubmitError(
+          resolved.error ?? "Khung giờ đặt phòng không hợp lệ."
+        );
+        return;
+      }
+      periodStartId = resolved.startId;
+      periodEndId = resolved.endId;
+      if (
+        resolved.startId !== form.startPeriodId ||
+        resolved.endId !== form.endPeriodId
+      ) {
+        setForm((prev) => ({
+          ...prev,
+          startPeriodId: resolved.startId as number,
+          endPeriodId: resolved.endId as number,
+        }));
+      }
+    }
+
     if (isStudent) {
-      const windowValidation = validateStudentBookingWindow(form);
+      const windowValidation = validateStudentBookingWindow(searchForm);
       if (!windowValidation.isValid) {
         setErrors((prev) => ({ ...prev, ...windowValidation.errors }));
         return;
@@ -235,6 +368,8 @@ export default function BookingPage() {
       delete next.date;
       delete next.startTime;
       delete next.endTime;
+      delete next.startPeriodId;
+      delete next.endPeriodId;
       delete next.bookingMode;
       return next;
     });
@@ -242,11 +377,15 @@ export default function BookingPage() {
     setIsSearchingRooms(true);
     try {
       const results = await fetchAvailableRoomsApi({
-        date: form.date,
-        startPeriodId: form.bookingMode === "period" ? form.startPeriodId : undefined,
-        endPeriodId: form.bookingMode === "period" ? form.endPeriodId : undefined,
-        startTime: form.bookingMode === "time" ? `${form.startTime}:00` : undefined,
-        endTime: form.bookingMode === "time" ? `${form.endTime}:00` : undefined,
+        date: searchForm.date,
+        startPeriodId:
+          searchForm.bookingMode === "period" ? periodStartId : undefined,
+        endPeriodId:
+          searchForm.bookingMode === "period" ? periodEndId : undefined,
+        startTime:
+          searchForm.bookingMode === "time" ? `${searchForm.startTime}:00` : undefined,
+        endTime:
+          searchForm.bookingMode === "time" ? `${searchForm.endTime}:00` : undefined,
       });
 
       // Sinh viên chỉ thấy phòng học nhóm và phòng thuyết trình của Thư viện.
@@ -268,6 +407,34 @@ export default function BookingPage() {
     } finally {
       setIsSearchingRooms(false);
     }
+  }
+
+  // Đổi chế độ đặt → xóa kết quả cũ và tìm lại theo chế độ mới.
+  function handleBookingModeChange(mode: "period" | "time") {
+    if (form.bookingMode === mode) return;
+    setForm((prev) => ({ ...prev, bookingMode: mode }));
+    setAvailableRooms([]);
+    setSelectedRoomIds([]);
+    setHasSearched(false);
+    setSubmitError(null);
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.bookingMode;
+      return next;
+    });
+    if (!isInitializing) {
+      void searchRooms({ bookingMode: mode });
+    }
+  }
+
+  function handleTimeScopeChange(scope: AvailableRoomScope) {
+    if (scope === timeRoomScope) return;
+    setTimeRoomScope(scope);
+    if (availableRooms.length === 0) return;
+    const visibleIds = new Set(
+      filterAvailableRoomsByScope(availableRooms, scope).map((room) => room.roomId)
+    );
+    setSelectedRoomIds((prev) => prev.filter((id) => visibleIds.has(id)));
   }
 
   // Trigger auto search on first load if parameters exist
@@ -301,11 +468,104 @@ export default function BookingPage() {
     }
   }, [activeTab]);
 
+  function handleDateFilterChange(next: "all" | BookingDatePreset) {
+    setHistoryDateFilter(next);
+    setHistoryCustomRange(null);
+    setCustomDateFrom("");
+    setCustomDateTo("");
+    setDateFilterError("");
+  }
+
+  function handleApplyCustomDateRange() {
+    const from = parseDdMmYyyy(customDateFrom);
+    const to = parseDdMmYyyy(customDateTo);
+    if (!from || !to) {
+      setDateFilterError("Nhập đủ ngày theo định dạng dd/mm/yyyy.");
+      return;
+    }
+    if (from > to) {
+      setDateFilterError("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.");
+      return;
+    }
+    setDateFilterError("");
+    setHistoryCustomRange({ from, to });
+    setHistoryDateFilter("custom");
+  }
+
   // Thời gian "hiện tại" bám sát server (offset lấy từ checkInWindow.serverTime)
   const nowWithOffset = useMemo(
     () => new Date(nowTick.getTime() + serverClockOffsetMs),
     [nowTick, serverClockOffsetMs]
   );
+  const todayKey = toVietnamDateKey(nowWithOffset.toISOString());
+
+  // Cho phép chọn lại toàn bộ tiết của bộ lịch đang dùng; ràng buộc duy nhất là
+  // tiết kết thúc không được đứng trước tiết bắt đầu.
+  const selectableStartPeriods = activePeriods;
+  const selectedStartIndex = activePeriods.findIndex(
+    (p) => p.id === form.startPeriodId
+  );
+  const selectableEndPeriods =
+    selectedStartIndex >= 0
+      ? activePeriods.slice(selectedStartIndex)
+      : activePeriods;
+
+  const resolvePeriodSelection = useCallback(
+    (formLike: BookingFormState) => {
+      if (formLike.bookingMode !== "period" || activePeriods.length === 0) {
+        return {
+          startId: formLike.startPeriodId,
+          endId: formLike.endPeriodId,
+          error: null as string | null,
+        };
+      }
+      const startId = activePeriods.some(
+        (p) => p.id === formLike.startPeriodId
+      )
+        ? formLike.startPeriodId
+        : activePeriods[0].id;
+      const startIdx = activePeriods.findIndex((p) => p.id === startId);
+      const endIdx = activePeriods.findIndex(
+        (p) => p.id === formLike.endPeriodId
+      );
+      const endId =
+        endIdx >= startIdx
+          ? formLike.endPeriodId
+          : (activePeriods[startIdx + 1]?.id ?? startId);
+      return { startId, endId, error: null as string | null };
+    },
+    [activePeriods]
+  );
+
+  // Đưa lựa chọn tiết về mặc định: hai tiết đầu tiên của bộ lịch đang dùng.
+  function handleResetPeriods() {
+    const first = activePeriods[0];
+    if (!first) return;
+    setForm((prev) => ({
+      ...prev,
+      startPeriodId: first.id,
+      endPeriodId: activePeriods[1]?.id ?? first.id,
+    }));
+  }
+
+  // Tự sửa lựa chọn khi đổi ngày hoặc thời gian vượt qua tiết đang chọn.
+  useEffect(() => {
+    if (form.bookingMode !== "period" || activePeriods.length === 0) return;
+    const resolved = resolvePeriodSelection(form);
+    if (resolved.error || resolved.startId == null || resolved.endId == null) {
+      return;
+    }
+    if (
+      resolved.startId !== form.startPeriodId ||
+      resolved.endId !== form.endPeriodId
+    ) {
+      setForm((prev) => ({
+        ...prev,
+        startPeriodId: resolved.startId as number,
+        endPeriodId: resolved.endId as number,
+      }));
+    }
+  }, [form, activePeriods, resolvePeriodSelection]);
 
   // Bộ đếm ngược hiển thị — chỉ là UI; việc tự động hủy do backend đảm nhiệm.
   useEffect(() => {
@@ -466,9 +726,42 @@ export default function BookingPage() {
     });
   }, [myBookings, sessionByDetailId, nowWithOffset]);
 
+  // Lọc theo ngày mượn (ngày bắt đầu của từng chi tiết đơn).
+  const historyDateRange = useMemo<BookingDateRange | null>(() => {
+    if (historyDateFilter === "custom") return historyCustomRange;
+    if (historyDateFilter === "all") return null;
+    return getBookingDatePresetRange(historyDateFilter, todayKey);
+  }, [historyDateFilter, historyCustomRange, todayKey]);
+
+  const dateFilteredBookingItems = useMemo(() => {
+    if (!historyDateRange) return flatBookingItems;
+    return flatBookingItems.filter((item) =>
+      isIsoDateInRange(toVietnamDateKey(item.detail.startAt), historyDateRange)
+    );
+  }, [flatBookingItems, historyDateRange]);
+
+  const historyStatusCounts = useMemo(() => {
+    const counts = {
+      all: dateFilteredBookingItems.length,
+      approved: 0,
+      inUse: 0,
+      pending: 0,
+      completed: 0,
+      cancelled: 0,
+    };
+    for (const item of dateFilteredBookingItems) {
+      if (item.isApproved) counts.approved += 1;
+      if (item.isInUse) counts.inUse += 1;
+      if (item.isPending) counts.pending += 1;
+      if (item.isCompleted) counts.completed += 1;
+      if (item.isCancelled) counts.cancelled += 1;
+    }
+    return counts;
+  }, [dateFilteredBookingItems]);
+
   // Filtered booking items
   const filteredBookingItems = useMemo(() => {
-    return flatBookingItems.filter((item) => {
+    return dateFilteredBookingItems.filter((item) => {
       if (historyStatusFilter !== "ALL") {
         if (historyStatusFilter === "APPROVED" && !item.isApproved) return false;
         if (historyStatusFilter === "IN_USE" && !item.isInUse) return false;
@@ -488,7 +781,7 @@ export default function BookingPage() {
       }
       return true;
     });
-  }, [flatBookingItems, historyStatusFilter, historySearch]);
+  }, [dateFilteredBookingItems, historyStatusFilter, historySearch]);
 
   // Quick Code Check-in
   async function handleQuickCodeCheckIn(e: React.FormEvent) {
@@ -832,13 +1125,21 @@ export default function BookingPage() {
     }
   }
 
-  const selectedRoomsList = availableRooms.filter((r) =>
+  const scopedAvailableRooms = useMemo(() => {
+    if (form.bookingMode !== "time") return availableRooms;
+    return filterAvailableRoomsByScope(
+      availableRooms,
+      isStudent ? "library" : timeRoomScope
+    );
+  }, [availableRooms, form.bookingMode, isStudent, timeRoomScope]);
+
+  const selectedRoomsList = scopedAvailableRooms.filter((r) =>
     selectedRoomIds.includes(r.roomId)
   );
 
   const availableRoomGroups = useMemo(
-    () => groupAvailableRoomsByType(availableRooms),
-    [availableRooms]
+    () => groupAvailableRoomsByType(scopedAvailableRooms),
+    [scopedAvailableRooms]
   );
 
   useEffect(() => {
@@ -874,21 +1175,29 @@ export default function BookingPage() {
     return min === max ? `${min} chỗ` : `${min}–${max} chỗ`;
   };
 
-  const groupLocationLabel = (group: AvailableRoomGroup): string => {
-    const first = group.rooms[0];
-    if (!first) return "Thư viện HUIT";
-    if (first.building?.toLowerCase() === "thư viện") {
-      return `Thư viện • Tầng ${first.floor || "3"}`;
-    }
-    return `Tòa ${first.building || "—"} • Tầng ${first.floor || "—"}`;
+  const groupLocationLabel = (group: AvailableRoomGroup): string =>
+    summarizeRoomLocations(group.rooms);
+
+  const roomBuildingLabel = (building: string): string => {
+    if (building.toLowerCase() === "thư viện") return "Thư viện";
+    if (!building || building === "Khác") return "Khu khác";
+    return `Tòa ${building}`;
   };
 
-  const roomLocationLabel = (room: AvailableRoom): string => {
-    if (room.building?.toLowerCase() === "thư viện") {
-      return `Thư viện • Tầng ${room.floor || "3"}`;
-    }
-    return `Tòa ${room.building || "—"} • Tầng ${room.floor || "—"}`;
-  };
+  const roomFloorLabel = (floor: string): string =>
+    floor === "—" ? "Khác" : `Tầng ${floor}`;
+
+  const timeScopeOptions: { value: AvailableRoomScope; label: string }[] = [
+    { value: "hall", label: "Hội trường" },
+    { value: "library", label: "Thư viện" },
+    ...(isLecturer
+      ? []
+      : [{ value: "all" as AvailableRoomScope, label: "Tất cả" }]),
+  ];
+
+  const timeScopeLabel =
+    timeScopeOptions.find((option) => option.value === timeRoomScope)?.label ??
+    "Tất cả";
 
   return (
     <div className="booking-page">
@@ -900,10 +1209,17 @@ export default function BookingPage() {
               <CalendarIcon size={16} />
               <span>Hệ thống đăng ký & phân phối phòng học HUIT</span>
             </div>
-            <h1>Đăng ký mượn phòng dùng chung</h1>
+            <h1>
+              {isStudent
+                ? "Đăng ký mượn phòng dùng chung"
+                : isLecturer
+                  ? "Đăng ký phòng giảng dạy"
+                  : "Đăng ký mượn phòng dùng chung"}
+            </h1>
             <p>
-              Chọn ngày, tra cứu phòng trống theo tiết học hoặc khung giờ, nhập
-              thông tin hoạt động và gửi yêu cầu phê duyệt nhanh chóng.
+              {isLecturer
+                ? "Tra cứu phòng trống theo tiết học cho phòng lý thuyết, phòng máy và theo khung giờ cho thư viện, hội trường."
+                : "Chọn ngày, tra cứu phòng trống theo tiết học hoặc khung giờ, nhập thông tin hoạt động và gửi yêu cầu phê duyệt nhanh chóng."}
             </p>
 
             {/* Tab switchers */}
@@ -1009,30 +1325,28 @@ export default function BookingPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="mode-segmented-control">
-                      <button
-                        type="button"
-                        className={`seg-btn ${
-                          form.bookingMode === "period" ? "active" : ""
-                        }`}
-                        onClick={() =>
-                          setForm((prev) => ({ ...prev, bookingMode: "period" }))
-                        }
-                      >
-                        Mượn theo Tiết học (Phòng học, Lab)
-                      </button>
-                      <button
-                        type="button"
-                        className={`seg-btn ${
-                          form.bookingMode === "time" ? "active" : ""
-                        }`}
-                        onClick={() =>
-                          setForm((prev) => ({ ...prev, bookingMode: "time" }))
-                        }
-                      >
-                        Mượn theo Khung giờ (Hội trường, Phòng họp)
-                      </button>
-                    </div>
+                    <>
+                      <div className="mode-segmented-control">
+                        <button
+                          type="button"
+                          className={`seg-btn ${
+                            form.bookingMode === "period" ? "active" : ""
+                          }`}
+                          onClick={() => handleBookingModeChange("period")}
+                        >
+                          Mượn theo Tiết học (Phòng lý thuyết, Lab)
+                        </button>
+                        <button
+                          type="button"
+                          className={`seg-btn ${
+                            form.bookingMode === "time" ? "active" : ""
+                          }`}
+                          onClick={() => handleBookingModeChange("time")}
+                        >
+                          Mượn theo Khung giờ (Hội trường, Thư viện)
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   {errors.bookingMode && (
@@ -1063,61 +1377,124 @@ export default function BookingPage() {
 
                   {/* Period selection */}
                   {form.bookingMode === "period" && (
-                    <div className="form-row">
-                      <div className="form-group flex-1">
-                        <label className="form-label" htmlFor="start-period">
-                          Tiết bắt đầu: <span className="req">*</span>
-                        </label>
-                        <select
-                          id="start-period"
-                          className="form-select"
-                          value={form.startPeriodId || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              startPeriodId: Number(e.target.value),
-                            }))
-                          }
-                        >
-                          {periods.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.startTime.slice(0, 5)})
-                            </option>
-                          ))}
-                        </select>
-                        {errors.startPeriodId && (
-                          <span className="err-text">
-                            {errors.startPeriodId}
-                          </span>
-                        )}
-                      </div>
+                    <>
+                      {periodGroups.length > 1 && (
+                        <div className="form-group">
+                          <label className="form-label" htmlFor="period-schedule">
+                            Sử dụng phòng: <span className="req">*</span>
+                          </label>
+                          <select
+                            id="period-schedule"
+                            className="form-select"
+                            value={activePeriodGroup?.roomTypeId ?? ""}
+                            onChange={(e) =>
+                              handlePeriodScheduleChange(e.target.value)
+                            }
+                          >
+                            {periodGroups.map((group) => (
+                              <option
+                                key={group.roomTypeId}
+                                value={group.roomTypeId}
+                              >
+                                {group.roomTypeName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
-                      <div className="form-group flex-1">
-                        <label className="form-label" htmlFor="end-period">
-                          Tiết kết thúc: <span className="req">*</span>
-                        </label>
-                        <select
-                          id="end-period"
-                          className="form-select"
-                          value={form.endPeriodId || ""}
-                          onChange={(e) =>
-                            setForm((prev) => ({
-                              ...prev,
-                              endPeriodId: Number(e.target.value),
-                            }))
-                          }
+                      <div className="form-row">
+                        <div className="form-group flex-1">
+                          <label className="form-label" htmlFor="start-period">
+                            Tiết bắt đầu: <span className="req">*</span>
+                          </label>
+                          <select
+                            id="start-period"
+                            className="form-select"
+                            value={form.startPeriodId || ""}
+                            onChange={(e) => {
+                              const nextStartId = Number(e.target.value);
+                              const nextStartIdx = activePeriods.findIndex(
+                                (p) => p.id === nextStartId
+                              );
+                              setForm((prev) => {
+                                const prevEndIdx = activePeriods.findIndex(
+                                  (p) => p.id === prev.endPeriodId
+                                );
+                                const endId =
+                                  prevEndIdx >= nextStartIdx
+                                    ? prev.endPeriodId
+                                    : (activePeriods[nextStartIdx + 1]?.id ??
+                                      nextStartId);
+                                return {
+                                  ...prev,
+                                  startPeriodId: nextStartId,
+                                  endPeriodId: endId,
+                                };
+                              });
+                            }}
+                          >
+                            {selectableStartPeriods.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {formatPeriodLabel(p)}
+                              </option>
+                            ))}
+                          </select>
+                          {errors.startPeriodId && (
+                            <span className="err-text">
+                              {errors.startPeriodId}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="form-group flex-1">
+                          <label className="form-label" htmlFor="end-period">
+                            Tiết kết thúc: <span className="req">*</span>
+                          </label>
+                          <select
+                            id="end-period"
+                            className="form-select"
+                            value={form.endPeriodId || ""}
+                            onChange={(e) => {
+                              const nextEndId = Number(e.target.value);
+                              const nextEndIdx = activePeriods.findIndex(
+                                (p) => p.id === nextEndId
+                              );
+                              if (
+                                nextEndIdx < 0 ||
+                                nextEndIdx < selectedStartIndex
+                              ) {
+                                return;
+                              }
+                              setForm((prev) => ({
+                                ...prev,
+                                endPeriodId: nextEndId,
+                              }));
+                            }}
+                          >
+                            {selectableEndPeriods.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {formatPeriodLabel(p)}
+                              </option>
+                            ))}
+                          </select>
+                          {errors.endPeriodId && (
+                            <span className="err-text">{errors.endPeriodId}</span>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          className="period-reset-btn"
+                          onClick={handleResetPeriods}
+                          title="Đặt lại tiết mặc định"
+                          aria-label="Đặt lại tiết mặc định"
+                          disabled={selectableStartPeriods.length === 0}
                         >
-                          {periods.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.endTime.slice(0, 5)})
-                            </option>
-                          ))}
-                        </select>
-                        {errors.endPeriodId && (
-                          <span className="err-text">{errors.endPeriodId}</span>
-                        )}
+                          <RefreshCwIcon size={16} />
+                        </button>
                       </div>
-                    </div>
+                    </>
                   )}
 
                   {/* Hourly selection */}
@@ -1177,6 +1554,26 @@ export default function BookingPage() {
                     </div>
                   )}
 
+                  {form.bookingMode === "time" && !isStudent && (
+                    <div className="form-group">
+                      <span className="form-label">Khu vực phòng:</span>
+                      <div className="mode-segmented-control time-scope-control">
+                        {timeScopeOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={`seg-btn ${
+                              timeRoomScope === option.value ? "active" : ""
+                            }`}
+                            onClick={() => handleTimeScopeChange(option.value)}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {isStudent && form.bookingMode === "time" && (
                     <div className="student-time-hint">
                       <ClockIcon size={14} />
@@ -1191,7 +1588,7 @@ export default function BookingPage() {
                     <button
                       type="button"
                       className="btn-outline full-width"
-                      onClick={searchRooms}
+                      onClick={() => searchRooms()}
                       disabled={isSearchingRooms}
                     >
                       {isSearchingRooms ? (
@@ -1358,9 +1755,7 @@ export default function BookingPage() {
                         <BanIcon size={16} /> Tài khoản đang bị cấm mượn phòng
                       </span>
                     ) : (
-                      <span>
-                        Gửi yêu cầu đặt {selectedRoomIds.length} phòng đã chọn
-                      </span>
+                      <span>Gửi yêu cầu</span>
                     )}
                   </button>
                 </form>
@@ -1376,12 +1771,14 @@ export default function BookingPage() {
                         Ngày{" "}
                         <strong>{formatVietnameseDate(form.date)}</strong> •{" "}
                         {form.bookingMode === "period"
-                          ? `Tiết ${form.startPeriodId} → Tiết ${form.endPeriodId}`
-                          : `${form.startTime} — ${form.endTime}`}
+                          ? `${selectedStartPeriod ? formatPeriodLabel(selectedStartPeriod) : "Tiết đầu"} → ${selectedEndPeriod ? formatPeriodLabel(selectedEndPeriod) : "Tiết cuối"}`
+                          : `${form.startTime} — ${form.endTime} • ${
+                              isStudent ? "Thư viện" : timeScopeLabel
+                            }`}
                       </p>
                     </div>
                     <span className="rooms-count-pill">
-                      {availableRooms.length} phòng khả dụng
+                      {scopedAvailableRooms.length} phòng khả dụng
                     </span>
                   </div>
 
@@ -1392,14 +1789,20 @@ export default function BookingPage() {
                     </div>
                   )}
 
-                  {!isSearchingRooms && availableRooms.length === 0 && hasSearched && (
+                  {!isSearchingRooms && scopedAvailableRooms.length === 0 && hasSearched && (
                     <div className="room-empty-card">
                       <InfoIcon size={32} />
                       <h4>Không tìm thấy phòng trống phù hợp</h4>
                       <p>
                         {isStudent
                           ? "Phòng học nhóm và phòng thuyết trình trong khung giờ này đã có lịch hoặc đang bảo trì. Bạn vui lòng chọn khung giờ khác trong 07:00 – 20:00."
-                          : "Tất cả các phòng trong khung giờ này đã có lịch đặt hoặc đang bảo trì. Bạn vui lòng chọn ngày hoặc khung giờ khác."}
+                          : form.bookingMode === "time"
+                            ? timeRoomScope === "hall"
+                              ? "Phòng hội thảo đã có lịch trong khung giờ này. Bạn vui lòng chọn khung giờ khác."
+                              : timeRoomScope === "library"
+                                ? "Phòng học nhóm và phòng thuyết trình đã có lịch trong khung giờ này. Bạn vui lòng chọn khung giờ khác."
+                                : "Tất cả phòng đặt theo khung giờ đã có lịch. Bạn vui lòng chọn ngày hoặc khung giờ khác."
+                            : "Tất cả các phòng trong khung giờ này đã có lịch đặt hoặc đang bảo trì. Bạn vui lòng chọn ngày hoặc khung giờ khác."}
                       </p>
                     </div>
                   )}
@@ -1413,6 +1816,20 @@ export default function BookingPage() {
                         const selectedInGroup = group.rooms.filter((room) =>
                           selectedRoomIds.includes(room.roomId)
                         ).length;
+                        const buildingGroups = groupAvailableRoomsByBuilding(
+                          group.rooms
+                        );
+                        const selectedBuilding =
+                          buildingGroups.find(
+                            (building) =>
+                              building.building ===
+                              activeRoomBuilding[group.roomTypeId]
+                          ) ?? buildingGroups[0];
+                        const selectedFloor =
+                          selectedBuilding?.floors.find(
+                            (floor) =>
+                              floor.floor === activeRoomFloor[group.roomTypeId]
+                          ) ?? selectedBuilding?.floors[0];
 
                         return (
                           <section
@@ -1453,61 +1870,139 @@ export default function BookingPage() {
                               />
                             </button>
 
-                            {isOpen && (
-                              <div className="room-compact-list">
-                                {group.rooms.map((room) => {
-                                  const isSelected =
-                                    selectedRoomIds.includes(room.roomId);
-                                  return (
-                                    <div
-                                      key={room.roomId}
-                                      className={`room-compact-row ${
-                                        isSelected ? "is-selected" : ""
-                                      }`}
-                                    >
-                                      <div className="room-compact-main">
-                                        <span className="room-code-tag">
-                                          {room.roomCode}
-                                        </span>
-                                        <span className="room-compact-text">
-                                          <strong>{room.roomName}</strong>
+                            {isOpen && selectedBuilding && selectedFloor && (
+                              <div className="room-browser">
+                                {buildingGroups.length > 1 ? (
+                                  <div
+                                    className="room-building-tabs"
+                                    role="tablist"
+                                    aria-label="Chọn tòa nhà"
+                                  >
+                                    {buildingGroups.map((building) => {
+                                      const isActive =
+                                        building.building ===
+                                        selectedBuilding.building;
+                                      return (
+                                        <button
+                                          key={building.building}
+                                          type="button"
+                                          role="tab"
+                                          aria-selected={isActive}
+                                          className={`room-building-tab ${
+                                            isActive ? "active" : ""
+                                          }`}
+                                          onClick={() =>
+                                            setActiveRoomBuilding((prev) => ({
+                                              ...prev,
+                                              [group.roomTypeId]:
+                                                building.building,
+                                            }))
+                                          }
+                                        >
+                                          <span>
+                                            {roomBuildingLabel(
+                                              building.building
+                                            )}
+                                          </span>
                                           <small>
-                                            {roomLocationLabel(room)} •{" "}
-                                            {room.capacity} chỗ
+                                            {building.rooms.length} phòng
                                           </small>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="room-single-location">
+                                    {roomBuildingLabel(selectedBuilding.building)}
+                                  </div>
+                                )}
+
+                                <div
+                                  className="room-floor-tabs"
+                                  role="tablist"
+                                  aria-label="Chọn tầng"
+                                >
+                                  {selectedBuilding.floors.map((floor) => {
+                                    const isActive =
+                                      floor.floor === selectedFloor.floor;
+                                    return (
+                                      <button
+                                        key={floor.floor}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={isActive}
+                                        className={`room-floor-tab ${
+                                          isActive ? "active" : ""
+                                        }`}
+                                        onClick={() =>
+                                          setActiveRoomFloor((prev) => ({
+                                            ...prev,
+                                            [group.roomTypeId]: floor.floor,
+                                          }))
+                                        }
+                                      >
+                                        <span>
+                                          {roomFloorLabel(floor.floor)}
                                         </span>
-                                      </div>
-                                      <div className="room-compact-actions">
+                                        <small>{floor.rooms.length}</small>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                <div className="room-tile-grid">
+                                  {selectedFloor.rooms.map((room) => {
+                                    const isSelected =
+                                      selectedRoomIds.includes(room.roomId);
+                                    return (
+                                      <div
+                                        key={room.roomId}
+                                        className={`room-tile ${
+                                          isSelected ? "is-selected" : ""
+                                        }`}
+                                      >
                                         <button
                                           type="button"
-                                          className={`select-btn ${
-                                            isSelected
-                                              ? "btn-selected"
-                                              : "btn-unselected"
-                                          }`}
+                                          className="room-tile-select"
                                           onClick={() =>
                                             toggleRoom(room.roomId)
                                           }
+                                          aria-pressed={isSelected}
+                                          title={`${room.roomName} • ${room.capacity} chỗ`}
                                         >
-                                          {isSelected
-                                            ? "✓ Đã chọn"
-                                            : "Chọn phòng"}
+                                          <span className="room-tile-head">
+                                            <span className="room-code-tag">
+                                              {room.roomCode}
+                                            </span>
+                                            <span className="room-tile-capacity">
+                                              {room.capacity} chỗ
+                                            </span>
+                                          </span>
+                                          <span className="room-tile-name">
+                                            {room.roomName}
+                                          </span>
+                                          <span className="room-tile-check">
+                                            {isSelected
+                                              ? "✓ Đã chọn"
+                                              : "Chọn phòng"}
+                                          </span>
                                         </button>
                                         <button
                                           type="button"
-                                          className="view-schedule-link"
+                                          className="room-tile-schedule"
                                           onClick={() =>
                                             navigate(
                                               `/lich-phong?roomId=${room.roomId}&date=${form.date}`
                                             )
                                           }
+                                          title={`Xem lịch ${room.roomCode}`}
                                         >
                                           Lịch
                                         </button>
                                       </div>
-                                    </div>
-                                  );
-                                })}
+                                    );
+                                  })}
+                                </div>
                               </div>
                             )}
                           </section>
@@ -1649,6 +2144,85 @@ export default function BookingPage() {
 
               {!isLoadingBookings && myBookings.length > 0 && (
                 <div className="user-bookings-list-container">
+                  {/* Date filter: ngày mượn */}
+                  <div className="user-bookings-date-filter-bar">
+                    <span className="user-bookings-date-label">Ngày mượn</span>
+
+                    <div
+                      className="user-bookings-date-presets"
+                      role="group"
+                      aria-label="Lọc nhanh theo ngày mượn"
+                    >
+                      {([
+                        { value: "all", label: "Tất cả" },
+                        { value: "today", label: "Hôm nay" },
+                        { value: "last7", label: "7 ngày qua" },
+                        { value: "month", label: "Tháng này" },
+                      ] as const).map((preset) => (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          className={`user-bookings-date-chip ${
+                            historyDateFilter === preset.value ? "active" : ""
+                          }`}
+                          onClick={() => handleDateFilterChange(preset.value)}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div
+                      className={`user-bookings-date-custom ${
+                        historyDateFilter === "custom" ? "is-active" : ""
+                      }`}
+                    >
+                      <span className="user-bookings-date-custom-label">
+                        Khoảng ngày
+                      </span>
+                      <input
+                        type="text"
+                        className="user-bookings-date-input"
+                        placeholder="dd/mm/yyyy"
+                        aria-label="Từ ngày"
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={customDateFrom}
+                        onChange={(event) => {
+                          setCustomDateFrom(event.target.value);
+                          setDateFilterError("");
+                        }}
+                      />
+                      <span className="user-bookings-date-sep">–</span>
+                      <input
+                        type="text"
+                        className="user-bookings-date-input"
+                        placeholder="dd/mm/yyyy"
+                        aria-label="Đến ngày"
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={customDateTo}
+                        onChange={(event) => {
+                          setCustomDateTo(event.target.value);
+                          setDateFilterError("");
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="user-bookings-date-apply"
+                        onClick={handleApplyCustomDateRange}
+                      >
+                        Áp dụng
+                      </button>
+                    </div>
+
+                    {dateFilterError && (
+                      <p className="user-bookings-date-error" role="alert">
+                        {dateFilterError}
+                      </p>
+                    )}
+                  </div>
+
                   {/* Filter and Search Bar */}
                   <div className="user-bookings-filter-bar">
                     <div className="user-bookings-filter-tabs">
@@ -1657,42 +2231,42 @@ export default function BookingPage() {
                         className={`user-bookings-filter-tab ${historyStatusFilter === "ALL" ? "active" : ""}`}
                         onClick={() => setHistoryStatusFilter("ALL")}
                       >
-                        Tất cả ({flatBookingItems.length})
+                        Tất cả ({historyStatusCounts.all})
                       </button>
                       <button
                         type="button"
                         className={`user-bookings-filter-tab ${historyStatusFilter === "APPROVED" ? "active" : ""}`}
                         onClick={() => setHistoryStatusFilter("APPROVED")}
                       >
-                        Đã duyệt ({flatBookingItems.filter((i) => i.isApproved).length})
+                        Đã duyệt ({historyStatusCounts.approved})
                       </button>
                       <button
                         type="button"
                         className={`user-bookings-filter-tab ${historyStatusFilter === "IN_USE" ? "active" : ""}`}
                         onClick={() => setHistoryStatusFilter("IN_USE")}
                       >
-                        Đang sử dụng ({flatBookingItems.filter((i) => i.isInUse).length})
+                        Đang sử dụng ({historyStatusCounts.inUse})
                       </button>
                       <button
                         type="button"
                         className={`user-bookings-filter-tab ${historyStatusFilter === "PENDING" ? "active" : ""}`}
                         onClick={() => setHistoryStatusFilter("PENDING")}
                       >
-                        Chờ duyệt ({flatBookingItems.filter((i) => i.isPending).length})
+                        Chờ duyệt ({historyStatusCounts.pending})
                       </button>
                       <button
                         type="button"
                         className={`user-bookings-filter-tab ${historyStatusFilter === "COMPLETED" ? "active" : ""}`}
                         onClick={() => setHistoryStatusFilter("COMPLETED")}
                       >
-                        Hoàn thành ({flatBookingItems.filter((i) => i.isCompleted).length})
+                        Hoàn thành ({historyStatusCounts.completed})
                       </button>
                       <button
                         type="button"
                         className={`user-bookings-filter-tab ${historyStatusFilter === "CANCELLED" ? "active" : ""}`}
                         onClick={() => setHistoryStatusFilter("CANCELLED")}
                       >
-                        Đã hủy ({flatBookingItems.filter((i) => i.isCancelled).length})
+                        Đã hủy ({historyStatusCounts.cancelled})
                       </button>
                     </div>
 
@@ -1708,7 +2282,22 @@ export default function BookingPage() {
                   {/* Compact Table / List View */}
                   {filteredBookingItems.length === 0 ? (
                     <div className="table-empty-box" style={{ padding: "40px 20px" }}>
-                      <p>Không tìm thấy lịch đặt phòng nào phù hợp với bộ lọc.</p>
+                      <p>
+                        {historyDateRange
+                          ? `Không có đơn phù hợp với khoảng ngày ${formatDdMmYyyy(
+                              historyDateRange.from
+                            )} – ${formatDdMmYyyy(historyDateRange.to)}.`
+                          : "Không tìm thấy lịch đặt phòng nào phù hợp với bộ lọc."}
+                      </p>
+                      {historyDateRange && (
+                        <button
+                          type="button"
+                          className="btn-outline"
+                          onClick={() => handleDateFilterChange("all")}
+                        >
+                          Xóa lọc ngày
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="user-bookings-table-wrapper">

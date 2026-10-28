@@ -117,6 +117,20 @@ export interface AvailableRoomGroup {
   rooms: AvailableRoom[];
 }
 
+export interface RoomFloorGroup {
+  floor: string;
+  rooms: AvailableRoom[];
+}
+
+export interface RoomBuildingGroup {
+  building: string;
+  rooms: AvailableRoom[];
+  floors: RoomFloorGroup[];
+}
+
+/** Nhóm phòng theo khu vực khi đặt theo khung giờ. */
+export type AvailableRoomScope = "hall" | "library" | "all";
+
 /** Khung giờ mượn phòng dành cho sinh viên tại Thư viện HUIT. */
 export const STUDENT_OPEN_TIME = "07:00";
 export const STUDENT_CLOSE_TIME = "20:00";
@@ -134,6 +148,44 @@ export function isStudentRole(role?: string | null): boolean {
   return value === "student" || value === "sinh viên" || value === "sinh vien";
 }
 
+export function isLecturerRole(role?: string | null): boolean {
+  const value = normalizeText(role);
+  return value === "lecturer" || value === "giảng viên" || value === "giang vien";
+}
+
+export interface PeriodGroup {
+  roomTypeId: number;
+  roomTypeName: string;
+  periods: Period[];
+}
+
+/**
+ * Gom tiết học theo loại phòng (lý thuyết / thực hành). Mỗi loại phòng có
+ * bộ 16 tiết riêng nên không được trộn khi chọn tiết.
+ */
+export function groupPeriodsByRoomType(periods: Period[]): PeriodGroup[] {
+  const groups = new Map<number, PeriodGroup>();
+  for (const period of periods) {
+    if (!period.roomTypeId) continue;
+    const existing = groups.get(period.roomTypeId);
+    if (existing) {
+      existing.periods.push(period);
+    } else {
+      groups.set(period.roomTypeId, {
+        roomTypeId: period.roomTypeId,
+        roomTypeName: period.roomTypeName || "Lịch tiết",
+        periods: [period],
+      });
+    }
+  }
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    periods: [...group.periods].sort(
+      (a, b) => a.startTime.localeCompare(b.startTime)
+    ),
+  }));
+}
+
 /**
  * Sinh viên chỉ được đặt phòng học nhóm và phòng thuyết trình của Thư viện.
  * Các loại phòng khác (hội thảo, hội trường, phòng học...) do đơn vị quản lý.
@@ -144,6 +196,139 @@ export function isStudentBookableRoomType(
   const value = normalizeText(roomTypeName);
   return value.includes("nhóm") || value.includes("nhom") ||
     value.includes("thuyết trình") || value.includes("thuyet trinh");
+}
+
+/** Phòng hội thảo / hội trường — nhóm phòng đặt theo khung giờ. */
+export function isHallRoomType(roomTypeName?: string | null): boolean {
+  const value = normalizeText(roomTypeName);
+  return value.includes("hội thảo") || value.includes("hoi thao") ||
+    value.includes("hội trường") || value.includes("hoi truong");
+}
+
+/** Lọc danh sách phòng theo khu vực đặt (hội trường / thư viện / tất cả). */
+export function filterAvailableRoomsByScope(
+  rooms: AvailableRoom[],
+  scope: AvailableRoomScope
+): AvailableRoom[] {
+  if (scope === "all") return rooms;
+  if (scope === "hall") {
+    return rooms.filter((room) => isHallRoomType(room.roomTypeName));
+  }
+  return rooms.filter((room) => isStudentBookableRoomType(room.roomTypeName));
+}
+
+function parseFloorNumber(floor: string): number | null {
+  const value = Number.parseInt(floor, 10);
+  return Number.isNaN(value) ? null : value;
+}
+
+function compareFloors(a: string, b: string): number {
+  const numA = parseFloorNumber(a);
+  const numB = parseFloorNumber(b);
+  if (numA !== null && numB !== null) return numA - numB;
+  if (numA !== null) return -1;
+  if (numB !== null) return 1;
+  return a.localeCompare(b, "vi");
+}
+
+/**
+ * Gom phòng theo tòa → tầng để hiển thị dạng tab gọn (Tòa A/B, Tầng 2–5).
+ * Sắp xếp tòa theo tên và tầng theo số để thứ tự ổn định.
+ */
+export function groupAvailableRoomsByBuilding(
+  rooms: AvailableRoom[]
+): RoomBuildingGroup[] {
+  const buildings = new Map<string, Map<string, AvailableRoom[]>>();
+
+  for (const room of rooms) {
+    const building = (room.building || "Khác").trim() || "Khác";
+    const floor = (room.floor || "—").trim() || "—";
+    let floors = buildings.get(building);
+    if (!floors) {
+      floors = new Map<string, AvailableRoom[]>();
+      buildings.set(building, floors);
+    }
+    const floorRooms = floors.get(floor);
+    if (floorRooms) {
+      floorRooms.push(room);
+    } else {
+      floors.set(floor, [room]);
+    }
+  }
+
+  return Array.from(buildings.entries())
+    .sort(([a], [b]) => a.localeCompare(b, "vi"))
+    .map(([building, floors]) => {
+      const floorGroups = Array.from(floors.entries())
+        .sort(([a], [b]) => compareFloors(a, b))
+        .map(([floor, floorRooms]) => ({
+          floor,
+          rooms: [...floorRooms].sort((a, b) =>
+            a.roomCode.localeCompare(b.roomCode, "vi")
+          ),
+        }));
+      const allRooms = floorGroups.flatMap((floor) => floor.rooms);
+      return { building, rooms: allRooms, floors: floorGroups };
+    });
+}
+
+function formatFloorSummary(floors: number[]): string | null {
+  if (floors.length === 0) return null;
+  if (floors.length === 1) return `Tầng ${floors[0]}`;
+  const contiguous = floors.every(
+    (floor, index) => index === 0 || floor === floors[index - 1] + 1
+  );
+  return contiguous
+    ? `Tầng ${floors[0]}–${floors[floors.length - 1]}`
+    : `Tầng ${floors.join(", ")}`;
+}
+
+/** Tóm tắt vị trí các phòng, ví dụ "Tòa A, B • Tầng 2–5" hoặc "Thư viện • Tầng 3". */
+export function summarizeRoomLocations(rooms: AvailableRoom[]): string {
+  if (rooms.length === 0) return "Thư viện HUIT";
+
+  const buildingLabels: string[] = [];
+  const floors = new Set<number>();
+  const unknownFloors = new Set<string>();
+
+  for (const room of rooms) {
+    const rawBuilding = (room.building || "").trim();
+    const buildingLabel =
+      rawBuilding.toLowerCase() === "thư viện"
+        ? "Thư viện"
+        : `Tòa ${rawBuilding || "—"}`;
+    if (!buildingLabels.includes(buildingLabel)) {
+      buildingLabels.push(buildingLabel);
+    }
+    const rawFloor = (room.floor || "").trim();
+    if (!rawFloor) continue;
+    const floorNumber = parseFloorNumber(rawFloor);
+    if (floorNumber === null) {
+      unknownFloors.add(rawFloor);
+    } else {
+      floors.add(floorNumber);
+    }
+  }
+
+  const sortedFloors = Array.from(floors).sort((a, b) => a - b);
+  const floorLabel = formatFloorSummary(sortedFloors);
+  const sortedBuildingLabels = [...buildingLabels].sort((a, b) =>
+    a.localeCompare(b, "vi")
+  );
+  const allAreTowers = sortedBuildingLabels.every((label) =>
+    label.startsWith("Tòa ")
+  );
+  const buildingLabel = allAreTowers
+    ? `Tòa ${sortedBuildingLabels.map((label) => label.slice(4)).join(", ")}`
+    : sortedBuildingLabels.join(", ");
+
+  if (!floorLabel) {
+    return unknownFloors.size > 0
+      ? `${buildingLabel} • Tầng ${Array.from(unknownFloors).join(", ")}`
+      : buildingLabel;
+  }
+
+  return `${buildingLabel} • ${floorLabel}`;
 }
 
 function parseClockMinutes(value?: string): number | null {
@@ -302,12 +487,14 @@ export function groupAvailableRoomsByType(
     }
   }
 
-  return Array.from(groups.values()).map((group) => ({
-    ...group,
-    rooms: [...group.rooms].sort((a, b) =>
-      a.roomCode.localeCompare(b.roomCode, "vi")
-    ),
-  }));
+  return Array.from(groups.values())
+    .sort((a, b) => a.roomTypeName.localeCompare(b.roomTypeName, "vi"))
+    .map((group) => ({
+      ...group,
+      rooms: [...group.rooms].sort((a, b) =>
+        a.roomCode.localeCompare(b.roomCode, "vi")
+      ),
+    }));
 }
 
 /**
@@ -694,6 +881,77 @@ export function formatDetailTimeRange(detail: BookingDetailItem): string {
   const sStr = s.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
   const eStr = e.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
   return `${sStr} - ${eStr}`;
+}
+
+// ── DATE RANGE FILTER HELPERS ────────────────────────────────────────────
+
+export type BookingDatePreset = "today" | "last7" | "month";
+
+export interface BookingDateRange {
+  /** ISO date key yyyy-mm-dd */
+  from: string;
+  /** ISO date key yyyy-mm-dd */
+  to: string;
+}
+
+/** Chuyển chuỗi dd/mm/yyyy (cho phép 1-2 chữ số ngày/tháng) sang ISO yyyy-mm-dd. */
+export function parseDdMmYyyy(value: string): string | null {
+  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Hiển thị ISO yyyy-mm-dd thành dd/mm/yyyy. */
+export function formatDdMmYyyy(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-");
+  if (!year || !month || !day) return "";
+  return `${day}/${month}/${year}`;
+}
+
+/** Khoảng ngày cho các nút chọn nhanh, tính theo ngày hôm nay (ISO key). */
+export function getBookingDatePresetRange(
+  preset: BookingDatePreset,
+  todayKey: string
+): BookingDateRange {
+  const [year, month, day] = todayKey.split("-").map(Number);
+
+  if (preset === "today") {
+    return { from: todayKey, to: todayKey };
+  }
+
+  if (preset === "last7") {
+    return {
+      from: toISODateString(new Date(year, month - 1, day - 6)),
+      to: todayKey,
+    };
+  }
+
+  return {
+    from: toISODateString(new Date(year, month - 1, 1)),
+    to: toISODateString(new Date(year, month, 0)),
+  };
+}
+
+/** Kiểm tra một ngày (ISO key) có nằm trong khoảng đã chọn hay không. */
+export function isIsoDateInRange(
+  dateKey: string,
+  range: BookingDateRange
+): boolean {
+  if (!dateKey) return false;
+  return dateKey >= range.from && dateKey <= range.to;
 }
 
 // ── API CALLS ─────────────────────────────────────────────────────────────

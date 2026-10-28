@@ -43,11 +43,17 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         /// </summary>
         Task<ApiResponse<RoomScheduleDto>> GetRoomScheduleAsync(int roomId, RoomScheduleQueryDto query);
 
+        /// <summary>
+        /// Lịch đặt phòng của toàn bộ phòng trong khoảng ngày (giờ Việt Nam).
+        /// Dùng cho chế độ xem ngày/tuần/tháng của trang lịch phòng.
+        /// </summary>
+        Task<ApiResponse<IEnumerable<RoomScheduleItemDto>>> GetSchedulesAsync(DateTime fromDate, DateTime toDate);
+
         /// <summary>Cập nhật trạng thái phòng (Available / InUse / Maintenance)</summary>
         Task<ApiResponse<bool>> UpdateRoomStatusAsync(int roomId, UpdateRoomStatusDto request);
 
-        /// <summary>Lấy tất cả tiết học</summary>
-        Task<ApiResponse<IEnumerable<PeriodDto>>> GetPeriodsAsync();
+        /// <summary>Lấy danh sách tiết học, có thể lọc theo loại phòng.</summary>
+        Task<ApiResponse<IEnumerable<PeriodDto>>> GetPeriodsAsync(int? roomTypeId = null);
 
         /// <summary>Tìm kiếm phiếu mượn theo từ khóa, trạng thái, ngày, phòng</summary>
         Task<ApiResponse<IEnumerable<BookingResponseDto>>> SearchBookingsAsync(

@@ -42,6 +42,13 @@ namespace HUIT_RoMan.Infrastructure.Persistence
         {
             base.OnModelCreating(modelBuilder);
 
+            // Mã phòng duy nhất giữa các phòng đang hoạt động; phòng đã xóa mềm
+            // không chặn việc tái sử dụng mã khi seed lại.
+            modelBuilder.Entity<Room>()
+                .HasIndex(r => r.RoomCode)
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = FALSE");
+
             // Configure Composite Keys
             modelBuilder.Entity<RoomEquipment>()
                 .HasKey(re => new { re.RoomId, re.EquipmentId });

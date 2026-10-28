@@ -20,6 +20,14 @@ namespace HUIT_RoMan.Domain.Entities
 
         public TimeSpan StartTime { get; set; } // Giờ bắt đầu, VD: 07:00:00
         public TimeSpan EndTime { get; set; }   // Giờ kết thúc, VD: 07:45:00
+
+        /// <summary>
+        /// Loại phòng sử dụng bộ tiết này (phòng lý thuyết và phòng thực hành có
+        /// lịch tiết khác nhau). NULL = bộ tiết dùng chung cũ.
+        /// </summary>
+        [ForeignKey("RoomType")]
+        public int? RoomTypeId { get; set; }
+        public virtual RoomType RoomType { get; set; }
     }
 }
 

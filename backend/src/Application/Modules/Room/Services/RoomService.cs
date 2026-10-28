@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HUIT_RoMan.Application.Modules.Booking.Services;
 using HUIT_RoMan.Application.Modules.Room.DTOs;
 using HUIT_RoMan.Domain.Entities;
 using HUIT_RoMan.Application.Common.Interfaces;
@@ -13,6 +14,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IRepository<Domain.Entities.Room> _roomRepo;
         private readonly IRepository<RoomType> _roomTypeRepo;
+        private readonly IRepository<BookingDetail> _bookingDetailRepo;
         private readonly ICurrentUserService _currentUser;
 
         public RoomService(IUnitOfWork unitOfWork, ICurrentUserService currentUser)
@@ -20,6 +22,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             _unitOfWork = unitOfWork;
             _roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
             _roomTypeRepo = _unitOfWork.Repository<RoomType>();
+            _bookingDetailRepo = _unitOfWork.Repository<BookingDetail>();
             _currentUser = currentUser;
         }
 
@@ -224,6 +227,164 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             }).ToList();
 
             return ApiResponse<IEnumerable<RoomDto>>.SuccessResponse(dtos);
+        }
+
+        /// <summary>
+        /// Danh mục phòng có phân trang, lọc theo từ khóa/loại/tòa/tầng/sức chứa
+        /// và trạng thái vận hành. Trạng thái free/in-use được xác định theo
+        /// lịch đặt của ngày được truyền vào (giờ Việt Nam).
+        /// </summary>
+        public async Task<ApiResponse<PagedRoomResultDto>> GetPagedAsync(PagedRoomQueryDto query)
+        {
+            var page = query.Page < 1 ? 1 : query.Page;
+            var pageSize = query.PageSize <= 0 ? 10 : System.Math.Min(query.PageSize, 100);
+
+            var rooms = await _roomRepo.GetAllAsync(r => r.RoomType);
+            var roomList = rooms.ToList();
+
+            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            {
+                roomList = roomList
+                    .Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value)
+                    .ToList();
+            }
+
+            if (StudentBookingPolicy.IsStudent(_currentUser.Role))
+            {
+                roomList = roomList
+                    .Where(r => StudentBookingPolicy.IsBookableRoomType(r.RoomType?.Name))
+                    .ToList();
+            }
+
+            var filtered = roomList.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(query.Keyword))
+            {
+                var term = query.Keyword.Trim().ToLowerInvariant();
+                filtered = filtered.Where(r =>
+                    r.Name.ToLower().Contains(term) ||
+                    r.RoomCode.ToLower().Contains(term) ||
+                    (r.Building != null && r.Building.ToLower().Contains(term)) ||
+                    (r.Floor != null && r.Floor.ToLower().Contains(term)) ||
+                    (r.RoomType?.Name != null && r.RoomType.Name.ToLower().Contains(term)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.RoomType) && query.RoomType != "all")
+            {
+                filtered = filtered.Where(r =>
+                    string.Equals(r.RoomType?.Name, query.RoomType, System.StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.Building) && query.Building != "all")
+            {
+                filtered = filtered.Where(r =>
+                    string.Equals(r.Building, query.Building, System.StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.Floor) && query.Floor != "all")
+            {
+                filtered = filtered.Where(r =>
+                    string.Equals(r.Floor, query.Floor, System.StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (query.MinCapacity.HasValue && query.MinCapacity.Value > 0)
+            {
+                filtered = filtered.Where(r => r.Capacity >= query.MinCapacity.Value);
+            }
+
+            var statusFilter = (query.Status ?? "all").Trim().ToLowerInvariant();
+            if (statusFilter == "free" || statusFilter == "in-use" || statusFilter == "maintenance")
+            {
+                var localDate = (query.Date ?? System.DateTime.Today).Date;
+                var windowStart = System.DateTime.SpecifyKind(
+                    localDate.AddHours(-7), System.DateTimeKind.Utc);
+                var windowEnd = System.DateTime.SpecifyKind(
+                    localDate.AddDays(1).AddHours(-7), System.DateTimeKind.Utc);
+                var nowUtc = System.DateTime.UtcNow;
+
+                var details = await _bookingDetailRepo.FindAsync(
+                    bd => bd.Status != "Từ chối"
+                       && bd.Status != "Đã hủy"
+                       && bd.StartAt < windowEnd
+                       && bd.EndAt > windowStart);
+                var detailsByRoom = details
+                    .GroupBy(bd => bd.RoomId)
+                    .ToDictionary(group => group.Key, group => group.ToList());
+
+                filtered = filtered.Where(room =>
+                {
+                    detailsByRoom.TryGetValue(room.Id, out var roomDetails);
+                    var state = GetLiveRoomState(room, roomDetails, nowUtc);
+                    return state == statusFilter;
+                });
+            }
+
+            var ordered = filtered
+                .OrderBy(r => int.TryParse(r.Floor, out var floorNumber) ? floorNumber : int.MaxValue)
+                .ThenBy(r => r.RoomCode, System.StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var totalItems = ordered.Count;
+            var totalPages = totalItems == 0
+                ? 0
+                : (int)System.Math.Ceiling(totalItems / (double)pageSize);
+            if (totalPages > 0 && page > totalPages) page = totalPages;
+
+            var items = ordered
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(r => new RoomDto
+                {
+                    Id = r.Id,
+                    Name = r.Name,
+                    RoomCode = r.RoomCode,
+                    Building = r.Building,
+                    Floor = r.Floor,
+                    RoomNumber = r.RoomNumber,
+                    Capacity = r.Capacity,
+                    Status = r.Status,
+                    Description = r.Description,
+                    RoomTypeId = r.RoomTypeId,
+                    RoomTypeName = r.RoomType?.Name,
+                    IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
+                })
+                .ToList();
+
+            return ApiResponse<PagedRoomResultDto>.SuccessResponse(new PagedRoomResultDto
+            {
+                Items = items,
+                Page = totalPages == 0 ? 1 : page,
+                PageSize = pageSize,
+                TotalItems = totalItems,
+                TotalPages = totalPages
+            });
+        }
+
+        private static string GetLiveRoomState(
+            Domain.Entities.Room room,
+            IReadOnlyCollection<BookingDetail>? details,
+            System.DateTime nowUtc)
+        {
+            var status = NormalizeRoomStatus(room.Status);
+            if (status == "maintenance") return "maintenance";
+            if (status == "in-use") return "in-use";
+            if (details == null || details.Count == 0) return "free";
+
+            var inUse = details.Any(detail =>
+                detail.Status == "Đang sử dụng"
+                || (nowUtc >= detail.StartAt && nowUtc < detail.EndAt));
+            return inUse ? "in-use" : "booked";
+        }
+
+        private static string NormalizeRoomStatus(string? status)
+        {
+            var value = (status ?? string.Empty).Trim().ToLowerInvariant();
+            if (value == "bảo trì" || value == "bao tri" || value == "maintenance")
+                return "maintenance";
+            if (value == "đang sử dụng" || value == "dang su dung"
+                || value == "inuse" || value == "in use")
+                return "in-use";
+            return "free";
         }
     }
 }

@@ -41,6 +41,14 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(response);
         }
 
+        /// <summary>Danh mục phòng có phân trang và bộ lọc cho trang lịch sử dụng phòng</summary>
+        [HttpGet("paged")]
+        public async Task<IActionResult> GetPaged([FromQuery] PagedRoomQueryDto query)
+        {
+            var response = await _roomService.GetPagedAsync(query);
+            return Ok(response);
+        }
+
         /// <summary>Tìm kiếm phòng đa tiêu chí (từ khóa, tòa nhà, tầng, loại phòng, trạng thái, sức chứa)</summary>
         [HttpGet("search")]
         public async Task<IActionResult> Search(
@@ -160,6 +168,7 @@ namespace HUIT_RoMan.API.Controllers
             var localDate = date.Date;
             System.DateTime windowStart = System.DateTime.SpecifyKind(localDate.AddHours(-7), System.DateTimeKind.Utc);
             System.DateTime windowEnd = System.DateTime.SpecifyKind(localDate.AddDays(1).AddHours(-7), System.DateTimeKind.Utc);
+            int? requiredRoomTypeId = null;
 
             if (startPeriodId.HasValue && endPeriodId.HasValue)
             {
@@ -171,7 +180,13 @@ namespace HUIT_RoMan.API.Controllers
                     return BadRequest("Tiết học không hợp lệ.");
                 if (startPeriod.StartTime > endPeriod.EndTime)
                     return BadRequest("Tiết bắt đầu phải trước tiết kết thúc.");
-                
+                if (startPeriod.RoomTypeId.HasValue && endPeriod.RoomTypeId.HasValue
+                    && startPeriod.RoomTypeId != endPeriod.RoomTypeId)
+                    return BadRequest("Tiết bắt đầu và tiết kết thúc phải thuộc cùng một lịch tiết.");
+
+                // Mỗi loại phòng có bộ tiết riêng: chỉ trả phòng thuộc đúng loại phòng.
+                requiredRoomTypeId = startPeriod.RoomTypeId ?? endPeriod.RoomTypeId;
+
                 windowStart = System.DateTime.SpecifyKind(localDate.Add(startPeriod.StartTime).AddHours(-7), System.DateTimeKind.Utc);
                 windowEnd = System.DateTime.SpecifyKind(localDate.Add(endPeriod.EndTime).AddHours(-7), System.DateTimeKind.Utc);
             }
@@ -223,7 +238,15 @@ namespace HUIT_RoMan.API.Controllers
                 }
             }
 
-            var availableRooms = await _storedProcedureService.GetAvailableRoomsAsync(windowStart, windowEnd, null, 0);
+            var availableRooms = await _storedProcedureService.GetAvailableRoomsAsync(
+                windowStart, windowEnd, requiredRoomTypeId, 0);
+
+            if (requiredRoomTypeId.HasValue)
+            {
+                availableRooms = availableRooms
+                    .Where(room => room.RoomTypeId == requiredRoomTypeId.Value)
+                    .ToList();
+            }
 
             if (isStudent)
             {

@@ -141,6 +141,9 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
     {
         public int BookingDetailId { get; set; }
         public int BookingId { get; set; }
+        public int RoomId { get; set; }
+        public string RoomName { get; set; }
+        public string RoomCode { get; set; }
         public string ActivityName { get; set; }
         public string Purpose { get; set; }
         public DateTime StartAt { get; set; }
@@ -183,5 +186,8 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
         public string Name { get; set; }
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
+        /// <summary>Loại phòng sở hữu bộ tiết này (lý thuyết / thực hành).</summary>
+        public int? RoomTypeId { get; set; }
+        public string RoomTypeName { get; set; }
     }
 }

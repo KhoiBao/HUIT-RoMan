@@ -76,10 +76,18 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 if (room == null)
                     return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng ID {detail.RoomId} không tồn tại.");
 
-                if (room.Status == "Bảo trì")
+                if (IsRoomUnderMaintenance(room.Status))
                     return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng {room.Name} đang bảo trì, không thể đặt.");
 
-                if (room.RoomType != null && room.RoomType.IsBookingByPeriod)
+                // Ma trận quyền theo vai trò: vai trò lấy từ token ở server,
+                // không tin bất kỳ thông tin role nào do client gửi lên.
+                var roleError = BookingRoomPermissionPolicy.ValidateRoleRoomType(
+                    _currentUser.Role, room.RoomType?.Name);
+                if (roleError != null)
+                    return ApiResponse<BookingResponseDto>.ErrorResponse(roleError);
+
+                var isBookingByPeriod = room.RoomType?.IsBookingByPeriod ?? false;
+                if (isBookingByPeriod)
                 {
                     if (!detail.StartPeriodId.HasValue || !detail.EndPeriodId.HasValue)
                         return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng {room.Name} yêu cầu phải đặt theo tiết học.");
@@ -90,10 +98,24 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                     if (startPeriod == null || endPeriod == null)
                         return ApiResponse<BookingResponseDto>.ErrorResponse("Không tìm thấy thông tin tiết học.");
 
+                    // Mỗi loại phòng có bộ 16 tiết riêng; không cho trộn tiết của
+                    // phòng lý thuyết với phòng thực hành.
+                    if (startPeriod.RoomTypeId.HasValue && startPeriod.RoomTypeId != room.RoomTypeId)
+                        return ApiResponse<BookingResponseDto>.ErrorResponse(
+                            $"{startPeriod.Name} không thuộc lịch tiết của {room.RoomType?.Name}.");
+                    if (endPeriod.RoomTypeId.HasValue && endPeriod.RoomTypeId != room.RoomTypeId)
+                        return ApiResponse<BookingResponseDto>.ErrorResponse(
+                            $"{endPeriod.Name} không thuộc lịch tiết của {room.RoomType?.Name}.");
+
                     // detail.StartAt sent by client is in UTC. Convert to UTC+7 (Vietnam local) to get the correct calendar date.
                     var localDate = detail.StartAt.ToUniversalTime().AddHours(7).Date;
                     detail.StartAt = System.DateTime.SpecifyKind(localDate.Add(startPeriod.StartTime).AddHours(-7), System.DateTimeKind.Utc);
                     detail.EndAt = System.DateTime.SpecifyKind(localDate.Add(endPeriod.EndTime).AddHours(-7), System.DateTimeKind.Utc);
+                }
+                else if (detail.StartPeriodId.HasValue || detail.EndPeriodId.HasValue)
+                {
+                    return ApiResponse<BookingResponseDto>.ErrorResponse(
+                        $"Phòng {room.Name} đặt theo khung giờ, không theo tiết học.");
                 }
 
                 if (detail.EndAt <= detail.StartAt)
@@ -101,12 +123,6 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
 
                 if (StudentBookingPolicy.IsStudent(_currentUser.Role))
                 {
-                    if (!StudentBookingPolicy.IsBookableRoomType(room.RoomType?.Name))
-                    {
-                        return ApiResponse<BookingResponseDto>.ErrorResponse(
-                            "Sinh viên chỉ được đặt phòng học nhóm và phòng thuyết trình của Thư viện.");
-                    }
-
                     var windowError = StudentBookingPolicy.ValidateWindow(
                         detail.StartAt,
                         detail.EndAt,
@@ -114,6 +130,12 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
 
                     if (windowError != null)
                         return ApiResponse<BookingResponseDto>.ErrorResponse(windowError);
+                }
+                else if (BookingRoomPermissionPolicy.IsLecturer(_currentUser.Role)
+                         && detail.StartAt.ToUniversalTime() <= now)
+                {
+                    return ApiResponse<BookingResponseDto>.ErrorResponse(
+                        "Không thể đặt thời gian đã qua trong ngày.");
                 }
 
                 // Check for conflicting approved/pending bookings
@@ -536,10 +558,11 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 return ApiResponse<RoomScheduleDto>.ErrorResponse("Không tìm thấy phòng.");
 
             var isBookingByPeriod = room.RoomType?.IsBookingByPeriod ?? false;
-            // Đảm bảo DateTimeKind = Utc để Postgres không bị lỗi khi so sánh với timestamp with time zone
-            var queryDate = DateTime.SpecifyKind(query.Date.Date, DateTimeKind.Utc);
-            var startOfDay = queryDate;
-            var endOfDay   = queryDate.AddDays(1);
+            // Ngày người dùng chọn là giờ Việt Nam (UTC+7); DB lưu UTC nên cửa sổ ngày
+            // phải dịch về UTC để không lệch 7 giờ so với các API khác.
+            var localDate = query.Date.Date;
+            var startOfDay = DateTime.SpecifyKind(localDate.AddHours(-7), DateTimeKind.Utc);
+            var endOfDay   = DateTime.SpecifyKind(localDate.AddDays(1).AddHours(-7), DateTimeKind.Utc);
 
             // Khung thời gian mặc định = cả ngày
             DateTime windowStart = startOfDay;
@@ -564,9 +587,16 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                         return ApiResponse<RoomScheduleDto>.ErrorResponse(
                             "Tiết bắt đầu phải trước tiết kết thúc.");
 
-                    // Chuyển giờ tiết → datetime thực
-                    windowStart = queryDate.Add(startPeriod.StartTime);
-                    windowEnd   = queryDate.Add(endPeriod.EndTime);
+                    if (startPeriod.RoomTypeId.HasValue && startPeriod.RoomTypeId != room.RoomTypeId)
+                        return ApiResponse<RoomScheduleDto>.ErrorResponse(
+                            $"{startPeriod.Name} không thuộc lịch tiết của phòng này.");
+                    if (endPeriod.RoomTypeId.HasValue && endPeriod.RoomTypeId != room.RoomTypeId)
+                        return ApiResponse<RoomScheduleDto>.ErrorResponse(
+                            $"{endPeriod.Name} không thuộc lịch tiết của phòng này.");
+
+                    // Chuyển giờ tiết → datetime thực (UTC)
+                    windowStart = DateTime.SpecifyKind(localDate.Add(startPeriod.StartTime).AddHours(-7), DateTimeKind.Utc);
+                    windowEnd   = DateTime.SpecifyKind(localDate.Add(endPeriod.EndTime).AddHours(-7), DateTimeKind.Utc);
                     filterDesc  = $"{startPeriod.Name} → {endPeriod.Name}";
                 }
                 // Nếu không truyền period → giữ nguyên toàn ngày
@@ -580,8 +610,8 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                         return ApiResponse<RoomScheduleDto>.ErrorResponse(
                             "Giờ bắt đầu phải trước giờ kết thúc.");
 
-                    windowStart = queryDate.Add(query.StartTime.Value);
-                    windowEnd   = queryDate.Add(query.EndTime.Value);
+                    windowStart = DateTime.SpecifyKind(localDate.Add(query.StartTime.Value).AddHours(-7), DateTimeKind.Utc);
+                    windowEnd   = DateTime.SpecifyKind(localDate.Add(query.EndTime.Value).AddHours(-7), DateTimeKind.Utc);
                     filterDesc  = $"{query.StartTime:hh\\:mm} → {query.EndTime:hh\\:mm}";
                 }
                 // Nếu không truyền time → giữ nguyên toàn ngày
@@ -604,6 +634,9 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             {
                 BookingDetailId = bd.Id,
                 BookingId       = bd.BookingId,
+                RoomId          = room.Id,
+                RoomName        = room.Name,
+                RoomCode        = room.RoomCode,
                 ActivityName    = bd.Booking?.ActivityName,
                 Purpose         = bd.Purpose ?? bd.Booking?.Purpose,
                 StartAt         = bd.StartAt,
@@ -624,14 +657,71 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 RoomCode         = room.RoomCode,
                 RoomStatus       = room.Status,
                 IsBookingByPeriod = isBookingByPeriod,
-                QueryDate        = queryDate,
+                QueryDate        = localDate,
                 Schedules        = scheduleItems
             };
 
             return ApiResponse<RoomScheduleDto>.SuccessResponse(dto,
-                $"Lịch phòng {room.Name} ngày {queryDate:dd/MM/yyyy} | {filterDesc}");
+                $"Lịch phòng {room.Name} ngày {localDate:dd/MM/yyyy} | {filterDesc}");
         }
 
+
+        // ─────────────────────────────────────────────────────────────────
+        // GET SCHEDULES FOR A DATE RANGE (day / week / month view)
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<IEnumerable<RoomScheduleItemDto>>> GetSchedulesAsync(
+            DateTime fromDate, DateTime toDate)
+        {
+            var from = fromDate.Date;
+            var to = toDate.Date;
+            if (to < from) (from, to) = (to, from);
+            // Giới hạn khoảng truy vấn để tránh tải quá nhiều dữ liệu trong một request.
+            if ((to - from).TotalDays > 62) to = from.AddDays(62);
+
+            var windowStart = DateTime.SpecifyKind(from.AddHours(-7), DateTimeKind.Utc);
+            var windowEnd   = DateTime.SpecifyKind(to.AddDays(1).AddHours(-7), DateTimeKind.Utc);
+
+            var details = await _bookingDetailRepo.FindAsync(
+                bd => bd.Status != "Từ chối"
+                   && bd.Status != "Đã hủy"
+                   && bd.StartAt < windowEnd
+                   && bd.EndAt   > windowStart,
+                bd => bd.Room,
+                bd => bd.Booking,
+                bd => bd.Booking.User,
+                bd => bd.StartPeriod,
+                bd => bd.EndPeriod
+            );
+
+            var items = details
+                .Where(bd => bd.Room != null)
+                .Select(bd => new RoomScheduleItemDto
+                {
+                    BookingDetailId = bd.Id,
+                    BookingId       = bd.BookingId,
+                    RoomId          = bd.RoomId,
+                    RoomName        = bd.Room.Name,
+                    RoomCode        = bd.Room.RoomCode,
+                    ActivityName    = bd.Booking?.ActivityName,
+                    Purpose         = bd.Purpose ?? bd.Booking?.Purpose,
+                    StartAt         = bd.StartAt,
+                    EndAt           = bd.EndAt,
+                    StartPeriodId   = bd.StartPeriodId,
+                    StartPeriodName = bd.StartPeriod?.Name,
+                    EndPeriodId     = bd.EndPeriodId,
+                    EndPeriodName   = bd.EndPeriod?.Name,
+                    GuestCount      = bd.GuestCount,
+                    Status          = bd.Status,
+                    BookedByName    = bd.Booking?.User?.UserName
+                })
+                .OrderBy(s => s.StartAt)
+                .ThenBy(s => s.RoomCode)
+                .ToList();
+
+            return ApiResponse<IEnumerable<RoomScheduleItemDto>>.SuccessResponse(
+                items,
+                $"Lịch đặt phòng từ {from:dd/MM/yyyy} đến {to:dd/MM/yyyy}");
+        }
 
         // ─────────────────────────────────────────────────────────────────
         // UPDATE ROOM STATUS
@@ -652,8 +742,8 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
 
             room.Status = request.Status;
 
-            if (!string.IsNullOrWhiteSpace(request.Reason))
-                room.Description = $"[{request.Status}] {request.Reason}";
+            // Không ghi đè Description: trường này đang chứa danh sách tiện ích của phòng
+            // và được trang lịch phòng hiển thị.
 
             _roomRepo.Update(room);
             await _unitOfWork.SaveChangesAsync();
@@ -672,16 +762,23 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         // ─────────────────────────────────────────────────────────────────
         // GET PERIODS
         // ─────────────────────────────────────────────────────────────────
-        public async Task<ApiResponse<IEnumerable<PeriodDto>>> GetPeriodsAsync()
+        public async Task<ApiResponse<IEnumerable<PeriodDto>>> GetPeriodsAsync(int? roomTypeId = null)
         {
-            var periods = await _periodRepo.GetAllAsync();
-            var dtos = periods.Select(p => new PeriodDto
-            {
-                Id = p.Id,
-                Name = p.Name,
-                StartTime = p.StartTime,
-                EndTime = p.EndTime
-            }).OrderBy(p => p.StartTime).ToList();
+            var periods = await _periodRepo.GetAllAsync(p => p.RoomType);
+            var dtos = periods
+                .Where(p => !roomTypeId.HasValue || p.RoomTypeId == roomTypeId)
+                .Select(p => new PeriodDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    StartTime = p.StartTime,
+                    EndTime = p.EndTime,
+                    RoomTypeId = p.RoomTypeId,
+                    RoomTypeName = p.RoomType?.Name
+                })
+                .OrderBy(p => p.RoomTypeId)
+                .ThenBy(p => p.StartTime)
+                .ToList();
 
             return ApiResponse<IEnumerable<PeriodDto>>.SuccessResponse(dtos);
         }
@@ -689,6 +786,18 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         // ─────────────────────────────────────────────────────────────────
         // PRIVATE HELPERS
         // ─────────────────────────────────────────────────────────────────
+        /// <summary>
+        /// DB có thể lưu trạng thái phòng bằng tiếng Việt hoặc tiếng Anh
+        /// (dữ liệu seed và API cập nhật trạng thái dùng cả hai).
+        /// </summary>
+        private static bool IsRoomUnderMaintenance(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status)) return false;
+            var normalized = status.Trim();
+            return normalized.Equals("Bảo trì", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Maintenance", StringComparison.OrdinalIgnoreCase);
+        }
+
         /// <summary>
         /// Thời điểm bắt đầu đặt phòng T = StartAt sớm nhất trong các chi tiết còn hiệu lực
         /// (không tính chi tiết đã từ chối / đã hủy).

@@ -4,6 +4,10 @@ import {
   validateStudentBookingWindow,
   getNextStudentBookingSlot,
   groupAvailableRoomsByType,
+  groupAvailableRoomsByBuilding,
+  filterAvailableRoomsByScope,
+  summarizeRoomLocations,
+  isHallRoomType,
   isStudentBookableRoomType,
   isStudentRole,
   buildBookingPayload,
@@ -16,6 +20,10 @@ import {
   describeCancelReason,
   describeCancelSource,
   isApprovedBookingStatus,
+  parseDdMmYyyy,
+  formatDdMmYyyy,
+  getBookingDatePresetRange,
+  isIsoDateInRange,
   type BookingFormState,
   type AvailableRoom,
   type BookingDetailItem,
@@ -24,6 +32,21 @@ import {
 import type { Period } from "./schedule";
 
 describe("booking pure functions", () => {
+  function makeRoom(overrides: Partial<AvailableRoom>): AvailableRoom {
+    return {
+      roomId: 1,
+      roomName: `Phòng ${overrides.roomCode ?? "A201"}`,
+      roomCode: "A201",
+      building: "A",
+      floor: "2",
+      capacity: 60,
+      roomTypeId: 1,
+      roomTypeName: "Phòng Lý thuyết",
+      isBookingByPeriod: true,
+      ...overrides,
+    };
+  }
+
   it("validateBookingForm detects empty activity name, purpose, guest count, and rooms", () => {
     const form: BookingFormState = {
       activityName: "",
@@ -321,6 +344,74 @@ describe("booking pure functions", () => {
     ]);
     expect(groups[1].rooms[0].roomCode).toBe("TT01");
   });
+
+  it("filters time-based rooms by hall or library scope", () => {
+    const rooms: AvailableRoom[] = [
+      makeRoom({ roomId: 1, roomCode: "HT01", roomTypeName: "Phòng hội thảo" }),
+      makeRoom({ roomId: 2, roomCode: "TV01", roomTypeName: "Phòng học nhóm" }),
+      makeRoom({ roomId: 3, roomCode: "TT01", roomTypeName: "Phòng thuyết trình" }),
+      makeRoom({ roomId: 4, roomCode: "A201", roomTypeName: "Phòng Lý thuyết" }),
+    ];
+
+    expect(filterAvailableRoomsByScope(rooms, "hall").map((r) => r.roomCode)).toEqual([
+      "HT01",
+    ]);
+    expect(
+      filterAvailableRoomsByScope(rooms, "library").map((r) => r.roomCode)
+    ).toEqual(["TV01", "TT01"]);
+    expect(filterAvailableRoomsByScope(rooms, "all")).toHaveLength(4);
+    expect(isHallRoomType("Phòng hội thảo")).toBe(true);
+    expect(isHallRoomType("Phòng học nhóm")).toBe(false);
+  });
+
+  it("groups available rooms by building and floor", () => {
+    const rooms: AvailableRoom[] = [
+      makeRoom({ roomId: 1, roomCode: "B201", building: "B", floor: "2" }),
+      makeRoom({ roomId: 2, roomCode: "A305", building: "A", floor: "3" }),
+      makeRoom({ roomId: 3, roomCode: "A201", building: "A", floor: "2" }),
+      makeRoom({ roomId: 4, roomCode: "A202", building: "A", floor: "2" }),
+    ];
+
+    const buildings = groupAvailableRoomsByBuilding(rooms);
+    expect(buildings.map((b) => b.building)).toEqual(["A", "B"]);
+    expect(buildings[0].floors.map((f) => f.floor)).toEqual(["2", "3"]);
+    expect(buildings[0].floors[0].rooms.map((r) => r.roomCode)).toEqual([
+      "A201",
+      "A202",
+    ]);
+    expect(buildings[0].rooms).toHaveLength(3);
+    expect(buildings[1].floors[0].rooms[0].roomCode).toBe("B201");
+  });
+
+  it("summarizes room locations for the picker header", () => {
+    expect(
+      summarizeRoomLocations([
+        makeRoom({ roomId: 1, roomCode: "A201", building: "A", floor: "2" }),
+        makeRoom({ roomId: 2, roomCode: "A305", building: "A", floor: "3" }),
+        makeRoom({ roomId: 3, roomCode: "B201", building: "B", floor: "2" }),
+      ])
+    ).toBe("Tòa A, B • Tầng 2–3");
+
+    expect(
+      summarizeRoomLocations([
+        makeRoom({
+          roomId: 4,
+          roomCode: "TV01",
+          building: "Thư viện",
+          floor: "3",
+          roomTypeName: "Phòng học nhóm",
+        }),
+      ])
+    ).toBe("Thư viện • Tầng 3");
+
+    expect(
+      summarizeRoomLocations([
+        makeRoom({ roomId: 5, roomCode: "A101", building: "A", floor: "1" }),
+      ])
+    ).toBe("Tòa A • Tầng 1");
+
+    expect(summarizeRoomLocations([])).toBe("Thư viện HUIT");
+  });
 });
 
 describe("check-in window & cancellation rules (mirror backend policy)", () => {
@@ -468,5 +559,51 @@ describe("check-in window & cancellation rules (mirror backend policy)", () => {
     expect(isApprovedBookingStatus("Duyệt một phần")).toBe(true);
     expect(isApprovedBookingStatus("Chờ duyệt")).toBe(false);
     expect(isApprovedBookingStatus("Đã hủy")).toBe(false);
+  });
+});
+
+describe("booking date range helpers", () => {
+  it("parseDdMmYyyy: đọc dd/mm/yyyy và loại ngày không hợp lệ", () => {
+    expect(parseDdMmYyyy("05/01/2026")).toBe("2026-01-05");
+    expect(parseDdMmYyyy("5/1/2026")).toBe("2026-01-05");
+    expect(parseDdMmYyyy(" 28/10/2026 ")).toBe("2026-10-28");
+    expect(parseDdMmYyyy("31/02/2026")).toBeNull();
+    expect(parseDdMmYyyy("2026-01-05")).toBeNull();
+    expect(parseDdMmYyyy("")).toBeNull();
+  });
+
+  it("formatDdMmYyyy: hiển thị ISO thành dd/mm/yyyy", () => {
+    expect(formatDdMmYyyy("2026-01-05")).toBe("05/01/2026");
+    expect(formatDdMmYyyy("2026-10-28")).toBe("28/10/2026");
+    expect(formatDdMmYyyy("")).toBe("");
+  });
+
+  it("getBookingDatePresetRange: hôm nay, 7 ngày qua, tháng này", () => {
+    expect(getBookingDatePresetRange("today", "2026-10-28")).toEqual({
+      from: "2026-10-28",
+      to: "2026-10-28",
+    });
+    expect(getBookingDatePresetRange("last7", "2026-10-28")).toEqual({
+      from: "2026-10-22",
+      to: "2026-10-28",
+    });
+    expect(getBookingDatePresetRange("month", "2026-10-28")).toEqual({
+      from: "2026-10-01",
+      to: "2026-10-31",
+    });
+    expect(getBookingDatePresetRange("month", "2026-02-10")).toEqual({
+      from: "2026-02-01",
+      to: "2026-02-28",
+    });
+  });
+
+  it("isIsoDateInRange: tính cả hai đầu mút và bỏ ngày rỗng", () => {
+    const range = { from: "2026-10-22", to: "2026-10-28" };
+    expect(isIsoDateInRange("2026-10-22", range)).toBe(true);
+    expect(isIsoDateInRange("2026-10-25", range)).toBe(true);
+    expect(isIsoDateInRange("2026-10-28", range)).toBe(true);
+    expect(isIsoDateInRange("2026-10-21", range)).toBe(false);
+    expect(isIsoDateInRange("2026-10-29", range)).toBe(false);
+    expect(isIsoDateInRange("", range)).toBe(false);
   });
 });

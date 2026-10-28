@@ -40,6 +40,32 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public bool IsBookingByPeriod { get; set; }
     }
 
+    /// <summary>Bộ lọc + phân trang danh mục phòng cho trang lịch sử dụng phòng.</summary>
+    public class PagedRoomQueryDto
+    {
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 10;
+        public string? Keyword { get; set; }
+        public string? RoomType { get; set; }
+        public string? Building { get; set; }
+        public string? Floor { get; set; }
+        /// <summary>free | in-use | maintenance | all</summary>
+        public string? Status { get; set; }
+        public int? MinCapacity { get; set; }
+        /// <summary>Ngày (giờ Việt Nam) dùng để xác định trạng thái phòng theo lịch đặt.</summary>
+        public System.DateTime? Date { get; set; }
+    }
+
+    public class PagedRoomResultDto
+    {
+        public System.Collections.Generic.IReadOnlyList<RoomDto> Items { get; set; }
+            = new System.Collections.Generic.List<RoomDto>();
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalItems { get; set; }
+        public int TotalPages { get; set; }
+    }
+
     public class CreateRoomDto
     {
         public string Name { get; set; }

@@ -9,7 +9,6 @@ import {
   ArrowRightIcon,
   BankIcon,
   BuildingIcon,
-  ChevronRightIcon,
   ClockIcon,
   DoorIcon,
   LibraryIcon,
@@ -17,6 +16,14 @@ import {
   UsersIcon,
   WrenchIcon,
 } from "./Icon";
+
+const TYPE_ORDER = [
+  "học nhóm",
+  "thuyết trình",
+  "hội thảo",
+  "lý thuyết",
+  "thực hành",
+];
 
 function TypeIcon({
   name,
@@ -48,8 +55,11 @@ function typeTone(name: string): string {
 
 function typePhoto(name: string): string {
   const value = name.toLowerCase();
-  if (value.includes("hội trường")) return "/images/huit-library-hall.jpg";
-  if (value.includes("nhóm")) return "/images/huit-study-space.jpg";
+  if (value.includes("nhóm")) return "/images/huit-group-room.jpg";
+  if (value.includes("thuyết trình")) return "/images/huit-presentation-room.jpg";
+  if (value.includes("hội thảo")) return "/images/huit-conference-hall.jpg";
+  if (value.includes("lý thuyết")) return "/images/huit-theory-room.jpg";
+  if (value.includes("thực hành")) return "/images/huit-practice-room.jpg";
   return "/images/huit-reading-room.jpg";
 }
 
@@ -62,11 +72,22 @@ function availabilityLabel(type: RoomTypeSummary): string {
   return "Đang cập nhật";
 }
 
-function FeaturedSkeleton() {
+function sortTypes(types: RoomTypeSummary[]): RoomTypeSummary[] {
+  const rank = (name: string) => {
+    const value = name.toLowerCase();
+    const index = TYPE_ORDER.findIndex((keyword) => value.includes(keyword));
+    return index === -1 ? TYPE_ORDER.length : index;
+  };
+  return [...types].sort(
+    (a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name, "vi")
+  );
+}
+
+function TypeCardSkeleton() {
   return (
-    <article className="rh-room-card rh-room-card-skeleton" aria-hidden="true">
-      <div className="rh-room-visual" />
-      <div className="rh-room-body">
+    <article className="rh-type-card rh-type-card-skeleton" aria-hidden="true">
+      <div className="rh-type-card-visual" />
+      <div className="rh-type-card-body">
         <span className="rh-skeleton-line w-45" />
         <span className="rh-skeleton-line w-90" />
         <span className="rh-skeleton-line w-70" />
@@ -76,80 +97,70 @@ function FeaturedSkeleton() {
   );
 }
 
-function FeaturedCard({
-  type,
-  index,
-}: {
-  type: RoomTypeSummary;
-  index: number;
-}) {
+function TypeCard({ type }: { type: RoomTypeSummary }) {
   const tone = typeTone(type.name);
   return (
-    <article className="rh-room-card">
-      <div className={`rh-room-visual rh-room-visual-${tone}`}>
+    <article className="rh-type-card">
+      <div className={`rh-type-card-visual tone-${tone}`}>
         <img
-          className="rh-room-photo"
+          className="rh-type-card-photo"
           src={typePhoto(type.name)}
-          alt="Không gian học tập tại Thư viện HUIT"
+          alt={`${type.name} tại HUIT`}
           loading="lazy"
         />
-        <div className="rh-room-photo-scrim" aria-hidden="true" />
-        <div className="rh-room-visual-grid" aria-hidden="true" />
-        <span className="rh-room-badge">
-          {index === 0 ? "Loại 01" : "Loại 02"}
+        <div className="rh-type-card-scrim" aria-hidden="true" />
+        <span className="rh-type-card-mode">
+          {type.isBookingByPeriod ? "Theo tiết học" : "Theo khung giờ"}
         </span>
-        <span className={`rh-room-live ${type.availableCount > 0 ? "is-free" : "is-busy"}`}>
-          <span className="rh-room-live-dot" />
+        <span
+          className={`rh-type-card-live ${
+            type.availableCount > 0 ? "is-free" : "is-busy"
+          }`}
+        >
+          <span className="rh-type-card-live-dot" />
           {availabilityLabel(type)}
         </span>
-        <TypeIcon
-          name={type.name}
-          size={112}
-          className="rh-room-watermark"
-        />
-        <div className="rh-room-visual-caption">
+        <div className="rh-type-card-caption">
           <span>{formatRoomCodeRange(type.rooms)}</span>
           <strong>{type.roomCount} phòng</strong>
         </div>
       </div>
 
-      <div className="rh-room-body">
-        <div className="rh-room-title-row">
-          <div>
-            <span className="rh-room-kicker">
-              {type.isBookingByPeriod ? "Đặt theo tiết học" : "Đặt theo khung giờ"}
+      <div className="rh-type-card-body">
+        <div className="rh-type-card-title">
+          <span className={`rh-type-card-icon tone-${tone}`}>
+            <TypeIcon name={type.name} size={19} />
+          </span>
+          <div className="rh-type-card-heading">
+            <span className="rh-type-card-kicker">
+              {type.buildings.length > 0
+                ? `Tòa ${type.buildings.join(", ")}`
+                : "Khuôn viên HUIT"}
             </span>
             <h3>{type.name}</h3>
           </div>
-          <span className={`rh-room-status ${type.availableCount > 0 ? "is-free" : "is-busy"}`}>
-            {type.availableCount > 0
-              ? "Sẵn sàng phục vụ"
-              : type.roomCount === 0
-                ? "Chưa cấu hình"
-                : "Đang có lịch"}
-          </span>
         </div>
 
-        <p className="rh-room-desc">
+        <p className="rh-type-card-desc">
           {type.description ||
             "Thông tin mô tả loại phòng đang được cập nhật từ hệ thống."}
         </p>
 
-        <div className="rh-room-meta">
+        <div className="rh-type-card-meta">
           <span>
-            <BuildingIcon size={15} />
+            <BuildingIcon size={14} />
             {formatFloorList(type.floors)}
           </span>
           <span>
-            <UsersIcon size={15} />
+            <UsersIcon size={14} />
             {formatCapacityRange(type.minCapacity, type.maxCapacity)}
           </span>
           <span>
-            <DoorIcon size={15} />
+            <DoorIcon size={14} />
             {type.roomCount} phòng
           </span>
           <span>
-            <ClockIcon size={15} />
+            <ClockIcon size={14} />
             {type.isBookingByPeriod ? "Theo tiết" : "Theo giờ"}
           </span>
         </div>
@@ -162,14 +173,20 @@ function FeaturedCard({
           </div>
         )}
 
-        <div className="rh-room-foot">
-          <span className="rh-room-foot-note">
-            {type.roomCount > 0
-              ? `${type.roomCount} phòng trong hệ thống`
-              : "Đang chờ cấu hình phòng"}
+        <div className="rh-type-card-foot">
+          <span className="rh-type-card-foot-note">
+            {type.availableCount > 0
+              ? `${type.availableCount}/${type.roomCount} phòng đang trống`
+              : type.roomCount > 0
+                ? "Xem lịch để chọn khung giờ trống"
+                : "Đang chờ cấu hình phòng"}
           </span>
-          <Link to="/dat-phong" className="rh-btn rh-btn-primary rh-btn-sm">
-            Xem phòng &amp; đặt ngay
+          <Link
+            to="/dat-phong"
+            className="rh-btn rh-btn-primary rh-btn-sm"
+            aria-label={`Xem phòng và đặt ${type.name}`}
+          >
+            Đặt phòng
             <ArrowRightIcon size={15} />
           </Link>
         </div>
@@ -179,14 +196,14 @@ function FeaturedCard({
 }
 
 export default function RoomTypesSection({
-  featured,
-  others,
+  types,
   loading,
 }: {
-  featured: RoomTypeSummary[];
-  others: RoomTypeSummary[];
+  types: RoomTypeSummary[];
   loading: boolean;
 }) {
+  const ordered = sortTypes(types);
+
   return (
     <section className="rh-section" aria-labelledby="rh-room-types-title">
       <div className="rh-container">
@@ -197,8 +214,8 @@ export default function RoomTypesSection({
               Khám phá phòng học tập &amp; hội thảo
             </h2>
             <p className="rh-lead">
-              Mỗi loại phòng có cấu hình sức chứa, vị trí và tiện ích riêng.
-              Dữ liệu bên dưới được đồng bộ trực tiếp từ hệ thống RoMan.
+              Mỗi loại phòng có sức chứa, vị trí và cách đặt riêng. Dữ liệu bên
+              dưới được đồng bộ trực tiếp từ hệ thống RoMan.
             </p>
           </div>
           <Link to="/lich-phong" className="rh-text-link">
@@ -207,71 +224,25 @@ export default function RoomTypesSection({
           </Link>
         </div>
 
-        <div className="rh-room-layout">
-          <div className="rh-room-featured">
-            {loading ? (
-              <>
-                <FeaturedSkeleton />
-                <FeaturedSkeleton />
-              </>
-            ) : featured.length > 0 ? (
-              featured.map((type, index) => (
-                <FeaturedCard key={type.id} type={type} index={index} />
-              ))
-            ) : (
-              <div className="rh-empty-state">
-                <BuildingIcon size={28} />
-                <strong>Chưa tải được danh mục phòng</strong>
-                <p>
-                  Vui lòng kiểm tra kết nối API hoặc thử tải lại trang để lấy
-                  dữ liệu mới nhất từ hệ thống.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <aside className="rh-type-side" aria-label="Các loại phòng khác">
-            <div className="rh-type-side-head">
-              <span>Danh mục khác</span>
-              <strong>{loading ? "Đang tải" : `${others.length} loại phòng`}</strong>
+        <div className="rh-type-grid">
+          {loading ? (
+            <>
+              <TypeCardSkeleton />
+              <TypeCardSkeleton />
+              <TypeCardSkeleton />
+            </>
+          ) : ordered.length > 0 ? (
+            ordered.map((type) => <TypeCard key={type.id} type={type} />)
+          ) : (
+            <div className="rh-empty-state">
+              <BuildingIcon size={28} />
+              <strong>Chưa tải được danh mục phòng</strong>
+              <p>
+                Vui lòng kiểm tra kết nối API hoặc thử tải lại trang để lấy dữ
+                liệu mới nhất từ hệ thống.
+              </p>
             </div>
-
-            {loading ? (
-              <div className="rh-type-side-skeleton" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </div>
-            ) : (
-              others.map((type) => (
-                <Link
-                  to="/dat-phong"
-                  className="rh-type-mini"
-                  key={type.id}
-                >
-                  <span className={`rh-type-mini-icon tone-${typeTone(type.name)}`}>
-                    <TypeIcon name={type.name} size={20} />
-                  </span>
-                  <span className="rh-type-mini-main">
-                    <strong>{type.name}</strong>
-                    <small>
-                      {type.roomCount} phòng ·{" "}
-                      {formatCapacityRange(type.minCapacity, type.maxCapacity)}
-                    </small>
-                  </span>
-                  <span className="rh-type-mini-avail">
-                    {availabilityLabel(type)}
-                  </span>
-                  <ChevronRightIcon size={17} />
-                </Link>
-              ))
-            )}
-
-            <Link to="/lich-phong" className="rh-type-side-link">
-              Xem toàn bộ lịch phòng
-              <ArrowRightIcon size={15} />
-            </Link>
-          </aside>
+          )}
         </div>
       </div>
     </section>
