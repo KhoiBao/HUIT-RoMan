@@ -7,7 +7,6 @@ import {
   buildRoomTypeSummaries,
   deriveRoomStates,
   loadHomeSnapshot,
-  pickFeaturedRoomTypes,
   summarizeStates,
   type HomeSnapshot,
 } from "../lib/home";
@@ -89,11 +88,6 @@ export default function HomePage() {
     [snapshot, states]
   );
 
-  const { featured, others } = useMemo(
-    () => pickFeaturedRoomTypes(summaries),
-    [summaries]
-  );
-
   const pendingSession = activeSessions.find(
     (session) => session.status === "Chờ nhận phòng"
   );
@@ -167,11 +161,7 @@ export default function HomePage() {
         updatedLabel={updatedLabel}
       />
 
-      <RoomTypesSection
-        featured={featured}
-        others={others}
-        loading={loading && !snapshot}
-      />
+      <RoomTypesSection types={summaries} loading={loading && !snapshot} />
 
       <ProcessSection />
     </div>

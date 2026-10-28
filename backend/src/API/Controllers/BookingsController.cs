@@ -135,7 +135,6 @@ namespace HUIT_RoMan.API.Controllers
         /// - Chỉ truyền date → trả toàn bộ lịch trong ngày.
         /// </summary>
         [HttpGet("rooms/{roomId}/schedule")]
-        [AllowAnonymous]
         public async Task<IActionResult> GetRoomSchedule(
             int roomId,
             [FromQuery] DateTime date,
@@ -160,16 +159,32 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(response);
         }
 
+        /// <summary>
+        /// Lịch đặt phòng của tất cả phòng trong một khoảng ngày (giờ Việt Nam).
+        /// Dùng cho chế độ xem Ngày / Tuần / Tháng của trang lịch phòng.
+        /// </summary>
+        [HttpGet("schedules")]
+        public async Task<IActionResult> GetSchedules(
+            [FromQuery] DateTime from,
+            [FromQuery] DateTime to)
+        {
+            if (from == default) from = DateTime.Today;
+            if (to == default) to = from;
+
+            var response = await _bookingService.GetSchedulesAsync(from, to);
+            return Ok(response);
+        }
+
         // ─────────────────────────────────────────────────────────────────
         // PERIODS
         // ─────────────────────────────────────────────────────────────────
 
-        /// <summary>Lấy danh sách tiết học</summary>
+        /// <summary>Lấy danh sách tiết học (lọc theo loại phòng nếu cần)</summary>
         [HttpGet("periods")]
         [AllowAnonymous]
-        public async Task<IActionResult> GetPeriods()
+        public async Task<IActionResult> GetPeriods([FromQuery] int? roomTypeId = null)
         {
-            var response = await _bookingService.GetPeriodsAsync();
+            var response = await _bookingService.GetPeriodsAsync(roomTypeId);
             return Ok(response);
         }
     }

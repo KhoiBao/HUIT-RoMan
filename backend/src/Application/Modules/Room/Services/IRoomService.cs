@@ -19,5 +19,6 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             string? floor,
             string? status,
             int? minCapacity);
+        Task<ApiResponse<PagedRoomResultDto>> GetPagedAsync(PagedRoomQueryDto query);
     }
 }

@@ -624,6 +624,9 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<int?>("RoomTypeId")
+                        .HasColumnType("integer");
+
                     b.Property<TimeSpan>("StartTime")
                         .HasColumnType("interval");
 
@@ -631,6 +634,8 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RoomTypeId");
 
                     b.ToTable("Periods");
                 });
@@ -692,6 +697,10 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RoomCode")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("RoomTypeId");
 
@@ -1536,6 +1545,16 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.Period", b =>
+                {
+                    b.HasOne("HUIT_RoMan.Domain.Entities.RoomType", "RoomType")
+                        .WithMany()
+                        .HasForeignKey("RoomTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("RoomType");
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.Room", b =>

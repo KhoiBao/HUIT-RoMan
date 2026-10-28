@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HUIT_RoMan.Domain.Entities;
@@ -114,11 +115,11 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             // 6. Apply Stored Procedures / Functions PostgreSQL
             await SeedStoredProceduresAsync(dbContext);
 
-            // 7. Khởi tạo danh mục Tiết học (Tiết 1 -> Tiết 15)
-            await EnsurePeriodsAsync(dbContext);
+            // 7. Khởi tạo danh mục Tiết học cho phòng lý thuyết và phòng thực hành
+            await EnsurePeriodsAsync(dbContext, deptDaoTao.Id);
 
-            // 8. Khởi tạo các phòng dùng chung của Thư viện
-            await EnsureDemoRoomsAsync(dbContext, deptThuVien.Id);
+            // 8. Khởi tạo các phòng dùng chung của Thư viện và phòng học theo tiết
+            await EnsureDemoRoomsAsync(dbContext, deptThuVien.Id, deptDaoTao.Id);
 
             // 8b. Khởi tạo danh mục Thiết bị & Trang thiết bị mẫu
             await EnsureDemoEquipmentsAsync(dbContext);
@@ -288,45 +289,73 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             }
         }
 
-        private static async Task EnsurePeriodsAsync(ApplicationDbContext dbContext)
+        private static async Task EnsurePeriodsAsync(ApplicationDbContext dbContext, int departmentId)
         {
-            var defaultPeriods = new (string Name, TimeSpan Start, TimeSpan End)[]
-            {
-                ("Tiết 1", new TimeSpan(6, 30, 0), new TimeSpan(7, 20, 0)),
-                ("Tiết 2", new TimeSpan(7, 20, 0), new TimeSpan(8, 10, 0)),
-                ("Tiết 3", new TimeSpan(8, 15, 0), new TimeSpan(9, 5, 0)),
-                ("Tiết 4", new TimeSpan(9, 10, 0), new TimeSpan(10, 0, 0)),
-                ("Tiết 5", new TimeSpan(10, 5, 0), new TimeSpan(10, 55, 0)),
-                ("Tiết 6", new TimeSpan(11, 0, 0), new TimeSpan(11, 50, 0)),
-                ("Tiết 7", new TimeSpan(12, 30, 0), new TimeSpan(13, 20, 0)),
-                ("Tiết 8", new TimeSpan(13, 20, 0), new TimeSpan(14, 10, 0)),
-                ("Tiết 9", new TimeSpan(14, 15, 0), new TimeSpan(15, 5, 0)),
-                ("Tiết 10", new TimeSpan(15, 10, 0), new TimeSpan(16, 0, 0)),
-                ("Tiết 11", new TimeSpan(16, 5, 0), new TimeSpan(16, 55, 0)),
-                ("Tiết 12", new TimeSpan(17, 0, 0), new TimeSpan(17, 50, 0)),
-                ("Tiết 13", new TimeSpan(18, 0, 0), new TimeSpan(18, 50, 0)),
-                ("Tiết 14", new TimeSpan(18, 50, 0), new TimeSpan(19, 40, 0)),
-                ("Tiết 15", new TimeSpan(19, 45, 0), new TimeSpan(20, 35, 0)),
-            };
+            var theoryType = await EnsureRoomTypeAsync(
+                dbContext,
+                RoomCatalogSeed.TheoryRoomTypeName,
+                "Phòng lý thuyết, đăng ký theo 16 tiết học cố định.",
+                RoomCatalogSeed.TheoryRoomCapacity,
+                departmentId,
+                isBookingByPeriod: true);
 
-            foreach (var p in defaultPeriods)
+            var practiceType = await EnsureRoomTypeAsync(
+                dbContext,
+                RoomCatalogSeed.PracticeRoomTypeName,
+                "Phòng máy thực hành, đăng ký theo 16 tiết học cố định.",
+                RoomCatalogSeed.PracticeRoomCapacity,
+                departmentId,
+                isBookingByPeriod: true);
+
+            await EnsurePeriodSetAsync(dbContext, theoryType.Id, RoomCatalogSeed.TheoryPeriods, adoptUnassigned: true);
+            await EnsurePeriodSetAsync(dbContext, practiceType.Id, RoomCatalogSeed.PracticePeriods, adoptUnassigned: false);
+
+            await dbContext.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Seed một bộ 16 tiết cho một loại phòng.
+        /// Bộ tiết cũ chưa gán RoomTypeId được nhận về loại phòng lý thuyết để giữ
+        /// nguyên Id đang được BookingDetails tham chiếu.
+        /// </summary>
+        private static async Task EnsurePeriodSetAsync(
+            ApplicationDbContext dbContext,
+            int roomTypeId,
+            IReadOnlyList<RoomCatalogSeed.PeriodSeed> periods,
+            bool adoptUnassigned)
+        {
+            foreach (var seed in periods)
             {
-                var existing = await dbContext.Periods.FirstOrDefaultAsync(x => x.Name == p.Name);
+                var existing = await dbContext.Periods
+                    .IgnoreQueryFilters()
+                    .Where(p => p.Name == seed.Name
+                             && (p.RoomTypeId == roomTypeId
+                                 || (adoptUnassigned && p.RoomTypeId == null)))
+                    .OrderBy(p => p.Id)
+                    .FirstOrDefaultAsync();
+
                 if (existing == null)
                 {
                     dbContext.Periods.Add(new Period
                     {
-                        Name = p.Name,
-                        StartTime = p.Start,
-                        EndTime = p.End,
+                        Name = seed.Name,
+                        StartTime = seed.Start,
+                        EndTime = seed.End,
+                        RoomTypeId = roomTypeId,
                         CreatedAt = DateTime.UtcNow
                     });
+                    continue;
                 }
+
+                existing.StartTime = seed.Start;
+                existing.EndTime = seed.End;
+                existing.RoomTypeId = roomTypeId;
+                existing.IsDeleted = false;
+                existing.UpdatedAt = DateTime.UtcNow;
             }
-            await dbContext.SaveChangesAsync();
         }
 
-        private static async Task EnsureDemoRoomsAsync(ApplicationDbContext dbContext, int departmentId)
+        private static async Task EnsureDemoRoomsAsync(ApplicationDbContext dbContext, int departmentId, int academicDepartmentId)
         {
             var rtHocNhom = await EnsureRoomTypeAsync(
                 dbContext,
@@ -362,29 +391,11 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 ("Phòng hội thảo HT01", "HT01", "Thư viện", "3", "06", 90, rtHoiThao.Id, "Sức chứa 50–90 người • Âm thanh hội nghị • Máy chiếu • Điều hòa"),
             };
 
-            // Các phòng demo cũ được tái sử dụng mã để không làm mất lịch sử đặt phòng.
-            var legacyCodeByNewCode = new Dictionary<string, string>
-            {
-                ["TV01"] = "A101",
-                ["TV02"] = "A102",
-                ["TV03"] = "A103",
-                ["TV04"] = "A104",
-                ["TT01"] = "A201",
-                ["HT01"] = "B201",
-            };
-
             foreach (var r in demoRooms)
             {
                 var existing = await dbContext.Rooms
                     .IgnoreQueryFilters()
                     .FirstOrDefaultAsync(x => x.RoomCode == r.Code);
-
-                if (existing == null && legacyCodeByNewCode.TryGetValue(r.Code, out var legacyCode))
-                {
-                    existing = await dbContext.Rooms
-                        .IgnoreQueryFilters()
-                        .FirstOrDefaultAsync(x => x.RoomCode == legacyCode);
-                }
 
                 if (existing == null)
                 {
@@ -421,14 +432,10 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             // nếu không các phòng vừa tái sử dụng sẽ bị đánh dấu xóa nhầm.
             await dbContext.SaveChangesAsync();
 
-            // Ẩn các phòng demo không còn thuộc danh mục phòng dùng chung của Thư viện.
+            // Ẩn các phòng demo cũ không còn thuộc danh mục sử dụng.
+            // Các mã A101–A511/B201–B511 được seed lại ở bước phòng học theo tiết.
             var newRoomCodes = demoRooms.Select(r => r.Code).ToHashSet();
-            var legacyRoomCodes = new[]
-            {
-                "A101", "A102", "A103", "A104", "A201", "A202",
-                "A301", "A302", "A303", "A304", "B201", "B203",
-                "B204", "B301", "B302", "C101"
-            };
+            var legacyRoomCodes = new[] { "C101" };
 
             var staleRooms = await dbContext.Rooms
                 .IgnoreQueryFilters()
@@ -442,10 +449,11 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 room.UpdatedAt = DateTime.UtcNow;
             }
 
-            // Ẩn các loại phòng demo cũ; chỉ giữ 3 loại phòng của Thư viện.
+            // Ẩn các loại phòng demo cũ không còn sử dụng; giữ lại loại phòng
+            // lý thuyết/thực hành cho phòng học theo tiết.
             var legacyRoomTypeNames = new[]
             {
-                "Hội trường", "Phòng họp", "Phòng Lý thuyết", "Phòng Thực hành"
+                "Hội trường", "Phòng họp"
             };
 
             var staleRoomTypes = await dbContext.RoomTypes
@@ -460,7 +468,85 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 roomType.UpdatedAt = DateTime.UtcNow;
             }
 
+            await EnsureAcademicRoomsAsync(dbContext, academicDepartmentId);
+
             await dbContext.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Seed 11 phòng thực hành A101–A111 và 88 phòng lý thuyết A201–A511/B201–B511.
+        /// Mỗi mã phòng được tìm kể cả bản ghi đã xóa mềm để tái sử dụng Id cũ,
+        /// tránh nhân đôi phòng hoặc làm mất lịch sử đặt phòng.
+        /// </summary>
+        private static async Task EnsureAcademicRoomsAsync(ApplicationDbContext dbContext, int departmentId)
+        {
+            var theoryType = await EnsureRoomTypeAsync(
+                dbContext,
+                RoomCatalogSeed.TheoryRoomTypeName,
+                "Phòng lý thuyết, đăng ký theo 16 tiết học cố định.",
+                RoomCatalogSeed.TheoryRoomCapacity,
+                departmentId,
+                isBookingByPeriod: true);
+
+            var practiceType = await EnsureRoomTypeAsync(
+                dbContext,
+                RoomCatalogSeed.PracticeRoomTypeName,
+                "Phòng máy thực hành, đăng ký theo 16 tiết học cố định.",
+                RoomCatalogSeed.PracticeRoomCapacity,
+                departmentId,
+                isBookingByPeriod: true);
+
+            await EnsureRoomSetAsync(dbContext, RoomCatalogSeed.TheoryRooms, theoryType.Id);
+            await EnsureRoomSetAsync(dbContext, RoomCatalogSeed.PracticeRooms, practiceType.Id);
+        }
+
+        private static async Task EnsureRoomSetAsync(
+            ApplicationDbContext dbContext,
+            IReadOnlyList<RoomCatalogSeed.RoomSeed> rooms,
+            int roomTypeId)
+        {
+            var codes = rooms.Select(r => r.Code).ToList();
+            var existingRooms = await dbContext.Rooms
+                .IgnoreQueryFilters()
+                .Where(r => codes.Contains(r.RoomCode))
+                .ToDictionaryAsync(r => r.RoomCode);
+
+            foreach (var seed in rooms)
+            {
+                if (existingRooms.TryGetValue(seed.Code, out var room))
+                {
+                    var reclassified = room.RoomTypeId != roomTypeId;
+                    room.Name = seed.Name;
+                    room.Building = seed.Building;
+                    room.Floor = seed.Floor;
+                    room.RoomNumber = seed.RoomNumber;
+                    room.Capacity = seed.Capacity;
+                    room.RoomTypeId = roomTypeId;
+                    room.IsDeleted = false;
+                    room.UpdatedAt = DateTime.UtcNow;
+                    // Chỉ đặt lại trạng thái khi phòng được tái sử dụng; giữ
+                    // nguyên trạng thái bảo trì do quản trị viên thiết lập.
+                    if (reclassified || room.Status == "Ngừng sử dụng")
+                        room.Status = "Available";
+                    if (reclassified || string.IsNullOrWhiteSpace(room.Description))
+                        room.Description = seed.Description;
+                    continue;
+                }
+
+                dbContext.Rooms.Add(new Room
+                {
+                    Name = seed.Name,
+                    RoomCode = seed.Code,
+                    Building = seed.Building,
+                    Floor = seed.Floor,
+                    RoomNumber = seed.RoomNumber,
+                    Capacity = seed.Capacity,
+                    RoomTypeId = roomTypeId,
+                    Status = "Available",
+                    Description = seed.Description,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
         }
 
         private static async Task<RoomType> EnsureRoomTypeAsync(
@@ -468,7 +554,8 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             string name,
             string description,
             int defaultCapacity,
-            int departmentId)
+            int departmentId,
+            bool isBookingByPeriod = false)
         {
             var roomType = await dbContext.RoomTypes
                 .IgnoreQueryFilters()
@@ -482,7 +569,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                     Description = description,
                     DefaultCapacity = defaultCapacity,
                     DepartmentId = departmentId,
-                    IsBookingByPeriod = false,
+                    IsBookingByPeriod = isBookingByPeriod,
                     Status = "Hoạt động",
                     CreatedAt = DateTime.UtcNow
                 };
@@ -494,7 +581,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             roomType.Description = description;
             roomType.DefaultCapacity = defaultCapacity;
             roomType.DepartmentId = departmentId;
-            roomType.IsBookingByPeriod = false;
+            roomType.IsBookingByPeriod = isBookingByPeriod;
             roomType.Status = "Hoạt động";
             roomType.IsDeleted = false;
             roomType.UpdatedAt = DateTime.UtcNow;
