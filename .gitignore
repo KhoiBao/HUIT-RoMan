@@ -61,4 +61,6 @@ web/*.local
 ## Binaries
 *.exe
 cloudflared.exe
+*.impeccable/
+*.tmp-staff/
 
