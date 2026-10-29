@@ -57,6 +57,10 @@ namespace HUIT_RoMan.Application.Modules.Report.DTOs
         public string DateString { get; set; } = string.Empty;
         public long Total { get; set; }
         public long Approved { get; set; }
+        /// <summary>Đơn đang chờ duyệt.</summary>
+        public long Pending { get; set; }
+        /// <summary>Đơn đã duyệt và đã/đang sử dụng phòng (Hoàn thành, Đang sử dụng, Chờ nhận phòng).</summary>
+        public long Completed { get; set; }
         public long Rejected { get; set; }
         public long Cancelled { get; set; }
     }

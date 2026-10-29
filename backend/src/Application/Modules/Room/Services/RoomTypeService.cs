@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HUIT_RoMan.Application.Modules.Booking.Services;
 using HUIT_RoMan.Application.Modules.Room.DTOs;
 using HUIT_RoMan.Domain.Entities;
 using HUIT_RoMan.Application.Common.Interfaces;
@@ -28,6 +29,11 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
                 roomTypes = roomTypes.Where(rt => rt.DepartmentId == _currentUser.DepartmentId.Value).ToList();
+            }
+
+            if (StudentBookingPolicy.IsStudent(_currentUser.Role))
+            {
+                roomTypes = roomTypes.Where(rt => StudentBookingPolicy.IsBookableRoomType(rt.Name)).ToList();
             }
 
             var dtos = roomTypes.Select(rt => new RoomTypeDto

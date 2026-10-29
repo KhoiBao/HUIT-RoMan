@@ -19,14 +19,8 @@ export default function InfoFooter() {
           <div className="roman-footer-grid">
             <div className="roman-footer-brand">
               <Link to="/home" className="roman-footer-logo">
-                <span className="roman-footer-logo-box">
-                  <img
-                    src="/huit-logo.svg"
-                    alt="Logo Trường Đại học Công Thương TP.HCM"
-                  />
-                </span>
                 <span>
-                  <strong>RoMan</strong>
+                  <strong>Hệ thống quản lý phòng dùng chung HUIT</strong>
                   <small>HUIT · Phòng dùng chung</small>
                 </span>
               </Link>
@@ -122,7 +116,8 @@ export default function InfoFooter() {
 
           <div className="roman-footer-bottom">
             <span>
-              © {year} RoMan. Bản quyền thuộc Trường Đại học Công Thương TP.HCM.
+              © {year} Hệ thống quản lý phòng dùng chung HUIT. Bản quyền thuộc
+              Trường Đại học Công Thương TP.HCM.
             </span>
             <span>HUIT · Không gian học thuật dùng chung</span>
           </div>

@@ -8,7 +8,6 @@ import {
   EyeIcon,
   EyeOffIcon,
   IdCardIcon,
-  InfoIcon,
   LibraryIcon,
   LockIcon,
   MailIcon,
@@ -63,18 +62,14 @@ export default function LoginPage() {
       <div className="portal-grid">
         <aside className="info-card">
           <div className="brand">
-            <div className="brand-logo brand-logo-img">
-              <img
-                src="/huit-logo.svg"
-                alt="Logo Trường Đại học Công Thương TP.HCM"
-              />
-            </div>
             <div>
               <div className="brand-eyebrow">HUIT • ROOM MANAGEMENT</div>
-              <div className="brand-title">RoMan</div>
+              <div className="brand-title">
+                Hệ thống quản lý phòng dùng chung HUIT
+              </div>
               <div className="brand-sub">
-                Hệ thống quản lý đăng ký và khai thác phòng dùng chung tại
-                Trường Đại học Công Thương Thành phố Hồ Chí Minh
+                Thư viện HUIT · Trường Đại học Công Thương Thành phố Hồ Chí
+                Minh
               </div>
             </div>
           </div>
@@ -85,42 +80,17 @@ export default function LoginPage() {
             Hệ thống quản lý đăng ký và khai thác phòng dùng chung tại Trường Đại học Công Thương Thành phố Hồ Chí Minh.
           </p>
 
-          <div className="photo" role="img" aria-label="Không gian học tập HUIT">
-            <svg className="photo-art" viewBox="0 0 400 180" aria-hidden="true">
-              <g fill="none" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="3">
-                <path d="M40 150V60l30-12v102" />
-                <path d="M78 150V60l30-12v102" />
-                <path d="M116 150V60l30-12v102" />
-                <path d="M40 78h106M40 104h106M40 130h106" />
-              </g>
-              <g fill="#ffffff" fillOpacity="0.22">
-                <rect x="230" y="40" width="130" height="110" rx="6" />
-                <rect x="244" y="56" width="102" height="8" rx="4" />
-                <rect x="244" y="72" width="102" height="8" rx="4" />
-                <rect x="244" y="88" width="70" height="8" rx="4" />
-              </g>
-            </svg>
-            <div className="photo-caption">
+          <figure className="photo">
+            <img
+              className="photo-img"
+              src="/images/huit-campus-gate.jpg"
+              alt="Cổng Trường Đại học Công Thương Thành phố Hồ Chí Minh tại 140 Lê Trọng Tấn"
+            />
+            <figcaption className="photo-caption">
               <span>Cơ sở chính: 140 Lê Trọng Tấn, P. Tây Thạnh, Q. Tân Phú</span>
               <LibraryIcon />
-            </div>
-          </div>
-
-          <div className="policy">
-            <div className="policy-head">
-              <InfoIcon />
-              <strong>Chính sách định danh và cấp quyền</strong>
-            </div>
-            <p>
-              <strong>Sinh viên &amp; Học viên:</strong> Sử dụng Mã số sinh
-              viên (MSSV) kèm email định danh do nhà trường cung cấp
-              (@huit.edu.vn).
-            </p>
-            <p>
-              <strong>Cán bộ &amp; Giảng viên:</strong> Đăng nhập thông qua
-              tài khoản quản lý nhân sự tập trung hoặc Cổng SSO trường.
-            </p>
-          </div>
+            </figcaption>
+          </figure>
 
           <div className="contacts">
             <div className="contact-row">
@@ -143,7 +113,7 @@ export default function LoginPage() {
         </aside>
 
         <section className="login-card">
-          <h1>Đăng nhập RoMan</h1>
+          <h1>Đăng nhập</h1>
           <p className="login-sub">
             Sử dụng tài khoản Sinh viên / Giảng viên / Cán bộ viên chức
           </p>

@@ -99,7 +99,7 @@ namespace HUIT_RoMan.Infrastructure.Services
                                    isPartial ? "ĐƯỢC DUYỆT MỘT PHẦN" :
                                    isCancelled ? "ĐÃ BỊ HỦY BỞI QUẢN TRỊ" : "CẬP NHẬT TRẠNG THÁI";
 
-            var subject = $"[HUIT-RoMan] Đơn đặt phòng #{bookingId} {subjectPrefix} - {activityName}";
+            var subject = $"[HUIT] Đơn đặt phòng #{bookingId} {subjectPrefix} - {activityName}";
 
             var badgeBg = isApproved ? "#ecfdf5" : isRejected ? "#fef2f2" : isPartial ? "#eff6ff" : "#fffbeb";
             var badgeBorder = isApproved ? "#10b981" : isRejected ? "#ef4444" : isPartial ? "#3b82f6" : "#f59e0b";
@@ -145,12 +145,12 @@ namespace HUIT_RoMan.Infrastructure.Services
   <div class=""email-container"">
     <div class=""email-header"">
       <h1>TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG TP.HCM (HUIT)</h1>
-      <p>Hệ thống Quản lý và Khai thác Phòng Dùng Chung (RoMan)</p>
+      <p>Hệ thống Quản lý Phòng Dùng Chung HUIT</p>
     </div>
 
     <div class=""email-body"">
       <p>Xin chào <strong>{recipientName}</strong>,</p>
-      <p>Hệ thống RoMan xin thông báo về kết quả xử lý đơn đặt phòng của bạn:</p>
+      <p>Hệ thống quản lý phòng dùng chung HUIT xin thông báo về kết quả xử lý đơn đặt phòng của bạn:</p>
 
       <div class=""status-banner"">
         <h2 class=""status-banner-title"">KẾT QUẢ: {statusHeading}</h2>
@@ -212,7 +212,7 @@ namespace HUIT_RoMan.Infrastructure.Services
             sb.Append($@"
       <div style=""text-align: center; margin-top: 24px;"">
         <a href=""https://roman.huit.edu.vn/dat-phong?tab=my-bookings"" class=""btn-link"">
-          Xem chi tiết đơn trên RoMan &rarr;
+          Xem chi tiết đơn trên hệ thống &rarr;
         </a>
       </div>
     </div>
@@ -220,7 +220,7 @@ namespace HUIT_RoMan.Infrastructure.Services
     <div class=""email-footer"">
       <p style=""margin: 0 0 6px;""><strong>Ban Quản trị Phòng Dùng Chung & Thiết bị Thư viện HUIT</strong></p>
       <p style=""margin: 0 0 4px;"">Địa chỉ: 140 Lê Trọng Tấn, P. Tây Thạnh, Q. Tân Phú, TP. Hồ Chí Minh</p>
-      <p style=""margin: 0;"">Email này được gửi tự động từ hệ thống RoMan. Vui lòng không trả lời trực tiếp email này.</p>
+      <p style=""margin: 0;"">Email này được gửi tự động từ hệ thống quản lý phòng dùng chung HUIT. Vui lòng không trả lời trực tiếp email này.</p>
     </div>
   </div>
 </body>

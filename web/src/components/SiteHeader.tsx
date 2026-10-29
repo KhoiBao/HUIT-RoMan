@@ -88,15 +88,22 @@ export default function SiteHeader() {
     <>
       <header className="roman-header">
         <div className="roman-header-inner">
-          <Link to="/home" className="roman-brand" aria-label="RoMan — Trang chủ">
+          <Link
+            to="/home"
+            className="roman-brand"
+            aria-label="Hệ thống quản lý phòng dùng chung HUIT — Trang chủ"
+          >
             <span className="roman-brand-logo">
-              <img src="/roman-logo-icon.png" alt="Logo RoMan Room Booking" />
+              <img
+                src="/roman-logo-icon.png"
+                alt="Hệ thống quản lý phòng dùng chung HUIT"
+              />
             </span>
             <span className="roman-brand-text">
-              <span className="roman-brand-name">RoMan</span>
-              <span className="roman-brand-sub">
+              <span className="roman-brand-name">
                 Hệ thống quản lý phòng dùng chung HUIT
               </span>
+              <span className="roman-brand-sub">Thư viện HUIT</span>
             </span>
           </Link>
 

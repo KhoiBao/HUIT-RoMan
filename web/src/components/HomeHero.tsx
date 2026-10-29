@@ -15,7 +15,7 @@ interface HomeHeroProps {
   stats: LiveRoomStats | null;
   loading: boolean;
   dateLabel: string;
-  updatedLabel: string;
+  updatedLabel: string | null;
 }
 
 interface HeroSlide {
@@ -68,8 +68,14 @@ function StatCell({
       <div className="rh-stat-main">
         <span className="rh-stat-label">{label}</span>
         <div className="rh-stat-value">
-          <strong>{value ?? "--"}</strong>
-          <small>{suffix}</small>
+          {value === null ? (
+            <span className="rh-stat-skeleton" aria-hidden="true" />
+          ) : (
+            <>
+              <strong>{value}</strong>
+              <small>{suffix}</small>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -161,7 +167,7 @@ export default function HomeHero({
             </div>
 
             <div className="rh-hero-slider-meta">
-              <div className="rh-hero-dots" aria-label="Chọn ảnh">
+              <div className="rh-hero-dots" role="group" aria-label="Chọn ảnh">
                 {HERO_SLIDES.map((slide, index) => (
                   <button
                     key={slide.src}
@@ -201,9 +207,15 @@ export default function HomeHero({
               </Link>
             </div>
 
-            <div className="rh-status-updated">
+            <div
+              className={`rh-status-updated${updatedLabel ? "" : " is-offline"}`}
+            >
               <span className="rh-live-dot" />
-              <span>Cập nhật lúc {updatedLabel}</span>
+              <span>
+                {updatedLabel
+                  ? `Cập nhật lúc ${updatedLabel}`
+                  : "Chưa có dữ liệu phòng"}
+              </span>
               {loading && <span className="rh-status-loading">Đang tải…</span>}
             </div>
 
@@ -211,14 +223,14 @@ export default function HomeHero({
               <StatCell
                 label="Phòng trống"
                 value={stats?.available ?? null}
-                suffix={`/ ${stats?.total ?? "--"} phòng`}
+                suffix={`/${stats?.total ?? 0}`}
                 tone="tone-available"
                 icon={<DoorIcon size={16} />}
               />
               <StatCell
-                label="Đã đặt"
+                label="Sắp sử dụng"
                 value={stats?.upcoming ?? null}
-                suffix="sắp dùng"
+                suffix="phòng"
                 tone="tone-upcoming"
                 icon={<ClockIcon size={16} />}
               />

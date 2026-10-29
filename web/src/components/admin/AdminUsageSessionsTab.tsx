@@ -692,7 +692,7 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
 
                         {session.status === "Hoàn thành" && (
                           <span className="done-pill" title="Đã hoàn tất ca sử dụng">
-                            <CheckCircleIcon size={14} /> Đã trả
+                            <CheckCircleIcon size={14} /> Đã trả phòng
                           </span>
                         )}
 

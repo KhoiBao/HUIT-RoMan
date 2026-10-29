@@ -52,8 +52,7 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<SystemOverviewReportDto>> GetSystemOverviewAsync(ReportFilterDto filter)
         {
-            var from = filter.FromDate?.ToUniversalTime() ?? DateTime.UtcNow.AddMonths(-1);
-            var to = filter.ToDate?.ToUniversalTime() ?? DateTime.UtcNow.AddDays(1);
+            var (from, to) = ResolveDateRange(filter);
 
             // 1. Bookings
             var bookings = (await _bookingRepo.GetAllAsync(b => b.BookingDetails, b => b.User, b => b.User.Department))
@@ -173,8 +172,7 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
             var overviewRes = await GetSystemOverviewAsync(filter);
             var overview = overviewRes.Data ?? new SystemOverviewReportDto();
 
-            var from = filter.FromDate?.ToUniversalTime() ?? DateTime.UtcNow.AddMonths(-1);
-            var to = filter.ToDate?.ToUniversalTime() ?? DateTime.UtcNow.AddDays(1);
+            var (from, to) = ResolveDateRange(filter);
 
             var allBookings = (await _bookingRepo.GetAllAsync(b => b.BookingDetails, b => b.User, b => b.User.Department))
                 .Where(b => b.RequestedAt >= from && b.RequestedAt <= to)
@@ -194,7 +192,9 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
                     DateString = g.Key,
                     Label = DateTime.Parse(g.Key).ToString("dd/MM"),
                     Total = g.Count(),
-                    Approved = g.Count(x => x.Status == "Đã duyệt" || x.Status == "Approved"),
+                    Approved = g.Count(x => x.Status == "Đã duyệt" || x.Status == "Approved" || x.Status == "Duyệt một phần"),
+                    Pending = g.Count(x => x.Status == "Chờ duyệt" || x.Status == "Pending"),
+                    Completed = g.Count(x => x.Status == "Hoàn thành" || x.Status == "Đang sử dụng" || x.Status == "Chờ nhận phòng" || x.Status == "Completed" || x.Status == "InUse"),
                     Rejected = g.Count(x => x.Status == "Từ chối" || x.Status == "Rejected"),
                     Cancelled = g.Count(x => x.Status == "Đã hủy" || x.Status == "Cancelled")
                 }).ToList();
@@ -312,8 +312,7 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<RoomUsageReportDto>> GetRoomUsageReportAsync(ReportFilterDto filter)
         {
-            var from = filter.FromDate?.ToUniversalTime() ?? DateTime.UtcNow.AddMonths(-1);
-            var to = filter.ToDate?.ToUniversalTime() ?? DateTime.UtcNow.AddDays(1);
+            var (from, to) = ResolveDateRange(filter);
 
             var rooms = (await _roomRepo.GetAllAsync(r => r.RoomType)).ToList();
 
@@ -431,8 +430,7 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<ViolationStatsReportDto>> GetViolationStatsReportAsync(ReportFilterDto filter)
         {
-            var from = filter.FromDate?.ToUniversalTime() ?? DateTime.UtcNow.AddMonths(-3);
-            var to = filter.ToDate?.ToUniversalTime() ?? DateTime.UtcNow.AddDays(1);
+            var (from, to) = ResolveDateRange(filter, defaultMonths: 3);
 
             var violations = (await _violationRecordRepo.GetAllAsync(v => v.ViolationType, v => v.User, v => v.User.Department))
                 .Where(v => v.IncidentTime >= from && v.IncidentTime <= to)
@@ -568,14 +566,29 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
             {
                 // Default: Bookings
                 var bookRep = await GetBookingStatsReportAsync(filter);
-                sb.AppendLine("Ngay,TongDon,DaDuyet,TuChoi,DaHuy");
+                sb.AppendLine("Ngay,TongDon,DaDuyet,ChoDuyet,HoanThanh,TuChoi,DaHuy");
                 foreach (var pt in bookRep.Data?.TimeSeries ?? new List<TimeSeriesPointDto>())
                 {
-                    sb.AppendLine($"\"{pt.DateString}\",{pt.Total},{pt.Approved},{pt.Rejected},{pt.Cancelled}");
+                    sb.AppendLine($"\"{pt.DateString}\",{pt.Total},{pt.Approved},{pt.Pending},{pt.Completed},{pt.Rejected},{pt.Cancelled}");
                 }
                 var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
                 return (bytes, $"BaoCao_LuotMuonPhong_{DateTime.Now:yyyyMMdd_HHmm}.csv", "text/csv; charset=utf-8");
             }
+        }
+
+        /// <summary>
+        /// Bộ lọc gửi lên chỉ có ngày (date-only) nên lấy trọn ngày cuối thay vì mốc 00:00,
+        /// tránh việc dữ liệu phát sinh trong ngày hôm nay bị loại khỏi báo cáo.
+        /// </summary>
+        private static (DateTime From, DateTime To) ResolveDateRange(ReportFilterDto filter, int defaultMonths = 1)
+        {
+            var from = filter.FromDate.HasValue
+                ? DateTime.SpecifyKind(filter.FromDate.Value.Date, DateTimeKind.Utc)
+                : DateTime.UtcNow.AddMonths(-defaultMonths);
+            var to = filter.ToDate.HasValue
+                ? DateTime.SpecifyKind(filter.ToDate.Value.Date, DateTimeKind.Utc).AddDays(1)
+                : DateTime.UtcNow.AddDays(1);
+            return (from, to);
         }
     }
 }

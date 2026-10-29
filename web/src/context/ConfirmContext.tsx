@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -105,6 +106,41 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [dialog, handleClose]);
 
   const dialogType = dialog?.type || "warning";
+  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  // Focus trap + an toàn: dialog phá huỷ đặt focus vào nút Hủy
+  useEffect(() => {
+    if (!dialog?.isOpen) return;
+    const root = boxRef.current;
+    if (!root) return;
+    const focusables = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((el) => !el.hasAttribute("disabled"));
+    if (focusables.length === 0) return;
+
+    const initial =
+      dialog.type === "danger"
+        ? root.querySelector<HTMLElement>(".confirm-btn-cancel")
+        : focusables[focusables.length - 1];
+    initial?.focus();
+
+    const handleTab = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    root.addEventListener("keydown", handleTab);
+    return () => root.removeEventListener("keydown", handleTab);
+  }, [dialog]);
 
   return (
     <ConfirmContext.Provider value={{ confirm, alert }}>
@@ -114,11 +150,14 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({
         <div
           className="confirm-modal-overlay"
           onClick={() => handleClose(false)}
-          role="dialog"
-          aria-modal="true"
+          role="presentation"
         >
           <div
+            ref={boxRef}
             className={`confirm-modal-box type-${dialogType}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-dialog-title"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -143,7 +182,7 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({
                 )}
               </div>
               <div className="confirm-header-text">
-                <h3 className="confirm-modal-title">{dialog.title}</h3>
+                <h3 id="confirm-dialog-title" className="confirm-modal-title">{dialog.title}</h3>
               </div>
             </div>
 
@@ -192,7 +231,6 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({
                 type="button"
                 className={`confirm-btn-submit submit-${dialogType}`}
                 onClick={() => handleClose(true)}
-                autoFocus
               >
                 {dialog.confirmText ||
                   (dialog.isAlert ? "Đã hiểu" : "Xác nhận")}

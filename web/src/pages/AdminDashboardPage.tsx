@@ -16,31 +16,22 @@ import AdminReportsTab from "../components/admin/AdminReportsTab";
 import AdminChatTab from "../components/admin/AdminChatTab";
 import AdminGlobalSearchModal from "../components/admin/AdminGlobalSearchModal";
 import NotificationCenter from "../components/NotificationCenter";
-import { checkInSession, checkOutSession } from "../lib/usage";
-import { useConfirm } from "../context/ConfirmContext";
+import SchedulePage from "./SchedulePage";
 import {
   ClockIcon,
-  UsersIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   DoorIcon,
   CheckCircleIcon,
-  BookmarkIcon,
   AlertTriangleIcon,
-  FilterIcon,
-  ShieldCheckIcon,
-  WrenchIcon,
   BellRingIcon,
-  BanIcon,
+  ShieldCheckIcon,
   ClipboardListIcon,
+  TvIcon,
   PlusIcon,
   SearchIcon,
-  TvIcon,
   TagIcon,
   BriefcaseIcon,
   GraduationCapIcon,
   BankIcon,
-  BarChartIcon,
   CalendarIcon,
   XIcon,
   ChatIcon,
@@ -67,51 +58,6 @@ export type AdminTabType =
   | "users"
   | "timeline";
 
-export interface AdminBookingInfo {
-  id: string; // e.g. "HUIT-84920"
-  activityTitle: string;
-  roomCode: string;
-  roomName: string;
-  borrowerName: string;
-  studentId: string;
-  unit: string;
-  email: string;
-  phone: string;
-  startTime: string; // "09:00"
-  endTime: string;   // "11:00"
-  dateStr: string;   // "24/10/2024"
-  durationHours?: string; // "3 giờ"
-  guestCount: number;
-  purpose: string;
-  statusText: string; // "Đã nhận phòng lúc 08:58"
-  statusBadge: "ĐÃ ĐẶT" | "ĐANG SỬ DỤNG" | "WORKSHOP" | "TRỐNG";
-  checkInTag?: string; // "CHECK-IN 08:58" or "55 người"
-  checkInTime?: string;
-  note?: string;
-}
-
-export interface AdminRoomRow {
-  code: string;
-  name: string;
-  typeDesc: string;
-  capacityText: string;
-  amenityText: string;
-  hasIssue?: boolean;
-  issueDesc?: string;
-  status: "ĐÃ ĐẶT" | "TRỐNG" | "ĐANG SỬ DỤNG" | "WORKSHOP";
-  booking?: AdminBookingInfo;
-}
-
-export interface TechnicalIncident {
-  id: number;
-  roomCode: string;
-  content: string;
-  receivedAt: string;
-  technicianStatus: string;
-  severityLevel: number;
-  isResolved: boolean;
-}
-
 export interface SystemUserOption {
   id: number;
   userName: string;
@@ -133,159 +79,46 @@ export interface DbRoomOption {
   description?: string;
 }
 
-// ── Initial Mock / Default Data strictly matching user screenshot ───────────
-
-const INITIAL_BOOKINGS: Record<string, AdminBookingInfo> = {
-  A101: {
-    id: "HUIT-84917",
-    activityTitle: "Học nhóm Đa phương tiện & Đồ họa",
-    roomCode: "A101",
-    roomName: "Phòng A101 (Tầng 3)",
-    borrowerName: "Nguyễn Văn A",
-    studentId: "2001230417",
-    unit: "11DHTH01 - Khoa CNTT",
-    email: "2001230417@huit.edu.vn",
-    phone: "0901 234 567",
-    startTime: "08:00",
-    endTime: "10:00",
-    dateStr: "24/10/2024",
-    guestCount: 8,
-    purpose: "Ôn tập đồ án kết thúc học phần Hệ phân tán",
-    statusText: "Đã duyệt - Chờ nhận phòng (Hạn check-in: 08:15)",
-    statusBadge: "ĐÃ ĐẶT",
-  },
-  A102: {
-    id: "HUIT-84918",
-    activityTitle: "Thảo luận nhóm Chuyên đề AI",
-    roomCode: "A102",
-    roomName: "Phòng A102 (Tầng 3)",
-    borrowerName: "Trần Văn B",
-    studentId: "2001230418",
-    unit: "12DHTH03 - Khoa CNTT",
-    email: "2001230418@huit.edu.vn",
-    phone: "0909 888 777",
-    startTime: "10:30",
-    endTime: "12:00",
-    dateStr: "24/10/2024",
-    guestCount: 6,
-    purpose: "Phân tích thiết kế hệ thống Microservices",
-    statusText: "Đã duyệt - Chờ nhận phòng (Hạn check-in: 10:45)",
-    statusBadge: "ĐÃ ĐẶT",
-  },
-  A104: {
-    id: "HUIT-84920",
-    activityTitle: "Bảo vệ tiến độ Khóa luận tốt nghiệp",
-    roomCode: "A104",
-    roomName: "A104 (Tầng 3)",
-    borrowerName: "Lê Minh C",
-    studentId: "2001230419",
-    unit: "11DHTH02 - Khoa CNTT",
-    email: "2001230419@huit.edu.vn",
-    phone: "0912 345 678",
-    startTime: "09:00",
-    endTime: "11:00",
-    dateStr: "24/10/2024",
-    guestCount: 6,
-    purpose: "Bảo vệ tiến độ Khóa luận tốt nghiệp",
-    statusText: "Đã nhận phòng lúc 08:58",
-    statusBadge: "ĐANG SỬ DỤNG",
-    checkInTag: "CHECK-IN 08:58",
-    checkInTime: "08:58",
-  },
-  B201: {
-    id: "HUIT-84915",
-    activityTitle: "Workshop CNTT - Chủ trì: Nguyễn Văn D",
-    roomCode: "B201",
-    roomName: "Hội trường B201 (Khu Giảng đường)",
-    borrowerName: "Nguyễn Văn D",
-    studentId: "GV10010001",
-    unit: "Quy mô khoa | Đăng ký theo công văn viện",
-    email: "nguyenvand@huit.edu.vn",
-    phone: "0988 123 456",
-    startTime: "08:30",
-    endTime: "11:30",
-    durationHours: "3 giờ",
-    dateStr: "24/10/2024",
-    guestCount: 55,
-    purpose: "Hội thảo hướng nghiệp & Công nghệ AI thực chiến 2024",
-    statusText: "Đang diễn ra Workshop (55 người tham dự)",
-    statusBadge: "WORKSHOP",
-    checkInTag: "55 người",
-  },
-};
-
-const INITIAL_ROOMS: AdminRoomRow[] = [
-  {
-    code: "A101",
-    name: "Phòng A101",
-    typeDesc: "Học nhóm đa phương tiện",
-    capacityText: "08 chỗ",
-    amenityText: "Smart TV",
-    status: "ĐÃ ĐẶT",
-    booking: INITIAL_BOOKINGS.A101,
-  },
-  {
-    code: "A102",
-    name: "Phòng A102",
-    typeDesc: "Phòng thảo luận chuyên sâu",
-    capacityText: "06 chỗ",
-    amenityText: "Bảng kính",
-    status: "ĐÃ ĐẶT",
-    booking: INITIAL_BOOKINGS.A102,
-  },
-  {
-    code: "A103",
-    name: "Phòng A103",
-    typeDesc: "Phòng học nhóm linh hoạt",
-    capacityText: "10 chỗ",
-    amenityText: "Hub điện",
-    status: "TRỐNG",
-    booking: undefined,
-  },
-  {
-    code: "A104",
-    name: "Phòng A104",
-    typeDesc: "Phòng nghiên cứu đề tài",
-    capacityText: "06 chỗ",
-    amenityText: "Họp Hybrid",
-    status: "ĐANG SỬ DỤNG",
-    booking: INITIAL_BOOKINGS.A104,
-  },
-  {
-    code: "B201",
-    name: "Hội trường B201",
-    typeDesc: "Không gian hội thảo trung tâm",
-    capacityText: "60 chỗ",
-    amenityText: "Cần chỉnh mic",
-    hasIssue: true,
-    issueDesc: "Micro không dây số 2 rè âm thanh, pin yếu",
-    status: "WORKSHOP",
-    booking: INITIAL_BOOKINGS.B201,
-  },
-];
-
-const TIME_SLOTS = [
-  "07:30",
-  "08:30",
-  "09:30",
-  "10:30",
-  "11:30",
-  "12:30",
-  "13:30",
-  "14:30",
-  "15:30",
-  "16:30",
-  "17:30",
-];
-
 export default function AdminDashboardPage() {
   const { user, logout } = useAuth();
   const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
-  const { confirm } = useConfirm();
   // Navigation active tab: overview | approvals | rooms | roomTypes | departments | employees | users | timeline
   const [activeTab, setActiveTab] = useState<AdminTabType>("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("roman-admin-theme") === "dark";
+    } catch {
+      return false;
+    }
+  });
+  const [isNarrow, setIsNarrow] = useState<boolean>(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(max-width: 1024px)").matches
+      : false
+  );
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("roman-admin-theme", isDarkMode ? "dark" : "light");
+    } catch {
+      // storage bị chặn thì bỏ qua, theme vẫn đổi trong phiên
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1024px)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsNarrow(event.matches);
+      if (!event.matches) setIsMobileNavOpen(false);
+    };
+    mq.addEventListener("change", handleChange);
+    return () => mq.removeEventListener("change", handleChange);
+  }, []);
+
+  // Trên mobile sidebar luôn mở rộng trong drawer, không dùng trạng thái thu gọn
+  const isSidebarCompact = sidebarCollapsed && !isNarrow;
 
 
   const [pendingCount, setPendingCount] = useState<number>(0);
@@ -324,25 +157,6 @@ export default function AdminDashboardPage() {
     return () => clearInterval(poll);
   }, []);
 
-  // Rooms and bookings state
-  const [rooms, setRooms] = useState<AdminRoomRow[]>(INITIAL_ROOMS);
-  // Default selected booking is A104 as shown in mockup
-  const [selectedRoomCode, setSelectedRoomCode] = useState<string>("A104");
-
-  // Selected date
-  const [dateDisplay, setDateDisplay] = useState<string>("THỨ NĂM, 24/10/2024");
-
-  // Technical incident state
-  const [incident, setIncident] = useState<TechnicalIncident>({
-    id: 1,
-    roomCode: "B201",
-    content: "Micro không dây số 2 rè âm thanh, pin yếu",
-    receivedAt: "08:42:15",
-    technicianStatus: "Kỹ thuật viên: Đang điều phối",
-    severityLevel: 2,
-    isResolved: false,
-  });
-
   // Toast notification state
   const [toastMsg, setToastMsg] = useState<{
     text: string;
@@ -361,8 +175,6 @@ export default function AdminDashboardPage() {
 
   // Modals state
   const [showManualModal, setShowManualModal] = useState<boolean>(false);
-  const [showFilterModal, setShowFilterModal] = useState<boolean>(false);
-  const [showSurveyModal, setShowSurveyModal] = useState<boolean>(false);
   const [showGlobalSearchModal, setShowGlobalSearchModal] = useState<boolean>(false);
   const [pendingViolationsCount, setPendingViolationsCount] = useState<number>(0);
 
@@ -394,10 +206,6 @@ export default function AdminDashboardPage() {
     const interval = setInterval(fetchViolationsCount, 20000);
     return () => clearInterval(interval);
   }, []);
-
-  // Filter criteria
-  const [filterStatus, setFilterStatus] = useState<string>("ALL");
-  const [filterSearch, setFilterSearch] = useState<string>("");
 
   // Manual booking form state
   const [manualForm, setManualForm] = useState({
@@ -516,204 +324,7 @@ export default function AdminDashboardPage() {
     setUserSearchQuery("");
   };
 
-  // Survey checkout state
-  const [surveyChecklist, setSurveyChecklist] = useState({
-    cleaned: true,
-    devicesOk: true,
-    lightsOff: true,
-    staffNote: "Bàn giao đầy đủ thiết bị, phòng sạch sẽ.",
-  });
-
-  // Calculate current active booking for the right panel
-  const selectedBooking = useMemo(() => {
-    const r = rooms.find((x) => x.code === selectedRoomCode);
-    return r?.booking || null;
-  }, [rooms, selectedRoomCode]);
-
-  const selectedRoom = useMemo(() => {
-    return rooms.find((x) => x.code === selectedRoomCode) || null;
-  }, [rooms, selectedRoomCode]);
-
-  // Compute KPI counts dynamically
-  const kpiStats = useMemo(() => {
-    const totalRooms = rooms.length;
-    const availableRooms = rooms.filter((r) => r.status === "TRỐNG").length;
-    const bookedRooms = rooms.filter((r) => r.status === "ĐÃ ĐẶT").length;
-    const inUseRooms = rooms.filter(
-      (r) => r.status === "ĐANG SỬ DỤNG" || r.status === "WORKSHOP"
-    ).length;
-    const issueCount = incident.isResolved ? 0 : 1;
-    return {
-      totalRooms,
-      availableRooms,
-      bookedRooms,
-      inUseRooms,
-      issueCount,
-    };
-  }, [rooms, incident.isResolved]);
-
-  // ── Handlers for Staff Operations ──────────────────────────────────────────
-
-  // 1. Nhắc nhở kết thúc giờ
-  const handleRemindTime = () => {
-    if (!selectedBooking) return;
-    showToast(
-      `Đã phát thông báo nhắc nhở sắp kết thúc khung giờ đến ${selectedBooking.borrowerName} (${selectedBooking.phone}) qua SMS & thông báo ứng dụng!`,
-      "info"
-    );
-  };
-
-  // 2. Hủy do No-show > 15 phút
-  const handleCancelNoShow = async () => {
-    if (!selectedBooking) return;
-    const isConfirmed = await confirm({
-      title: "Xác nhận hủy đơn No-show",
-      message: `Xác nhận hủy đặt phòng #${selectedBooking.id} do Người đại diện ${selectedBooking.borrowerName} không đến nhận phòng sau 15 phút?`,
-      subMessage: "Hệ thống sẽ giải phóng phòng và lưu chế tài vi phạm vào hồ sơ MSSV.",
-      itemDetails: [
-        { label: "Mã đơn", value: `#${selectedBooking.id}` },
-        { label: "Phòng", value: selectedBooking.roomCode },
-        { label: "Người đại diện", value: selectedBooking.borrowerName, badge: selectedBooking.studentId },
-        { label: "Khung giờ", value: `${selectedBooking.startTime} - ${selectedBooking.endTime}` },
-      ],
-      confirmText: "Hủy đơn No-show",
-      cancelText: "Bỏ qua",
-      type: "danger",
-    });
-    if (!isConfirmed) return;
-
-    setRooms((prev) =>
-      prev.map((r) => {
-        if (r.code === selectedBooking.roomCode) {
-          return {
-            ...r,
-            status: "TRỐNG",
-            booking: undefined,
-          };
-        }
-        return r;
-      })
-    );
-    showToast(
-      `Đã hủy đơn đặt phòng #${selectedBooking.id} (Lý do: No-show >15p). Phòng ${selectedBooking.roomCode} đã sẵn sàng tiếp nhận!`,
-      "warning"
-    );
-  };
-
-  // 3. Check-in thủ công
-  const handleCheckInNow = async (roomCode: string) => {
-    try {
-      if (selectedBooking?.id) {
-        await checkInSession({ confirmationCode: selectedBooking.id });
-      }
-    } catch {
-      // Bỏ qua lỗi nếu là phòng mock mẫu
-    }
-
-    setRooms((prev) =>
-      prev.map((r) => {
-        if (r.code === roomCode && r.booking) {
-          const nowStr = `${String(new Date().getHours()).padStart(
-            2,
-            "0"
-          )}:${String(new Date().getMinutes()).padStart(2, "0")}`;
-          return {
-            ...r,
-            status: "ĐANG SỬ DỤNG",
-            booking: {
-              ...r.booking,
-              statusBadge: "ĐANG SỬ DỤNG",
-              statusText: `Đã nhận phòng lúc ${nowStr}`,
-              checkInTag: `CHECK-IN ${nowStr}`,
-              checkInTime: nowStr,
-            },
-          };
-        }
-        return r;
-      })
-    );
-    showToast(
-      `Xác nhận Check-in thành công cho phòng ${roomCode}! Chuyển trạng thái sang "Đang sử dụng".`,
-      "success"
-    );
-  };
-
-  // 4. Trả phòng & Khảo sát thiết bị
-  const handleCompleteSurveyCheckout = async () => {
-    if (!selectedBooking) return;
-    try {
-      if (selectedBooking.id) {
-        await checkOutSession({
-          usageSessionId: 0,
-          roomCondition: "Trống",
-          devicesOk: surveyChecklist.devicesOk,
-          cleaned: surveyChecklist.cleaned,
-          lightsOff: surveyChecklist.lightsOff,
-          staffNote: surveyChecklist.staffNote,
-        });
-      }
-    } catch {
-      // Bỏ qua nếu là phòng mock
-    }
-
-    setRooms((prev) =>
-      prev.map((r) => {
-        if (r.code === selectedBooking.roomCode) {
-          return {
-            ...r,
-            status: "TRỐNG",
-            booking: undefined,
-          };
-        }
-        return r;
-      })
-    );
-    setShowSurveyModal(false);
-    showToast(
-      `Ghi nhận trả phòng ${selectedBooking.roomCode} thành công! Đã lưu biên bản khảo sát thiết bị và hoàn tất lịch sử dụng.`,
-      "success"
-    );
-  };
-
-  // 5. Xử lý sự cố kỹ thuật
-  const handleDispatchTechnician = () => {
-    setIncident((prev) => ({
-      ...prev,
-      technicianStatus:
-        "Kỹ thuật viên: Nguyễn Tuấn Anh (Tổ Thiết bị) đang xử lý tại B201",
-    }));
-    showToast(
-      "Đã gửi lệnh điều phối khẩn cấp đến Kỹ thuật viên phụ trách!",
-      "info"
-    );
-  };
-
-  const handleResolveIncident = () => {
-    setIncident((prev) => ({
-      ...prev,
-      isResolved: true,
-      technicianStatus: "Đã khắc phục hoàn toàn lúc 09:10:00",
-    }));
-    // Remove warning from B201 room
-    setRooms((prev) =>
-      prev.map((r) => {
-        if (r.code === "B201") {
-          return {
-            ...r,
-            hasIssue: false,
-            amenityText: "Đã chỉnh mic",
-          };
-        }
-        return r;
-      })
-    );
-    showToast(
-      "Đã ghi nhận khắc phục xong sự cố Micro tại B201. Cập nhật nhật ký kỹ thuật thành công!",
-      "success"
-    );
-  };
-
-  // 6. Submit manual booking to API and update system
+  // Submit manual booking to API and update system
   const handleManualBookingSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!manualForm.borrowerName || !manualForm.studentId) {
@@ -725,18 +336,11 @@ export default function AdminDashboardPage() {
     try {
       // Find roomId from database rooms
       let targetRoomId = manualForm.roomId;
-      let targetRoomName = `Phòng ${manualForm.roomCode}`;
       if (availableDbRooms.length > 0) {
         const found = availableDbRooms.find(
           (r) => r.id === manualForm.roomId || r.roomCode === manualForm.roomCode
         );
-        if (found) {
-          targetRoomId = found.id;
-          targetRoomName = found.name;
-        } else {
-          targetRoomId = availableDbRooms[0].id;
-          targetRoomName = availableDbRooms[0].name;
-        }
+        targetRoomId = found ? found.id : availableDbRooms[0].id;
       }
 
       // Convert local date/time in Vietnam UTC+7
@@ -795,47 +399,6 @@ export default function AdminDashboardPage() {
         }
       }
 
-      const formatViDate = (dStr: string) => {
-        if (!dStr) return "Hôm nay";
-        const parts = dStr.split("-");
-        if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-        return dStr;
-      };
-
-      const newId = `HUIT-${Math.floor(10000 + Math.random() * 90000)}`;
-      const newBooking: AdminBookingInfo = {
-        id: newId,
-        activityTitle: manualForm.purpose || "Đặt phòng học trực tiếp tại quầy",
-        roomCode: manualForm.roomCode,
-        roomName: targetRoomName,
-        borrowerName: manualForm.borrowerName,
-        studentId: manualForm.studentId,
-        unit: manualForm.unit,
-        email: manualForm.email || `${manualForm.studentId}@huit.edu.vn`,
-        phone: manualForm.phone || "0900 000 000",
-        startTime: manualForm.startTime,
-        endTime: manualForm.endTime,
-        dateStr: formatViDate(manualForm.bookingDate),
-        guestCount: manualForm.guestCount,
-        purpose: manualForm.purpose || "Sử dụng phòng học nhóm / nghiên cứu",
-        statusText: `Đã tiếp nhận & duyệt lúc ${liveClock}`,
-        statusBadge: "ĐÃ ĐẶT",
-      };
-
-      setRooms((prev) =>
-        prev.map((r) => {
-          if (r.code === manualForm.roomCode) {
-            return {
-              ...r,
-              status: "ĐÃ ĐẶT",
-              booking: newBooking,
-            };
-          }
-          return r;
-        })
-      );
-
-      setSelectedRoomCode(manualForm.roomCode);
       handleCloseManualModal();
       setApprovalRefreshKey((k) => k + 1);
       showToast(
@@ -853,33 +416,6 @@ export default function AdminDashboardPage() {
       setSubmittingManual(false);
     }
   };
-
-  // Filter rooms
-  const filteredRooms = useMemo(() => {
-    return rooms.filter((r) => {
-      if (filterStatus === "AVAILABLE" && r.status !== "TRỐNG") return false;
-      if (filterStatus === "BOOKED" && r.status !== "ĐÃ ĐẶT") return false;
-      if (
-        filterStatus === "IN_USE" &&
-        r.status !== "ĐANG SỬ DỤNG" &&
-        r.status !== "WORKSHOP"
-      )
-        return false;
-      if (filterStatus === "ISSUE" && !r.hasIssue) return false;
-
-      if (filterSearch.trim()) {
-        const query = filterSearch.toLowerCase().trim();
-        const matchesRoom =
-          r.name.toLowerCase().includes(query) ||
-          r.code.toLowerCase().includes(query);
-        const matchesUser =
-          r.booking?.borrowerName.toLowerCase().includes(query) ||
-          r.booking?.studentId.toLowerCase().includes(query);
-        if (!matchesRoom && !matchesUser) return false;
-      }
-      return true;
-    });
-  }, [rooms, filterStatus, filterSearch]);
 
   const tabConfigList = useMemo(() => {
     const list = [
@@ -1004,7 +540,12 @@ export default function AdminDashboardPage() {
     <div className={`admin-workspace-layout ${isDarkMode ? "dark-mode" : ""}`}>
       {/* Toast Alert */}
       {toastMsg && (
-        <div className={`admin-toast-alert toast-${toastMsg.type || "success"}`}>
+        <div
+          className={`admin-toast-alert toast-${toastMsg.type || "success"}`}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <div className="toast-icon-wrap">
             {toastMsg.type === "warning" ? (
               <AlertTriangleIcon size={20} />
@@ -1019,27 +560,45 @@ export default function AdminDashboardPage() {
             type="button"
             className="toast-close-btn"
             onClick={() => setToastMsg(null)}
+            aria-label="Đóng thông báo"
           >
             <XIcon size={14} />
           </button>
         </div>
       )}
 
+      {/* Mobile drawer backdrop */}
+      <button
+        type="button"
+        aria-label="Đóng thanh điều hướng"
+        tabIndex={isMobileNavOpen ? 0 : -1}
+        className={`admin-sidebar-backdrop ${
+          isMobileNavOpen ? "is-visible" : ""
+        }`}
+        onClick={() => setIsMobileNavOpen(false)}
+      />
+
       {/* ── Left Sidebar Modern ───────────────────────────────── */}
-      <aside className={`admin-sidebar-modern ${sidebarCollapsed ? "is-collapsed" : ""}`}>
+      <aside
+        className={`admin-sidebar-modern ${
+          isSidebarCompact ? "is-collapsed" : ""
+        } ${isMobileNavOpen ? "is-mobile-open" : ""}`}
+      >
         <div className="admin-sidebar-top-section">
           {/* Brand header */}
           <div className="admin-sidebar-brand">
-            <div className="admin-brand-icon-box">R</div>
-            {!sidebarCollapsed && (
+            <div className="admin-brand-icon-box">H</div>
+            {!isSidebarCompact && (
               <div className="admin-brand-info">
-                <span className="admin-brand-title">RoMan</span>
-                <span className="admin-brand-sub">HỆ THỐNG PHÒNG HUIT</span>
+                <span className="admin-brand-title">Quản lý phòng HUIT</span>
+                <span className="admin-brand-sub">
+                  HỆ THỐNG PHÒNG DÙNG CHUNG
+                </span>
               </div>
             )}
           </div>
 
-          {!sidebarCollapsed && (
+          {!isSidebarCompact && (
             <div style={{ padding: "0 14px 6px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
                 <span className="admin-sidebar-section-title" style={{ padding: 0 }}>WORKSPACE</span>
@@ -1057,7 +616,7 @@ export default function AdminDashboardPage() {
                   {isAdmin ? "QUẢN LÝ" : "NHÂN VIÊN"}
                 </span>
               </div>
-              <div style={{ fontSize: "11px", color: "#8C8275", fontWeight: 600, paddingLeft: "2px" }}>
+              <div style={{ fontSize: "11px", color: "var(--rp-muted)", fontWeight: 600, paddingLeft: "2px" }}>
                 {user?.departmentName || (isAdmin ? "Ban Quản lý HUIT" : "Đơn vị Thư viện")}
               </div>
             </div>
@@ -1073,11 +632,14 @@ export default function AdminDashboardPage() {
                   key={t.id}
                   type="button"
                   className={`admin-nav-item-btn ${isActive ? "is-active" : ""}`}
-                  onClick={() => setActiveTab(t.id)}
-                  title={sidebarCollapsed ? t.label : undefined}
+                  onClick={() => {
+                    setActiveTab(t.id);
+                    setIsMobileNavOpen(false);
+                  }}
+                  title={isSidebarCompact ? t.label : undefined}
                 >
                   <IconComp size={18} className="admin-nav-icon" />
-                  {!sidebarCollapsed && (
+                  {!isSidebarCompact && (
                     <>
                       <span className="admin-nav-label">{t.label}</span>
                       {t.badge != null && t.badge > 0 && (
@@ -1099,14 +661,14 @@ export default function AdminDashboardPage() {
 
         {/* Sidebar Footer User Capsule */}
         <div className="admin-sidebar-footer">
-          {!sidebarCollapsed ? (
+          {!isSidebarCompact ? (
             <div className="admin-user-capsule">
               <div className="admin-user-avatar-circle">
                 {user?.fullName ? user.fullName[0].toUpperCase() : "A"}
               </div>
               <div className="admin-user-details">
                 <span className="admin-user-name" title={user?.fullName || "Admin"}>
-                  {user?.fullName || user?.cardCode || "Admin RoMan"}
+                  {user?.fullName || user?.cardCode || "Quản trị viên"}
                 </span>
                 <span className="admin-user-sub" title={user?.departmentName || formatRole(user?.role || "Admin")}>
                   {isAdmin ? "Quản lý đơn vị" : `Nhân viên • ${user?.departmentName || "Thư viện"}`}
@@ -1143,8 +705,19 @@ export default function AdminDashboardPage() {
             <button
               type="button"
               className="admin-sidebar-toggle-btn"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              title={sidebarCollapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
+              onClick={() => {
+                if (isNarrow) setIsMobileNavOpen((open) => !open);
+                else setSidebarCollapsed((collapsed) => !collapsed);
+              }}
+              title={
+                isNarrow
+                  ? "Mở thanh điều hướng"
+                  : isSidebarCompact
+                  ? "Mở rộng sidebar"
+                  : "Thu gọn sidebar"
+              }
+              aria-label="Mở thanh điều hướng"
+              aria-expanded={isNarrow ? isMobileNavOpen : undefined}
             >
               <SidebarIcon size={18} />
             </button>
@@ -1174,91 +747,71 @@ export default function AdminDashboardPage() {
               className="admin-topbar-icon-action"
               onClick={() => setIsDarkMode(!isDarkMode)}
               title={isDarkMode ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}
+              aria-label={isDarkMode ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}
+              aria-pressed={isDarkMode}
             >
               {isDarkMode ? <SunIcon size={18} /> : <MoonIcon size={18} />}
             </button>
-
-            {/* User Circle Avatar */}
-            <div
-              className="admin-topbar-user-avatar"
-              title={`${user?.fullName || "Admin"} (${formatRole(user?.role || "Admin")})`}
-              onClick={() => setActiveTab("users")}
-            >
-              {user?.fullName ? user.fullName[0].toUpperCase() : "N"}
-            </div>
           </div>
         </header>
 
         {/* Content Body */}
-        <div className="admin-workspace-content">
-          {/* Breadcrumb */}
-          <nav className="admin-breadcrumb-bar" aria-label="Breadcrumb">
-            <span className="admin-breadcrumb-root">Không gian làm việc</span>
-            <span className="admin-breadcrumb-separator">&gt;</span>
-            <span className="admin-breadcrumb-current">{activeTabConfig.label}</span>
-          </nav>
+        <div
+          className={`admin-workspace-content ${
+            activeTab === "timeline" ? "is-timeline" : ""
+          }`}
+        >
+          {activeTab !== "timeline" && (
+            <>
+              {/* Breadcrumb */}
+              <nav className="admin-breadcrumb-bar" aria-label="Breadcrumb">
+                <span className="admin-breadcrumb-root">Không gian làm việc</span>
+                <span className="admin-breadcrumb-separator">&gt;</span>
+                <span className="admin-breadcrumb-current">{activeTabConfig.label}</span>
+              </nav>
 
-          {/* Page Header Row */}
-          <div className="admin-page-hero-row">
-            <div className="admin-page-hero-headings">
-              <div className="admin-hero-icon-square">
-                <CurrentTabIcon size={22} />
+              {/* Page Header Row */}
+              <div className="admin-page-hero-row">
+                <div className="admin-page-hero-headings">
+                  <div className="admin-hero-icon-square">
+                    <CurrentTabIcon size={22} />
+                  </div>
+                  <div className="admin-hero-text-wrap">
+                    <h1 className="admin-hero-main-title">{activeTabConfig.title}</h1>
+                    <p className="admin-hero-sub-desc">{activeTabConfig.subtitle}</p>
+                  </div>
+                </div>
+
+                <div className="admin-hero-actions-group">
+                  {(activeTab === "overview" || activeTab === "reports") && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-admin-pill-primary"
+                        onClick={() => setShowManualModal(true)}
+                      >
+                        <PlusIcon size={15} />
+                        <span>Đặt phòng nhanh</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn-admin-pill-secondary"
+                        onClick={() => setActiveTab("timeline")}
+                      >
+                        <span>Xem lịch phòng</span>
+                      </button>
+                    </>
+                  )}
+
+                  <div className="live-sync-pill" style={{ marginLeft: "4px" }} title="Thời gian thực">
+                    <span className="live-pulse-dot" />
+                    <span className="live-sync-label">{liveClock}</span>
+                  </div>
+                </div>
               </div>
-              <div className="admin-hero-text-wrap">
-                <h1 className="admin-hero-main-title">{activeTabConfig.title}</h1>
-                <p className="admin-hero-sub-desc">{activeTabConfig.subtitle}</p>
-              </div>
-            </div>
-
-            <div className="admin-hero-actions-group">
-              <button
-                type="button"
-                className="btn-admin-pill-primary"
-                onClick={() => setShowManualModal(true)}
-              >
-                <PlusIcon size={15} />
-                <span>+ Đặt phòng nhanh</span>
-              </button>
-
-              {activeTab !== "timeline" ? (
-                <button
-                  type="button"
-                  className="btn-admin-pill-secondary"
-                  onClick={() => setActiveTab("timeline")}
-                >
-                  <span>Xem lịch phòng →</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={`btn-admin-pill-secondary ${
-                    filterStatus !== "ALL" || filterSearch ? "active-filter" : ""
-                  }`}
-                  onClick={() => setShowFilterModal(true)}
-                  title="Mở bộ lọc nâng cao"
-                >
-                  <FilterIcon size={14} />
-                  <span>Bộ lọc nâng cao</span>
-                </button>
-              )}
-
-              {activeTab !== "overview" && activeTab !== "reports" && (
-                <button
-                  type="button"
-                  className="btn-admin-pill-secondary"
-                  onClick={() => setActiveTab("overview")}
-                >
-                  <BarChartIcon size={14} />
-                  <span>Xem báo cáo & tổng quan</span>
-                </button>
-              )}
-
-              <div className="live-sync-pill" style={{ marginLeft: "4px" }} title="Thời gian thực">
-                <span className="live-pulse-dot" />
-                <span className="live-sync-label">{liveClock}</span>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
           {/* ── Active Tab Contents ────────────────────────── */}
           {(activeTab === "overview" || activeTab === "reports") && (
@@ -1310,642 +863,10 @@ export default function AdminDashboardPage() {
         )}
 
         {activeTab === "timeline" && (
-          <>
-            {/* ── 2. Top 5 KPI Summary Cards ─────────────────────────────────── */}
-            <section className="admin-kpi-summary-strip">
-          {/* Card 1: Tổng số phòng */}
-          <div className="admin-kpi-card">
-            <div className="kpi-header-row">
-              <span className="kpi-title-small">TỔNG SỐ PHÒNG</span>
-              <DoorIcon size={20} className="kpi-icon-slate" />
-            </div>
-            <div className="kpi-value-row">
-              <span className="kpi-number-huge">{kpiStats.totalRooms}</span>
-            </div>
-            <div className="kpi-sub-note">hoạt động tiêu chuẩn</div>
+          <div className="admin-embedded-schedule">
+            <SchedulePage />
           </div>
-
-          {/* Card 2: Phòng trống */}
-          <div className="admin-kpi-card">
-            <div className="kpi-header-row">
-              <span className="kpi-title-small">PHÒNG TRỐNG</span>
-              <CheckCircleIcon size={20} className="kpi-icon-green" />
-            </div>
-            <div className="kpi-value-row">
-              <span className="kpi-number-huge color-green">
-                {kpiStats.availableRooms}
-              </span>
-            </div>
-            <div className="kpi-sub-note">sẵn sàng tiếp nhận</div>
-          </div>
-
-          {/* Card 3: Đã đặt */}
-          <div className="admin-kpi-card">
-            <div className="kpi-header-row">
-              <span className="kpi-title-small">ĐÃ ĐẶT</span>
-              <BookmarkIcon size={20} className="kpi-icon-blue" />
-            </div>
-            <div className="kpi-value-row">
-              <span className="kpi-number-huge color-blue">
-                {kpiStats.bookedRooms}
-              </span>
-            </div>
-            <div className="kpi-sub-note">chờ xác nhận đến</div>
-          </div>
-
-          {/* Card 4: Đang sử dụng */}
-          <div className="admin-kpi-card">
-            <div className="kpi-header-row">
-              <span className="kpi-title-small">ĐANG SỬ DỤNG</span>
-              <UsersIcon size={20} className="kpi-icon-orange" />
-            </div>
-            <div className="kpi-value-row">
-              <span className="kpi-number-huge color-orange">
-                {kpiStats.inUseRooms}
-              </span>
-            </div>
-            <div className="kpi-sub-note">đã hoàn tất check-in</div>
-          </div>
-
-          {/* Card 5: Sự cố cần xử lý (Highlight Red) */}
-          <div
-            className={`admin-kpi-card kpi-card-danger ${
-              kpiStats.issueCount > 0 ? "has-active-issue" : "issue-resolved"
-            }`}
-          >
-            <div className="kpi-header-row">
-              <span className="kpi-title-small color-red">SỰ CỐ CẦN XỬ LÝ</span>
-              <AlertTriangleIcon size={20} className="kpi-icon-red" />
-            </div>
-            <div className="kpi-value-row">
-              <span className="kpi-number-huge color-red">
-                {kpiStats.issueCount}
-              </span>
-            </div>
-            <div className="kpi-sub-note color-red-dark">
-              {kpiStats.issueCount > 0
-                ? "Báo cáo bảo trì mic B201"
-                : "Tất cả phòng hoạt động tốt"}
-            </div>
-          </div>
-        </section>
-
-        {/* ── 3. Main Workspace: Schedule Matrix + Right Detail Drawer ───── */}
-        <section className="admin-workspace-split">
-          {/* Left Column: Timeline Schedule Matrix */}
-          <div className="admin-timeline-column">
-            {/* Header control bar for timeline */}
-            <div className="timeline-control-header">
-              <div className="timeline-nav-left">
-                <div className="date-control-pill">
-                  <button
-                    type="button"
-                    className="date-arrow-btn"
-                    title="Ngày trước"
-                    onClick={() => setDateDisplay("THỨ TƯ, 23/10/2024")}
-                  >
-                    <ChevronLeftIcon size={16} />
-                  </button>
-                  <span className="date-current-text">{dateDisplay}</span>
-                  <button
-                    type="button"
-                    className="date-arrow-btn"
-                    title="Ngày kế tiếp"
-                    onClick={() => setDateDisplay("THỨ SÁU, 25/10/2024")}
-                  >
-                    <ChevronRightIcon size={16} />
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn-today-pill"
-                  onClick={() => setDateDisplay("THỨ NĂM, 24/10/2024")}
-                >
-                  Hôm nay
-                </button>
-              </div>
-
-              {/* Legend matching mockup */}
-              <div className="timeline-legend-group">
-                <div className="legend-item">
-                  <span className="legend-box-sq border-green" />
-                  <span>Phòng trống</span>
-                </div>
-                <div className="legend-item">
-                  <span className="legend-box-sq border-blue" />
-                  <span>Đã đặt</span>
-                </div>
-                <div className="legend-item">
-                  <span className="legend-box-sq border-orange" />
-                  <span>Đang sử dụng</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Matrix Table */}
-            <div className="admin-matrix-scroll-wrapper">
-              <table className="admin-matrix-table">
-                <thead>
-                  <tr>
-                    <th className="th-room-spec">PHÒNG & CƠ SỞ VẬT CHẤT</th>
-                    {TIME_SLOTS.map((t) => (
-                      <th key={t} className="th-time-hour">
-                        {t}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRooms.map((room) => {
-                    const isSelected = selectedRoomCode === room.code;
-
-                    return (
-                      <tr
-                        key={room.code}
-                        className={`admin-room-row ${
-                          isSelected ? "row-selected" : ""
-                        }`}
-                        onClick={() => setSelectedRoomCode(room.code)}
-                      >
-                        {/* Room Meta Left Column */}
-                        <td className="td-room-info-cell">
-                          <div className="room-info-cell-inner">
-                            <div className="room-code-badge-row">
-                              <span className="room-name-bold">{room.name}</span>
-                              {room.status === "ĐÃ ĐẶT" && (
-                                <span className="status-badge-blue">ĐÃ ĐẶT</span>
-                              )}
-                              {room.status === "TRỐNG" && (
-                                <span className="status-badge-green">TRỐNG</span>
-                              )}
-                              {room.status === "ĐANG SỬ DỤNG" && (
-                                <span className="status-badge-orange">
-                                  ĐANG SỬ DỤNG
-                                </span>
-                              )}
-                              {room.status === "WORKSHOP" && (
-                                <span className="status-badge-purple">
-                                  WORKSHOP
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="room-desc-small">{room.typeDesc}</div>
-
-                            <div className="room-amenities-row">
-                              <span className="amenity-item">
-                                <UsersIcon size={13} /> {room.capacityText}
-                              </span>
-                              {room.hasIssue ? (
-                                <span className="amenity-item text-danger">
-                                  <WrenchIcon size={13} /> {room.amenityText}
-                                </span>
-                              ) : (
-                                <span className="amenity-item">
-                                  {room.amenityText.includes("TV") ? (
-                                    <TvIcon size={13} />
-                                  ) : (
-                                    <ClipboardListIcon size={13} />
-                                  )}{" "}
-                                  {room.amenityText}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Timeline Cells Track */}
-                        <td
-                          colSpan={TIME_SLOTS.length}
-                          className="td-timeline-track-cell"
-                        >
-                          <div className="timeline-track-relative">
-                            {/* Grid vertical guidelines */}
-                            <div className="timeline-grid-guidelines">
-                              {TIME_SLOTS.map((_, i) => (
-                                <div key={i} className="guideline-col" />
-                              ))}
-                            </div>
-
-                            {/* Case 1: Room A101 (08:00 - 10:00) */}
-                            {room.code === "A101" && (
-                              <div
-                                className={`booking-block-card block-blue ${
-                                  isSelected ? "active-ring" : ""
-                                }`}
-                                style={{
-                                  left: "5%",
-                                  width: "20%",
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRoomCode("A101");
-                                }}
-                              >
-                                <div className="block-header-time">
-                                  <span>08:00 - 10:00</span>
-                                  <ClockIcon size={13} />
-                                </div>
-                                <div className="block-title-user">
-                                  Nguyễn Văn A
-                                </div>
-                                <div className="block-sub-code">
-                                  MSSV: 2001230417
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Case 2: Room A102 (10:30 - 12:00) */}
-                            {room.code === "A102" && (
-                              <div
-                                className={`booking-block-card block-blue ${
-                                  isSelected ? "active-ring" : ""
-                                }`}
-                                style={{
-                                  left: "30%",
-                                  width: "15%",
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRoomCode("A102");
-                                }}
-                              >
-                                <div className="block-header-time">
-                                  <span>10:30 - 12:00</span>
-                                  <DoorIcon size={13} />
-                                </div>
-                                <div className="block-title-user">
-                                  Trần Văn B
-                                </div>
-                                <div className="block-sub-code">
-                                  MSSV: 2001230418
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Case 3: Room A103 (TRỐNG CẢ NGÀY) */}
-                            {room.code === "A103" && (
-                              <div
-                                className="block-all-day-free"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRoomCode("A103");
-                                  setManualForm((prev) => ({
-                                    ...prev,
-                                    roomCode: "A103",
-                                  }));
-                                }}
-                              >
-                                <div className="free-banner-content">
-                                  <CheckCircleIcon size={16} />
-                                  <span>
-                                    KHÔNG GIAN TRỐNG CẢ NGÀY - SẴN SÀNG TIẾP NHẬN
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Case 4: Room A104 (ĐANG SỬ DỤNG - CHECK-IN 08:58) */}
-                            {room.code === "A104" && (
-                              <div
-                                className={`booking-block-card block-orange ${
-                                  isSelected ? "active-ring" : ""
-                                }`}
-                                style={{
-                                  left: "15%",
-                                  width: "20%",
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRoomCode("A104");
-                                }}
-                              >
-                                <div className="block-header-orange-tag">
-                                  <span>09:00 - 11:00</span>
-                                  <span className="pill-checkin-highlight">
-                                    CHECK-IN 08:58
-                                  </span>
-                                </div>
-                                <div className="block-title-user">
-                                  Lê Minh C
-                                </div>
-                                <div className="block-sub-code">
-                                  MSSV: 2001230419
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Case 5: Room B201 (WORKSHOP 08:30 - 11:30) */}
-                            {room.code === "B201" && (
-                              <div
-                                className={`booking-block-card block-purple ${
-                                  isSelected ? "active-ring" : ""
-                                }`}
-                                style={{
-                                  left: "10%",
-                                  width: "30%",
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedRoomCode("B201");
-                                }}
-                              >
-                                <div className="block-header-workshop">
-                                  <span>08:30 - 11:30 (3 giờ)</span>
-                                  <span className="pill-workshop-count">
-                                    55 người
-                                  </span>
-                                </div>
-                                <div className="block-title-user">
-                                  Workshop CNTT - Chủ trì: Nguyễn Văn D
-                                </div>
-                                <div className="block-sub-code">
-                                  Quy mô khoa | Đăng ký theo công văn viện
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Right Column: Side Drawer / Detail Card */}
-          <aside className="admin-side-detail-panel">
-            <div className="detail-panel-inner">
-              {/* Header */}
-              <div className="panel-header-strip">
-                <div className="panel-header-title-box">
-                  <div className="panel-header-icon-title">
-                    <ClipboardListIcon size={18} className="panel-header-svg" />
-                    <h3 className="panel-title-text">
-                      Chi tiết Đặt phòng #{selectedBooking?.id || "HUIT-ROOM"}
-                    </h3>
-                  </div>
-                  <div className="panel-header-subtitle">
-                    Kiểm duyệt hồ sơ tiếp nhận & Quản lý chế tài
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="panel-close-btn"
-                  title="Đóng / Bỏ chọn"
-                  onClick={() => setSelectedRoomCode("")}
-                >
-                  <XIcon size={16} />
-                </button>
-              </div>
-
-              {selectedBooking ? (
-                <div className="panel-body-content">
-                  {/* Current Status Box */}
-                  <div className="status-current-box">
-                    <div className="status-box-header">
-                      <span className="status-dot-pulse" />
-                      <span className="status-box-tag">TRẠNG THÁI HIỆN TẠI</span>
-                    </div>
-                    <div className="status-box-value">
-                      <span>{selectedBooking.statusText}</span>
-                      <ShieldCheckIcon size={20} className="status-verified-icon" />
-                    </div>
-                  </div>
-
-                  {/* Section 1: Thông tin người đại diện */}
-                  <div className="detail-section-block">
-                    <h4 className="detail-section-title">
-                      THÔNG TIN NGƯỜI ĐẠI DIỆN
-                    </h4>
-                    <div className="detail-rows-list">
-                      <div className="detail-info-row">
-                        <span className="row-label">Họ và tên:</span>
-                        <span className="row-value bold">
-                          {selectedBooking.borrowerName}
-                        </span>
-                      </div>
-                      <div className="detail-info-row">
-                        <span className="row-label">MSSV / Mã cán bộ:</span>
-                        <span className="row-value font-mono">
-                          {selectedBooking.studentId}
-                        </span>
-                      </div>
-                      <div className="detail-info-row">
-                        <span className="row-label">Đơn vị / Chi đoàn:</span>
-                        <span className="row-value">{selectedBooking.unit}</span>
-                      </div>
-                      <div className="detail-info-row">
-                        <span className="row-label">Email trường:</span>
-                        <span className="row-value color-blue-text">
-                          {selectedBooking.email}
-                        </span>
-                      </div>
-                      <div className="detail-info-row">
-                        <span className="row-label">Số điện thoại:</span>
-                        <span className="row-value font-mono">
-                          {selectedBooking.phone}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Section 2: Không gian & khung giờ */}
-                  <div className="detail-section-block">
-                    <h4 className="detail-section-title">
-                      KHÔNG GIAN & KHUNG GIỜ
-                    </h4>
-                    <div className="detail-rows-list">
-                      <div className="detail-info-row">
-                        <span className="row-label">Phòng đăng ký:</span>
-                        <span className="row-value bold">
-                          {selectedBooking.roomName}
-                        </span>
-                      </div>
-                      <div className="detail-info-row">
-                        <span className="row-label">Thời gian sử dụng:</span>
-                        <span className="row-value bold color-primary">
-                          {selectedBooking.startTime} - {selectedBooking.endTime} (
-                          {selectedBooking.dateStr})
-                        </span>
-                      </div>
-                      <div className="detail-info-row">
-                        <span className="row-label">Số lượng thành viên:</span>
-                        <span className="row-value">
-                          {selectedBooking.guestCount} người
-                        </span>
-                      </div>
-                      <div className="detail-info-row">
-                        <span className="row-label">Mục đích học thuật:</span>
-                        <span className="row-value academic-purpose">
-                          {selectedBooking.purpose}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Section 3: Thao tác nghiệp vụ thủ thư */}
-                  <div className="detail-section-block">
-                    <h4 className="detail-section-title">
-                      THAO TÁC NGHIỆP VỤ THỦ THƯ
-                    </h4>
-                    <div className="librarian-action-buttons">
-                      {/* Button 1: Nhắc nhở kết thúc giờ */}
-                      <button
-                        type="button"
-                        className="btn-action-outline-neutral"
-                        onClick={handleRemindTime}
-                      >
-                        <BellRingIcon size={16} />
-                        <span>Nhắc nhở kết thúc giờ (Thông báo qua app/SMS)</span>
-                      </button>
-
-                      {/* If waiting for check-in: show quick check-in */}
-                      {selectedBooking.statusBadge === "ĐÃ ĐẶT" && (
-                        <button
-                          type="button"
-                          className="btn-action-solid-green"
-                          onClick={() => handleCheckInNow(selectedBooking.roomCode)}
-                        >
-                          <ShieldCheckIcon size={16} />
-                          <span>Xác nhận nhận phòng (Check-in ngay)</span>
-                        </button>
-                      )}
-
-                      {/* Button 2: Hủy do không nhận phòng (No-show) */}
-                      <button
-                        type="button"
-                        className="btn-action-outline-danger"
-                        onClick={handleCancelNoShow}
-                      >
-                        <BanIcon size={16} />
-                        <span>Hủy do không nhận phòng (No-show &gt;15p)</span>
-                      </button>
-
-                      {/* Button 3: Ghi nhận trả phòng & Khảo sát thiết bị */}
-                      <button
-                        type="button"
-                        className="btn-action-solid-teal"
-                        onClick={() => setShowSurveyModal(true)}
-                      >
-                        <ClipboardListIcon size={16} />
-                        <span>Ghi nhận trả phòng &amp; Khảo sát thiết bị</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : selectedRoom ? (
-                /* When an empty room is clicked */
-                <div className="panel-empty-room-state">
-                  <div className="empty-room-icon-box">
-                    <DoorIcon size={36} />
-                  </div>
-                  <h4 className="empty-room-title">{selectedRoom.name}</h4>
-                  <p className="empty-room-sub">
-                    {selectedRoom.typeDesc} • {selectedRoom.capacityText}
-                  </p>
-                  <div className="empty-status-tag">
-                    Trạng thái hiện tại: <strong>{selectedRoom.status}</strong>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="btn-primary-block"
-                    onClick={() => {
-                      setManualForm((prev) => ({
-                        ...prev,
-                        roomCode: selectedRoom.code,
-                      }));
-                      setShowManualModal(true);
-                    }}
-                  >
-                    + Khởi tạo mượn phòng này ngay
-                  </button>
-                </div>
-              ) : (
-                <div className="panel-unselected-placeholder">
-                  <p>Vui lòng bấm chọn một phòng học trên bảng để xem chi tiết.</p>
-                </div>
-              )}
-            </div>
-          </aside>
-        </section>
-
-        {/* ── 4. Bottom Incident Alert Strip ─────────────────────────────── */}
-        <section
-          className={`admin-incident-strip ${
-            incident.isResolved ? "incident-cleared" : ""
-          }`}
-        >
-          <div className="incident-header-bar">
-            <div className="incident-title-box">
-              <AlertTriangleIcon size={18} className="incident-alert-svg" />
-              <span className="incident-title-text">
-                Nhật ký sự cố kỹ thuật phòng học cần xử lý ngay
-              </span>
-            </div>
-            <div className="incident-count-pill">
-              {incident.isResolved
-                ? "00 Sự cố tồn đọng (Hoàn tất)"
-                : `0${incident.severityLevel} Yêu cầu cấp độ ${incident.severityLevel}`}
-            </div>
-          </div>
-
-          {!incident.isResolved ? (
-            <div className="incident-card-content">
-              <div className="incident-field-col col-space">
-                <span className="incident-col-label">KHÔNG GIAN</span>
-                <span className="incident-col-value bold">
-                  {incident.roomCode === "B201"
-                    ? "Hội trường B201"
-                    : incident.roomCode}
-                </span>
-              </div>
-
-              <div className="incident-field-col col-desc">
-                <span className="incident-col-label">NỘI DUNG BÁO CÁO</span>
-                <span className="incident-col-value">{incident.content}</span>
-              </div>
-
-              <div className="incident-field-col col-time">
-                <span className="incident-col-label">THỜI ĐIỂM TIẾP NHẬN</span>
-                <span className="incident-col-value font-mono">
-                  {incident.receivedAt} - {incident.technicianStatus}
-                </span>
-              </div>
-
-              <div className="incident-actions-col">
-                <button
-                  type="button"
-                  className="btn-incident-secondary"
-                  onClick={handleDispatchTechnician}
-                >
-                  Chuyển KTV
-                </button>
-                <button
-                  type="button"
-                  className="btn-incident-primary"
-                  onClick={handleResolveIncident}
-                >
-                  Đã khắc phục
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="incident-resolved-msg">
-              <CheckCircleIcon size={18} />
-              <span>
-                Không có sự cố kỹ thuật nào đang chờ xử lý. Thiết bị tất cả các
-                phòng hoạt động bình thường!
-              </span>
-            </div>
-          )}
-        </section>
-      </>
-    )}
+        )}
         </div>
       </div>
 
@@ -1965,6 +886,7 @@ export default function AdminDashboardPage() {
           className="btn-floating-chat-bubble"
           onClick={() => setActiveTab("chat")}
           title="Mở tin nhắn trực tuyến"
+          aria-label="Mở tin nhắn trực tuyến"
         >
           <ChatIcon size={18} />
         </button>
@@ -1980,6 +902,7 @@ export default function AdminDashboardPage() {
                 type="button"
                 className="modal-close-btn"
                 onClick={handleCloseManualModal}
+                aria-label="Đóng hộp thoại đặt phòng thủ công"
               >
                 <XIcon size={16} />
               </button>
@@ -2044,17 +967,15 @@ export default function AdminDashboardPage() {
                       }
                     }}
                   >
-                    {availableDbRooms.length > 0
-                      ? availableDbRooms.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} ({r.roomCode} - {r.capacity} chỗ)
-                          </option>
-                        ))
-                      : rooms.map((r) => (
-                          <option key={r.code} value={r.code}>
-                            {r.name} ({r.capacityText} - {r.amenityText})
-                          </option>
-                        ))}
+                    {availableDbRooms.length > 0 ? (
+                      availableDbRooms.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} ({r.roomCode} - {r.capacity} chỗ)
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Đang tải danh sách phòng...</option>
+                    )}
                   </select>
                 </div>
 
@@ -2192,183 +1113,6 @@ export default function AdminDashboardPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal 2: Bộ lọc nâng cao ───────────────────────────────────── */}
-      {showFilterModal && (
-        <div className="admin-modal-overlay">
-          <div className="admin-modal-box modal-box-sm">
-            <div className="modal-header">
-              <h3 className="modal-title">Bộ lọc điều hành nâng cao</h3>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setShowFilterModal(false)}
-              >
-                <XIcon size={16} />
-              </button>
-            </div>
-
-            <div className="modal-form">
-              <div className="form-field">
-                <label>Trạng thái phòng:</label>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                >
-                  <option value="ALL">Tất cả trạng thái</option>
-                  <option value="AVAILABLE">Phòng trống (Sẵn sàng)</option>
-                  <option value="BOOKED">Đã đặt (Chờ đến)</option>
-                  <option value="IN_USE">Đang sử dụng / Workshop</option>
-                  <option value="ISSUE">Phòng có sự cố kỹ thuật</option>
-                </select>
-              </div>
-
-              <div className="form-field">
-                <label>Tìm kiếm phòng hoặc người đặt:</label>
-                <div className="search-input-wrap">
-                  <SearchIcon size={16} className="search-icon-inside" />
-                  <input
-                    type="text"
-                    placeholder="Nhập tên phòng, họ tên hoặc MSSV..."
-                    value={filterSearch}
-                    onChange={(e) => setFilterSearch(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="modal-footer-actions">
-                <button
-                  type="button"
-                  className="btn-modal-cancel"
-                  onClick={() => {
-                    setFilterStatus("ALL");
-                    setFilterSearch("");
-                  }}
-                >
-                  Đặt lại bộ lọc
-                </button>
-                <button
-                  type="button"
-                  className="btn-modal-submit"
-                  onClick={() => setShowFilterModal(false)}
-                >
-                  Áp dụng bộ lọc
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal 3: Khảo sát trả phòng & Thiết bị ──────────────────────── */}
-      {showSurveyModal && selectedBooking && (
-        <div className="admin-modal-overlay">
-          <div className="admin-modal-box">
-            <div className="modal-header">
-              <h3 className="modal-title">
-                Khảo sát hoàn tất &amp; Ghi nhận trả phòng #{selectedBooking.roomCode}
-              </h3>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setShowSurveyModal(false)}
-              >
-                <XIcon size={16} />
-              </button>
-            </div>
-
-            <div className="modal-form">
-              <p className="survey-desc">
-                Thủ thư kiểm tra hiện trạng phòng học trước khi kết thúc ca sử
-                dụng của <strong>{selectedBooking.borrowerName}</strong> (MSSV:{" "}
-                {selectedBooking.studentId}):
-              </p>
-
-              <div className="checklist-group">
-                <label className="checkbox-item-row">
-                  <input
-                    type="checkbox"
-                    checked={surveyChecklist.devicesOk}
-                    onChange={(e) =>
-                      setSurveyChecklist({
-                        ...surveyChecklist,
-                        devicesOk: e.target.checked,
-                      })
-                    }
-                  />
-                  <span>
-                    Thiết bị điện tử, Smart TV, micro, hub dây cáp nguyên vẹn,
-                    hoạt động tốt.
-                  </span>
-                </label>
-
-                <label className="checkbox-item-row">
-                  <input
-                    type="checkbox"
-                    checked={surveyChecklist.cleaned}
-                    onChange={(e) =>
-                      setSurveyChecklist({
-                        ...surveyChecklist,
-                        cleaned: e.target.checked,
-                      })
-                    }
-                  />
-                  <span>
-                    Bàn ghế được sắp xếp ngăn nắp, không xả rác trong phòng học.
-                  </span>
-                </label>
-
-                <label className="checkbox-item-row">
-                  <input
-                    type="checkbox"
-                    checked={surveyChecklist.lightsOff}
-                    onChange={(e) =>
-                      setSurveyChecklist({
-                        ...surveyChecklist,
-                        lightsOff: e.target.checked,
-                      })
-                    }
-                  />
-                  <span>
-                    Đã tắt hệ thống điều hòa và ngắt cầu dao trước khi ra về.
-                  </span>
-                </label>
-              </div>
-
-              <div className="form-field">
-                <label>Ghi chú của Thủ thư tiếp nhận:</label>
-                <textarea
-                  rows={3}
-                  value={surveyChecklist.staffNote}
-                  onChange={(e) =>
-                    setSurveyChecklist({
-                      ...surveyChecklist,
-                      staffNote: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="modal-footer-actions">
-                <button
-                  type="button"
-                  className="btn-modal-cancel"
-                  onClick={() => setShowSurveyModal(false)}
-                >
-                  Đóng
-                </button>
-                <button
-                  type="button"
-                  className="btn-modal-submit"
-                  onClick={handleCompleteSurveyCheckout}
-                >
-                  Xác nhận hoàn tất trả phòng
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}

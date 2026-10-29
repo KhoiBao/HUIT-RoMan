@@ -780,8 +780,6 @@ namespace HUIT_RoMan.Infrastructure.Persistence
 
         private static async Task EnsureDemoShiftsAsync(ApplicationDbContext dbContext)
         {
-            if (await dbContext.Shifts.AnyAsync()) return;
-
             var employees = await dbContext.Employees
                 .Include(e => e.User)
                 .Where(e => e.Status == "Hoạt động")
@@ -795,90 +793,133 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             var empQLP1 = employees.FirstOrDefault(e => e.User?.UserName?.Contains("qlp001") == true || e.Code.Contains("QLP001")) ?? employees[Math.Min(3, employees.Count - 1)];
             var empQLP2 = employees.FirstOrDefault(e => e.User?.UserName?.Contains("qlp002") == true || e.Code.Contains("QLP002")) ?? employees[Math.Min(4, employees.Count - 1)];
 
-            var today = DateTime.UtcNow.Date;
+            // Mốc giờ Việt Nam (UTC+7) để trạng thái ca khớp với giờ hiển thị trên UI.
+            var nowLocal = DateTime.UtcNow.AddHours(7);
+            var today = DateTime.SpecifyKind(nowLocal.Date, DateTimeKind.Utc);
 
-            // Shift schedule templates across 7 days (-2 to +4)
-            var shiftPlan = new List<(int dayOffset, string name, TimeSpan start, TimeSpan end, string status, Employee[] assigned)>
+            // Shift schedule templates across 7 days (-2 to +3)
+            var shiftPlan = new List<(int dayOffset, string name, TimeSpan start, TimeSpan end, Employee[] assigned)>
             {
                 // Day -2
-                (-2, "Ca Sáng - Quản lý phòng & Tiếp nhận mượn", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), "Hoàn thành", new[] { empTV1, empQLP1 }),
-                (-2, "Ca Chiều - Hỗ trợ thiết bị phòng hội thảo", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), "Hoàn thành", new[] { empTV2 }),
+                (-2, "Ca Sáng - Quản lý phòng & Tiếp nhận mượn", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV1, empQLP1 }),
+                (-2, "Ca Chiều - Hỗ trợ thiết bị phòng hội thảo", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV2 }),
                 // Day -1
-                (-1, "Ca Sáng - Kiểm tra thiết bị & Tiếp đón", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), "Hoàn thành", new[] { empTV3, empQLP2 }),
-                (-1, "Ca Chiều - Giám sát phòng tự học & Hội thảo", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), "Hoàn thành", new[] { empTV1, empQLP1 }),
-                (-1, "Ca Tối - Trực phòng học nhóm & Thu hồi chìa khóa", new TimeSpan(17, 30, 0), new TimeSpan(21, 0, 0), "Hoàn thành", new[] { empTV2 }),
+                (-1, "Ca Sáng - Kiểm tra thiết bị & Tiếp đón", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV3, empQLP2 }),
+                (-1, "Ca Chiều - Giám sát phòng tự học & Hội thảo", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV1, empQLP1 }),
+                (-1, "Ca Tối - Trực phòng học nhóm & Thu hồi chìa khóa", new TimeSpan(17, 30, 0), new TimeSpan(21, 0, 0), new[] { empTV2 }),
                 // Today (0)
-                (0, "Ca Sáng - Điều phối ca mượn & Bàn giao thiết bị", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), "Hoàn thành", new[] { empTV1, empQLP1 }),
-                (0, "Ca Chiều - Giám sát thời gian thực & Tiếp nhận trả phòng", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), "Đang trực", new[] { empTV2, empQLP2 }),
-                (0, "Ca Tối - Khóa phòng & Kiểm kê trang thiết bị cuối ngày", new TimeSpan(17, 30, 0), new TimeSpan(21, 0, 0), "Lên lịch", new[] { empTV3 }),
+                (0, "Ca Sáng - Điều phối ca mượn & Bàn giao thiết bị", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV1, empQLP1 }),
+                (0, "Ca Chiều - Giám sát thời gian thực & Tiếp nhận trả phòng", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV2, empQLP2 }),
+                (0, "Ca Tối - Khóa phòng & Kiểm kê trang thiết bị cuối ngày", new TimeSpan(17, 30, 0), new TimeSpan(21, 0, 0), new[] { empTV3 }),
                 // Tomorrow (+1)
-                (1, "Ca Sáng - Phục vụ phòng học chuyên đề & Lab", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), "Lên lịch", new[] { empTV1, empQLP2 }),
-                (1, "Ca Chiều - Kiểm tra vệ sinh & Trả phòng", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), "Lên lịch", new[] { empTV3 }),
+                (1, "Ca Sáng - Phục vụ phòng học chuyên đề & Lab", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV1, empQLP2 }),
+                (1, "Ca Chiều - Kiểm tra vệ sinh & Trả phòng", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV3 }),
                 // Day +2
-                (2, "Ca Sáng - Hỗ trợ hội thảo Khoa CNTT", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), "Lên lịch", new[] { empTV2, empQLP1 }),
-                (2, "Ca Chiều - Phục vụ phòng tự học thông minh", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), "Lên lịch", new[] { empTV1 }),
+                (2, "Ca Sáng - Hỗ trợ hội thảo Khoa CNTT", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV2, empQLP1 }),
+                (2, "Ca Chiều - Phục vụ phòng tự học thông minh", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV1 }),
                 // Day +3
-                (3, "Ca Sáng - Điều phối phòng Lab thực hành", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), "Lên lịch", new[] { empTV3, empQLP2 }),
-                (3, "Ca Chiều - Giám sát an ninh & Thiết bị", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), "Lên lịch", new[] { empTV2 })
+                (3, "Ca Sáng - Điều phối phòng Lab thực hành", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV3, empQLP2 }),
+                (3, "Ca Chiều - Giám sát an ninh & Thiết bị", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV2 })
             };
 
-            foreach (var item in shiftPlan)
-            {
-                var s = new Domain.Entities.Shift
-                {
-                    Date = DateTime.SpecifyKind(today.AddDays(item.dayOffset), DateTimeKind.Utc),
-                    Name = item.name,
-                    StartTime = item.start,
-                    EndTime = item.end,
-                    Status = item.status,
-                    CreatedAt = DateTime.UtcNow.AddDays(item.dayOffset)
-                };
+            var existingShifts = await dbContext.Shifts.ToListAsync();
 
-                foreach (var emp in item.assigned)
+            if (!existingShifts.Any())
+            {
+                foreach (var item in shiftPlan)
                 {
-                    s.Employees.Add(emp);
+                    var date = today.AddDays(item.dayOffset);
+                    var s = new Domain.Entities.Shift
+                    {
+                        Date = date,
+                        Name = item.name,
+                        StartTime = item.start,
+                        EndTime = item.end,
+                        Status = ResolveShiftStatus(date, item.start, item.end, nowLocal),
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    foreach (var emp in item.assigned)
+                    {
+                        s.Employees.Add(emp);
+                    }
+
+                    dbContext.Shifts.Add(s);
                 }
 
-                dbContext.Shifts.Add(s);
+                // Seed sample ShiftLogs
+                dbContext.ShiftLogs.AddRange(
+                    new ShiftLog
+                    {
+                        LogTime = DateTime.UtcNow.AddDays(-1).Date.AddHours(11).AddMinutes(35),
+                        Content = "Bàn giao ca sáng ngày hôm qua: Đã bàn giao 12 chìa khóa phòng, hệ thống điều hòa và máy chiếu phòng A101-A103 hoạt động tốt.",
+                        Type = 1, // Bàn giao
+                        EmployeeId = empTV1.Id,
+                        CreatedAt = DateTime.UtcNow.AddDays(-1)
+                    },
+                    new ShiftLog
+                    {
+                        LogTime = DateTime.UtcNow.AddDays(-1).Date.AddHours(16).AddMinutes(40),
+                        Content = "Sự cố phát sinh: Cáp HDMI tại phòng thảo luận B201 bị chập chờn khi kết nối với máy tính xách tay. Đã ghi nhận chuyển bộ phận kỹ thuật.",
+                        Type = 2, // Sự cố
+                        EmployeeId = empTV2.Id,
+                        CreatedAt = DateTime.UtcNow.AddDays(-1)
+                    },
+                    new ShiftLog
+                    {
+                        LogTime = DateTime.UtcNow.Date.AddHours(11).AddMinutes(30),
+                        Content = "Bàn giao ca sáng hôm nay: Đã tiếp nhận và hỗ trợ 8 lượt mượn phòng. Phòng họp A102 đã được bàn giao sạch sẽ sau giờ mượn.",
+                        Type = 1, // Bàn giao
+                        EmployeeId = empTV1.Id,
+                        CreatedAt = DateTime.UtcNow
+                    },
+                    new ShiftLog
+                    {
+                        LogTime = DateTime.UtcNow.Date.AddHours(14).AddMinutes(15),
+                        Content = "Kiểm tra an ninh & vệ sinh: Tất cả các phòng tầng 2 và tầng 3 khu tự học đều tuân thủ quy định giữ trật tự và không mang thức ăn vào phòng.",
+                        Type = 3, // Kiểm tra an ninh / vệ sinh
+                        EmployeeId = empTV2.Id,
+                        CreatedAt = DateTime.UtcNow
+                    }
+                );
+
+                await dbContext.SaveChangesAsync();
+                return;
             }
 
-            // Seed sample ShiftLogs
-            dbContext.ShiftLogs.AddRange(
-                new ShiftLog
-                {
-                    LogTime = DateTime.UtcNow.AddDays(-1).Date.AddHours(11).AddMinutes(35),
-                    Content = "Bàn giao ca sáng ngày hôm qua: Đã bàn giao 12 chìa khóa phòng, hệ thống điều hòa và máy chiếu phòng A101-A103 hoạt động tốt.",
-                    Type = 1, // Bàn giao
-                    EmployeeId = empTV1.Id,
-                    CreatedAt = DateTime.UtcNow.AddDays(-1)
-                },
-                new ShiftLog
-                {
-                    LogTime = DateTime.UtcNow.AddDays(-1).Date.AddHours(16).AddMinutes(40),
-                    Content = "Sự cố phát sinh: Cáp HDMI tại phòng thảo luận B201 bị chập chờn khi kết nối với máy tính xách tay. Đã ghi nhận chuyển bộ phận kỹ thuật.",
-                    Type = 2, // Sự cố
-                    EmployeeId = empTV2.Id,
-                    CreatedAt = DateTime.UtcNow.AddDays(-1)
-                },
-                new ShiftLog
-                {
-                    LogTime = DateTime.UtcNow.Date.AddHours(11).AddMinutes(30),
-                    Content = "Bàn giao ca sáng hôm nay: Đã tiếp nhận và hỗ trợ 8 lượt mượn phòng. Phòng họp A102 đã được bàn giao sạch sẽ sau giờ mượn.",
-                    Type = 1, // Bàn giao
-                    EmployeeId = empTV1.Id,
-                    CreatedAt = DateTime.UtcNow
-                },
-                new ShiftLog
-                {
-                    LogTime = DateTime.UtcNow.Date.AddHours(14).AddMinutes(15),
-                    Content = "Kiểm tra an ninh & vệ sinh: Tất cả các phòng tầng 2 và tầng 3 khu tự học đều tuân thủ quy định giữ trật tự và không mang thức ăn vào phòng.",
-                    Type = 3, // Kiểm tra an ninh / vệ sinh
-                    EmployeeId = empTV2.Id,
-                    CreatedAt = DateTime.UtcNow
-                }
-            );
+            // Đã có ca trong khoảng hiện tại thì giữ nguyên (không ghi đè trạng thái người dùng đã cập nhật).
+            var hasCurrentSchedule = existingShifts.Any(s =>
+                s.Date.Date >= today.AddDays(-2) && s.Date.Date <= today.AddDays(3));
+            if (hasCurrentSchedule) return;
+
+            // Dữ liệu mẫu được seed theo ngày tạo DB nên có thể đã lệch tuần hiện tại:
+            // cập nhật lại ngày/giờ/trạng thái của đúng các ca mẫu, không xoá dữ liệu khác.
+            foreach (var item in shiftPlan)
+            {
+                var shift = existingShifts.FirstOrDefault(s => s.Name == item.name);
+                if (shift == null) continue;
+
+                var date = today.AddDays(item.dayOffset);
+                shift.Date = date;
+                shift.StartTime = item.start;
+                shift.EndTime = item.end;
+                shift.Status = ResolveShiftStatus(date, item.start, item.end, nowLocal);
+            }
 
             await dbContext.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Trạng thái ca trực suy ra từ ngày/giờ thực tế để demo không hiển thị ca quá khứ ở trạng thái "Lên lịch".
+        /// </summary>
+        private static string ResolveShiftStatus(DateTime date, TimeSpan start, TimeSpan end, DateTime nowLocal)
+        {
+            var today = nowLocal.Date;
+            if (date.Date < today) return "Hoàn thành";
+            if (date.Date > today) return "Lên lịch";
+            if (nowLocal.TimeOfDay > end) return "Hoàn thành";
+            if (nowLocal.TimeOfDay >= start) return "Đang trực";
+            return "Lên lịch";
         }
     }
 }

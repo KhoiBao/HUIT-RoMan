@@ -176,7 +176,7 @@ function TypeCard({ type }: { type: RoomTypeSummary }) {
         <div className="rh-type-card-foot">
           <span className="rh-type-card-foot-note">
             {type.availableCount > 0
-              ? `${type.availableCount}/${type.roomCount} phòng đang trống`
+              ? `${type.availableCount}/${type.roomCount} đang trống`
               : type.roomCount > 0
                 ? "Xem lịch để chọn khung giờ trống"
                 : "Đang chờ cấu hình phòng"}
@@ -215,7 +215,7 @@ export default function RoomTypesSection({
             </h2>
             <p className="rh-lead">
               Mỗi loại phòng có sức chứa, vị trí và cách đặt riêng. Dữ liệu bên
-              dưới được đồng bộ trực tiếp từ hệ thống RoMan.
+              dưới được đồng bộ trực tiếp từ hệ thống.
             </p>
           </div>
           <Link to="/lich-phong" className="rh-text-link">
@@ -227,6 +227,8 @@ export default function RoomTypesSection({
         <div className="rh-type-grid">
           {loading ? (
             <>
+              <TypeCardSkeleton />
+              <TypeCardSkeleton />
               <TypeCardSkeleton />
               <TypeCardSkeleton />
               <TypeCardSkeleton />

@@ -852,7 +852,17 @@ export function describeCancelReason(
   }
   const label = getCancelReasonLabel(booking.cancelReason);
   const detail = (booking.cancelReasonDetail || "").trim();
-  return detail ? `${label}: ${detail}` : label;
+  if ((booking.cancelReason || "").trim().toUpperCase() === CANCEL_REASON_NO_SHOW) {
+    return "Quá 15 phút không nhận phòng, hệ thống tự động hủy";
+  }
+  if (!detail) return label;
+  if (
+    detail.toLowerCase().includes(label.toLowerCase()) ||
+    label.toLowerCase().includes(detail.toLowerCase())
+  ) {
+    return detail;
+  }
+  return `${label}: ${detail}`;
 }
 
 /**
