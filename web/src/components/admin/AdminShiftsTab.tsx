@@ -525,7 +525,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
           className="shift-calendar-week"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(7, minmax(150px, 1fr))",
+            gridTemplateColumns: "repeat(7, minmax(172px, 1fr))",
             gap: "10px",
             overflowX: "auto",
             marginTop: "16px",
@@ -639,7 +639,9 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                             style={{
                               display: "flex",
                               justifyContent: "space-between",
-                              alignItems: "center",
+                              alignItems: "flex-start",
+                              flexWrap: "wrap",
+                              gap: "4px 6px",
                               marginBottom: "4px",
                             }}
                           >
@@ -647,6 +649,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                               style={{
                                 fontWeight: 800,
                                 fontSize: "11.5px",
+                                whiteSpace: "nowrap",
                                 color: isMorning ? "#15803d" : isEvening ? "#6b21a8" : "#b45309",
                                 display: "inline-flex",
                                 alignItems: "center",
@@ -662,6 +665,8 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                                 padding: "2px 5px",
                                 borderRadius: "4px",
                                 fontWeight: 700,
+                                whiteSpace: "nowrap",
+                                flexShrink: 0,
                                 background:
                                   s.status === "Đang trực"
                                     ? "#fee2e2"

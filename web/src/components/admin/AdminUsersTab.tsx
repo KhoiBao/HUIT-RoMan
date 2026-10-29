@@ -53,7 +53,7 @@ export default function AdminUsersTab({ onNotify }: Props) {
 
   // Reset password modal
   const [resettingUser, setResettingUser] = useState<UserItem | null>(null);
-  const [newPassword, setNewPassword] = useState<string>("Huit@123");
+  const [newPassword, setNewPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [resetSubmitting, setResetSubmitting] = useState<boolean>(false);
   const [resetSuccessResult, setResetSuccessResult] = useState<{ user: UserItem; password: string } | null>(null);
@@ -186,7 +186,7 @@ export default function AdminUsersTab({ onNotify }: Props) {
 
   const openResetPassword = (u: UserItem) => {
     setResettingUser(u);
-    setNewPassword("Huit@123");
+    setNewPassword("");
     setShowPassword(false);
     setResetSuccessResult(null);
   };

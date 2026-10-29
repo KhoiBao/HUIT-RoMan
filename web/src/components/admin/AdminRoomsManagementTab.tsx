@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../../lib/api";
 import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
   DoorIcon,
   PlusIcon,
   SearchIcon,
@@ -42,6 +44,27 @@ interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
+function buildPageItems(current: number, total: number): Array<number | "gap"> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+  const pages = new Set<number>([1, total, current - 1, current, current + 1]);
+  if (current <= 3) pages.add(2).add(3).add(4);
+  if (current >= total - 2) pages.add(total - 1).add(total - 2).add(total - 3);
+
+  const sorted = Array.from(pages)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b);
+  const items: Array<number | "gap"> = [];
+  sorted.forEach((page, index) => {
+    if (index > 0 && page - sorted[index - 1] > 1) items.push("gap");
+    items.push(page);
+  });
+  return items;
+}
+
 export default function AdminRoomsManagementTab({ onNotify }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
@@ -52,6 +75,8 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Equipment modal target
   const [equipmentTarget, setEquipmentTarget] = useState<RoomItem | null>(null);
@@ -117,6 +142,15 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
       return true;
     });
   }, [rooms, statusFilter, typeFilter, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRooms.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pagedRooms = filteredRooms.slice(pageStart, pageStart + pageSize);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   // Open Create Modal
   const openCreateModal = () => {
@@ -213,7 +247,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
   // Toggle Room Status: Available <=> Maintenance
   const handleToggleStatus = async (r: RoomItem) => {
     const nextStatus = r.status === "Maintenance" ? "Available" : "Maintenance";
-    const statusLabel = nextStatus === "Maintenance" ? "Bảo trì" : "Sẵn sàng (Trống)";
+    const statusLabel = nextStatus === "Maintenance" ? "Bảo trì" : "Sẵn sàng";
     
     const isConfirmed = await confirm({
       title: "Chuyển trạng thái phòng",
@@ -282,7 +316,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
       case "Available":
         return (
           <span className="admin-status-pill pill-approved">
-            <CheckIcon size={12} className="mr-1 inline-block" /> Sẵn sàng (Trống)
+            <CheckIcon size={12} className="mr-1 inline-block" /> Sẵn sàng
           </span>
         );
       case "InUse":
@@ -331,7 +365,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
               className="btn-toolbar-primary"
               onClick={openCreateModal}
             >
-              <PlusIcon size={16} /> + Thêm phòng mới
+              <PlusIcon size={16} /> Thêm phòng mới
             </button>
           )}
         </div>
@@ -345,7 +379,10 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
             type="text"
             placeholder="Tìm theo Mã phòng (A101...), Tên phòng, Tòa nhà..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
           />
           {searchTerm && (
             <button
@@ -362,7 +399,10 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
           <select
             className="admin-select-filter"
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
+            onChange={(e) => {
+              setTypeFilter(e.target.value);
+              setPage(1);
+            }}
           >
             <option value="ALL">-- Tất cả loại phòng --</option>
             {roomTypes.map((t) => (
@@ -375,10 +415,13 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
           <select
             className="admin-select-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
           >
             <option value="ALL">-- Tất cả trạng thái --</option>
-            <option value="Available">Sẵn sàng (Trống)</option>
+            <option value="Available">Sẵn sàng</option>
             <option value="InUse">Đang sử dụng</option>
             <option value="Maintenance">Đang bảo trì</option>
           </select>
@@ -398,8 +441,9 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
           <p className="empty-desc">Thử tìm với từ khóa khác hoặc bấm "+ Thêm phòng mới".</p>
         </div>
       ) : (
-        <div className="admin-table-responsive">
-          <table className="admin-data-table">
+        <>
+          <div className="admin-table-responsive">
+            <table className="admin-data-table admin-rooms-table">
             <thead>
               <tr>
                 <th>Mã phòng</th>
@@ -413,7 +457,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
               </tr>
             </thead>
             <tbody>
-              {filteredRooms.map((r) => (
+              {pagedRooms.map((r) => (
                 <tr key={r.id}>
                   <td>
                     <span className="room-code-badge-lg">{r.roomCode}</span>
@@ -495,7 +539,86 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+
+          <nav className="matrix-pagination" aria-label="Phân trang danh sách phòng">
+            <span className="pagination-summary">
+              Hiển thị <strong>{pageStart + 1}–{Math.min(pageStart + pageSize, filteredRooms.length)}</strong>{" "}
+              trong <strong>{filteredRooms.length}</strong> phòng
+            </span>
+
+            <div className="pagination-controls">
+              <button
+                type="button"
+                onClick={() => setPage(1)}
+                disabled={currentPage <= 1}
+                aria-label="Trang đầu"
+              >
+                Đầu
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage(currentPage - 1)}
+                disabled={currentPage <= 1}
+                aria-label="Trang trước"
+              >
+                <ChevronLeftIcon size={15} />
+              </button>
+
+              {buildPageItems(currentPage, totalPages).map((item, index) =>
+                item === "gap" ? (
+                  <span key={`gap-${index}`} className="pagination-gap">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={item}
+                    type="button"
+                    className={item === currentPage ? "is-active" : ""}
+                    onClick={() => setPage(item)}
+                    aria-current={item === currentPage ? "page" : undefined}
+                  >
+                    {item}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                onClick={() => setPage(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                aria-label="Trang sau"
+              >
+                <ChevronRightIcon size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage(totalPages)}
+                disabled={currentPage >= totalPages}
+                aria-label="Trang cuối"
+              >
+                Cuối
+              </button>
+            </div>
+
+            <label className="pagination-size">
+              <span>Số phòng/trang</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </nav>
+        </>
       )}
 
       {/* Equipment Drawer / Modal */}
@@ -649,7 +772,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                         setFormData({ ...formData, status: e.target.value })
                       }
                     >
-                      <option value="Available">Sẵn sàng (Trống)</option>
+                      <option value="Available">Sẵn sàng</option>
                       <option value="InUse">Đang sử dụng</option>
                       <option value="Maintenance">Đang bảo trì</option>
                     </select>

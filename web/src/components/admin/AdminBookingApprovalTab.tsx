@@ -15,9 +15,11 @@ import {
   XIcon,
   ZapIcon,
   SlashIcon,
+  HistoryIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
 import { describeCancelSource, describeCancelReason } from "../../lib/booking";
+import { ApprovalHistoryModal } from "../ApprovalHistoryModal";
 
 export interface BookingDetail {
   id: number;
@@ -83,6 +85,23 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
   const [approvingBookingId, setApprovingBookingId] = useState<number | null>(null);
   const [approvingDetailId, setApprovingDetailId] = useState<number | null>(null);
 
+  // Confirm sheet before approving — duyệt là hành động không thể hoàn tác
+  const [approveTarget, setApproveTarget] = useState<{
+    type: "booking" | "detail";
+    booking: BookingItem;
+    detail?: BookingDetail;
+  } | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<BookingItem | null>(null);
+
+  useEffect(() => {
+    if (!approveTarget) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !submittingAction) setApproveTarget(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [approveTarget, submittingAction]);
+
   // Fetch bookings from API
   const fetchBookings = async () => {
     try {
@@ -137,8 +156,20 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
     });
   }, [bookings, statusFilter, searchTerm]);
 
+  // Đơn chờ duyệt kế tiếp trong hàng đợi (để duyệt liên tiếp)
+  const nextPendingBooking = useMemo(() => {
+    if (!approveTarget || approveTarget.type !== "booking") return null;
+    const queue = bookings.filter((b) => b.status === "Chờ duyệt");
+    const index = queue.findIndex((b) => b.id === approveTarget.booking.id);
+    return index >= 0 ? queue[index + 1] ?? null : null;
+  }, [approveTarget, bookings]);
+
   // Handle Approve whole booking
-  const handleApproveBooking = async (bookingId: number) => {
+  const handleApproveBooking = async (bookingId: number, advance = false) => {
+    const pendingQueue = bookings.filter((b) => b.status === "Chờ duyệt");
+    const currentIndex = pendingQueue.findIndex((b) => b.id === bookingId);
+    const nextPendingId =
+      currentIndex >= 0 ? pendingQueue[currentIndex + 1]?.id : undefined;
     try {
       setApprovingBookingId(bookingId);
       const res = await api.patch(`/api/Bookings/${bookingId}/approve`, {
@@ -146,7 +177,12 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
         rejectionReason: "",
       });
       if (res.data?.success) {
-        onNotify(`Đã duyệt đặt phòng #${bookingId} thành công!`, "success");
+        onNotify(
+          nextPendingId
+            ? `Đã duyệt đơn #${bookingId}. Còn đơn #${nextPendingId} đang chờ.`
+            : `Đã duyệt đặt phòng #${bookingId} thành công!`,
+          "success"
+        );
         setBookings((prev) =>
           prev.map((b) =>
             b.id === bookingId
@@ -158,7 +194,15 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
               : b
           )
         );
+        setApproveTarget(null);
         fetchBookings();
+        if (advance && nextPendingId) {
+          window.setTimeout(() => {
+            document
+              .getElementById(`booking-card-${nextPendingId}`)
+              ?.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 200);
+        }
       } else {
         onNotify(res.data?.message || "Duyệt đặt phòng không thành công.", "warning");
       }
@@ -276,6 +320,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
             return { ...b, status: nextStatus, details: updatedDetails };
           })
         );
+        setApproveTarget(null);
         fetchBookings();
       } else {
         onNotify(
@@ -328,6 +373,24 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
         return (
           <span className="admin-status-pill pill-cancelled">
             <SlashIcon size={12} className="mr-1 inline-block" /> Đã hủy
+          </span>
+        );
+      case "Hoàn thành":
+        return (
+          <span className="admin-status-pill pill-completed">
+            <CheckCircleIcon size={12} className="mr-1 inline-block" /> Hoàn thành
+          </span>
+        );
+      case "Đang sử dụng":
+        return (
+          <span className="admin-status-pill pill-inuse">
+            <ClockIcon size={12} className="mr-1 inline-block" /> Đang sử dụng
+          </span>
+        );
+      case "Chờ nhận phòng":
+        return (
+          <span className="admin-status-pill pill-pending">
+            <HourglassIcon size={12} className="mr-1 inline-block" /> Chờ nhận phòng
           </span>
         );
       default:
@@ -399,7 +462,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
           onClick={() => setStatusFilter("Đã duyệt")}
         >
           <span className="stat-label color-green">
-            <CheckIcon size={12} className="mr-1 inline-block" /> Đã chấp thuận
+            <CheckIcon size={12} className="mr-1 inline-block" /> Đã duyệt
           </span>
           <span className="stat-val color-green">{stats.approved}</span>
         </div>
@@ -442,7 +505,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
             { id: "ALL", label: "Tất cả" },
             { id: "Chờ duyệt", label: "Chờ duyệt" },
             { id: "Đã duyệt", label: "Đã duyệt" },
-            { id: "Từ chối", label: "Từ chối" },
+            { id: "Từ chối", label: "Đã từ chối" },
             { id: "Đã hủy", label: "Đã hủy" },
           ].map((item) => (
             <button
@@ -482,6 +545,7 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
             return (
               <div
                 key={b.id}
+                id={`booking-card-${b.id}`}
                 className={`admin-booking-card-item ${
                   isPending ? "border-highlight-pending" : ""
                 }`}
@@ -549,7 +613,9 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                         <button
                           type="button"
                           className="btn-action-approve"
-                          onClick={() => handleApproveBooking(b.id)}
+                          onClick={() =>
+                            setApproveTarget({ type: "booking", booking: b })
+                          }
                           disabled={approvingBookingId === b.id || submittingAction}
                           title="Duyệt đặt phòng này"
                         >
@@ -583,6 +649,15 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                       }
                     >
                       {isExpanded ? "Thu gọn" : `Xem chi tiết (${b.details.length} phòng)`}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn-action-expand"
+                      onClick={() => setHistoryTarget(b)}
+                      title="Xem lịch sử duyệt của đơn này"
+                    >
+                      <HistoryIcon size={13} /> Lịch sử duyệt
                     </button>
                   </div>
                 </div>
@@ -658,7 +733,11 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                                       type="button"
                                       className="btn-mini-approve"
                                       onClick={() =>
-                                        handleApproveDetail(detail.id, detail.roomCode)
+                                        setApproveTarget({
+                                          type: "detail",
+                                          booking: b,
+                                          detail,
+                                        })
                                       }
                                       disabled={approvingDetailId === detail.id || submittingAction}
                                       title="Duyệt phòng này"
@@ -701,6 +780,159 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Approve Confirmation Modal — duyệt là hành động không thể hoàn tác */}
+      {approveTarget && (
+        <div
+          className="admin-modal-overlay"
+          role="presentation"
+          onClick={() => setApproveTarget(null)}
+        >
+          <div
+            className="admin-modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="approve-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3 id="approve-modal-title" className="modal-title color-green">
+                <CheckCircleIcon size={18} className="mr-1" /> Xác nhận duyệt{" "}
+                {approveTarget.type === "booking"
+                  ? `đơn #${approveTarget.booking.id}`
+                  : `phòng ${approveTarget.detail?.roomCode}`}
+              </h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setApproveTarget(null)}
+                aria-label="Đóng hộp thoại xác nhận duyệt"
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p className="modal-prompt-text">
+                Kiểm tra lại thông tin trước khi duyệt. Sau khi duyệt, đơn không
+                thể quay lại trạng thái Chờ duyệt và người đặt sẽ nhận thông báo
+                ngay.
+              </p>
+
+              <div className="confirm-item-details">
+                <div className="confirm-detail-row">
+                  <span className="confirm-detail-label">Hoạt động:</span>
+                  <span className="confirm-detail-value">
+                    {approveTarget.booking.activityName ||
+                      "Mượn phòng học tập / nghiên cứu"}
+                  </span>
+                </div>
+                <div className="confirm-detail-row">
+                  <span className="confirm-detail-label">Người đặt:</span>
+                  <span className="confirm-detail-value">
+                    {approveTarget.booking.userFullName ||
+                      approveTarget.booking.userName}
+                    {approveTarget.booking.userName && (
+                      <span className="confirm-detail-badge">
+                        {approveTarget.booking.userName}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                {approveTarget.type === "booking" ? (
+                  approveTarget.booking.details.map((detail) => (
+                    <div className="confirm-detail-row" key={detail.id}>
+                      <span className="confirm-detail-label">
+                        Phòng {detail.roomCode}:
+                      </span>
+                      <span className="confirm-detail-value">
+                        {formatDateTime(detail.startAt)} →{" "}
+                        {formatDateTime(detail.endAt)}
+                        {detail.startPeriodName
+                          ? ` · Tiết ${detail.startPeriodName}${
+                              detail.endPeriodName &&
+                              detail.endPeriodName !== detail.startPeriodName
+                                ? `–${detail.endPeriodName}`
+                                : ""
+                            }`
+                          : ""}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  approveTarget.detail && (
+                    <>
+                      <div className="confirm-detail-row">
+                        <span className="confirm-detail-label">Phòng:</span>
+                        <span className="confirm-detail-value">
+                          {approveTarget.detail.roomCode}
+                        </span>
+                      </div>
+                      <div className="confirm-detail-row">
+                        <span className="confirm-detail-label">Thời gian:</span>
+                        <span className="confirm-detail-value">
+                          {formatDateTime(approveTarget.detail.startAt)} →{" "}
+                          {formatDateTime(approveTarget.detail.endAt)}
+                        </span>
+                      </div>
+                    </>
+                  )
+                )}
+              </div>
+
+              <div className="confirm-sub-note note-warning">
+                <AlertTriangleIcon size={16} />
+                <span>
+                  Thao tác này không thể hoàn tác. Nếu chọn nhầm, hãy từ chối
+                  đơn và yêu cầu người dùng đặt lại.
+                </span>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setApproveTarget(null)}
+                autoFocus
+              >
+                Hủy
+              </button>
+              {approveTarget.type === "booking" && nextPendingBooking && (
+                <button
+                  type="button"
+                  className="btn-confirm-approve btn-confirm-approve-advance"
+                  onClick={() =>
+                    handleApproveBooking(approveTarget.booking.id, true)
+                  }
+                  disabled={submittingAction || approvingBookingId !== null}
+                >
+                  {approvingBookingId
+                    ? "Đang duyệt..."
+                    : `Duyệt & xem đơn #${nextPendingBooking.id}`}
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-confirm-approve"
+                onClick={() => {
+                  if (approveTarget.type === "booking") {
+                    handleApproveBooking(approveTarget.booking.id);
+                  } else if (approveTarget.detail) {
+                    handleApproveDetail(
+                      approveTarget.detail.id,
+                      approveTarget.detail.roomCode
+                    );
+                  }
+                }}
+                disabled={submittingAction || approvingBookingId !== null}
+              >
+                {approvingBookingId ? "Đang duyệt..." : "Xác nhận duyệt"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -758,6 +990,15 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
             </div>
           </div>
         </div>
+      )}
+      {/* Approval history (ai duyệt, khi nào) */}
+      {historyTarget && (
+        <ApprovalHistoryModal
+          isOpen
+          bookingId={historyTarget.id}
+          activityName={historyTarget.activityName}
+          onClose={() => setHistoryTarget(null)}
+        />
       )}
     </div>
   );

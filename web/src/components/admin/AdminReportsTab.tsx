@@ -34,6 +34,22 @@ interface AdminReportsTabProps {
   onNotify?: (text: string, type?: "success" | "warning" | "info") => void;
 }
 
+const BOOKING_STATUS_COLORS = {
+  approved: "#10b981",
+  pending: "#f59e0b",
+  completed: "#3b82f6",
+  rejected: "#ef4444",
+  cancelled: "#6b7280",
+} as const;
+
+const BOOKING_CHART_LEGEND = [
+  { label: "Đã duyệt", color: BOOKING_STATUS_COLORS.approved },
+  { label: "Chờ duyệt", color: BOOKING_STATUS_COLORS.pending },
+  { label: "Hoàn thành", color: BOOKING_STATUS_COLORS.completed },
+  { label: "Từ chối", color: BOOKING_STATUS_COLORS.rejected },
+  { label: "Đã hủy", color: BOOKING_STATUS_COLORS.cancelled },
+];
+
 export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
   // Sub-tab selection: "bookings" | "rooms" | "violations"
   const [subTab, setSubTab] = useState<"bookings" | "rooms" | "violations">("bookings");
@@ -122,10 +138,21 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
 
   // Max value for SVG Bar Chart
   const maxBarValue = useMemo(() => {
-    if (!bookingReport?.timeSeries || bookingReport.timeSeries.length === 0) return 10;
+    if (!bookingReport?.timeSeries || bookingReport.timeSeries.length === 0) return 1;
     const maxVal = Math.max(...bookingReport.timeSeries.map((p) => p.total));
-    return Math.max(10, maxVal);
+    return Math.max(1, maxVal);
   }, [bookingReport]);
+
+  // Chưa có đơn nào được duyệt / chưa có dữ liệu → không hiển thị 0% gây hiểu sai
+  const totalBookingsInRange = overview?.totalBookings ?? 0;
+  const approvedBookingsInRange = overview?.approvedBookings ?? 0;
+  const hasBookingData = bookingReport?.timeSeries.some((p) => p.total > 0) ?? false;
+  const approvalCaption =
+    totalBookingsInRange === 0
+      ? "Chưa có đơn nào trong kỳ"
+      : approvedBookingsInRange === 0
+      ? `0/${totalBookingsInRange} đơn đã duyệt`
+      : null;
 
   return (
     <div className="admin-reports-container">
@@ -139,7 +166,12 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
             <span className="kpi-label">Tổng lượt mượn phòng</span>
             <strong className="kpi-value">{overview?.totalBookings || 0}</strong>
             <span className="kpi-sub">
-              Duyệt thành công: <strong>{overview?.approvalRate || 0}%</strong> ({overview?.approvedBookings || 0} đơn)
+              {approvalCaption ?? (
+                <>
+                  Đã duyệt: <strong>{overview?.approvalRate ?? 0}%</strong> ·{" "}
+                  {approvedBookingsInRange} đơn
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -187,7 +219,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
       {/* ── 2. Time Filter & Export Toolbar ─────────────────────────────────── */}
       <div className="table-filter-bar">
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "13px", fontWeight: 700, color: "#475569" }}>
+          <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--rp-text)" }}>
             Khung thời gian báo cáo:
           </span>
           <div className="btn-group-segmented">
@@ -237,7 +269,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                 value={customFromDate}
                 onChange={(e) => setCustomFromDate(e.target.value)}
               />
-              <span style={{ color: "#64748b" }}>→</span>
+              <span style={{ color: "var(--rp-muted)" }}>→</span>
               <input
                 type="date"
                 className="filter-select"
@@ -258,8 +290,6 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
             onClick={() => handleExport(subTab)}
             style={{
               padding: "7px 16px",
-              background: "#059669",
-              borderColor: "#059669",
               fontWeight: 600,
               fontSize: "13px",
               display: "inline-flex",
@@ -312,40 +342,57 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           <div
             className="profile-section-card"
             style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
+              background: "var(--rp-surface)",
+              border: "1px solid var(--rp-border)",
               borderRadius: "12px",
               padding: "20px",
               marginBottom: "20px",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                flexWrap: "wrap",
+                gap: "10px 16px",
+                marginBottom: "14px",
+              }}
+            >
               <div>
-                <h3 style={{ fontSize: "16px", fontWeight: 800, color: "#1e293b", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                <h3 style={{ fontSize: "16px", fontWeight: 800, color: "var(--rp-title)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                   <TrendingUpIcon size={18} />
                   <span>XU HƯỚNG SỐ LƯỢNG ĐƠN MƯỢN THEO NGÀY</span>
                 </h3>
-                <span style={{ fontSize: "12.5px", color: "#64748b" }}>
+                <span style={{ fontSize: "12.5px", color: "var(--rp-muted)" }}>
                   Biến động số lượng yêu cầu đặt phòng và tình hình xét duyệt qua các mốc thời gian.
                 </span>
               </div>
-              <div style={{ display: "flex", gap: "12px", fontSize: "12px" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: 10, height: 10, background: "#10b981", borderRadius: "2px" }} /> Đã duyệt
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: 10, height: 10, background: "#f59e0b", borderRadius: "2px" }} /> Chờ duyệt
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: 10, height: 10, background: "#ef4444", borderRadius: "2px" }} /> Từ chối
-                </span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", fontSize: "12px" }}>
+                {BOOKING_CHART_LEGEND.map((item) => (
+                  <span key={item.label} style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "var(--rp-text)" }}>
+                    <span style={{ width: 10, height: 10, background: item.color, borderRadius: "2px" }} /> {item.label}
+                  </span>
+                ))}
               </div>
             </div>
 
             {/* SVG Interactive Chart */}
-            {bookingReport?.timeSeries.length === 0 ? (
-              <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
-                Không có dữ liệu lượt mượn trong khoảng thời gian đã chọn.
+            {!bookingReport?.timeSeries.length || !hasBookingData ? (
+              <div
+                style={{
+                  padding: "48px 24px",
+                  textAlign: "center",
+                  color: "var(--rp-muted)",
+                  border: "1px dashed var(--rp-border-strong)",
+                  borderRadius: "10px",
+                  background: "var(--rp-soft)",
+                }}
+              >
+                <strong style={{ display: "block", color: "var(--rp-text)", marginBottom: "4px" }}>
+                  Chưa có lượt mượn phòng nào trong kỳ
+                </strong>
+                Biểu đồ sẽ hiển thị khi có đơn đặt phòng trong khoảng thời gian đã chọn.
               </div>
             ) : (
               <div style={{ overflowX: "auto", paddingBottom: "10px" }}>
@@ -356,14 +403,24 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                     gap: "12px",
                     height: "220px",
                     paddingTop: "20px",
-                    borderBottom: "2px solid #cbd5e1",
+                    borderBottom: "2px solid var(--rp-border-strong)",
                     minWidth: "600px",
                   }}
                 >
                   {bookingReport?.timeSeries.map((pt) => {
                     const totalHeightPct = Math.min(100, (pt.total / maxBarValue) * 100);
-                    const approvedHeightPct = pt.total > 0 ? (pt.approved / pt.total) * 100 : 0;
-                    const rejectedHeightPct = pt.total > 0 ? (pt.rejected / pt.total) * 100 : 0;
+                    const segments = [
+                      { key: "approved", value: pt.approved, color: BOOKING_STATUS_COLORS.approved },
+                      { key: "completed", value: pt.completed ?? 0, color: BOOKING_STATUS_COLORS.completed },
+                      { key: "pending", value: pt.pending ?? 0, color: BOOKING_STATUS_COLORS.pending },
+                      { key: "rejected", value: pt.rejected, color: BOOKING_STATUS_COLORS.rejected },
+                      { key: "cancelled", value: pt.cancelled, color: BOOKING_STATUS_COLORS.cancelled },
+                    ];
+                    const barBase = Math.max(1, pt.total);
+                    const barBreakdown =
+                      `Ngày ${pt.label}: Tổng ${pt.total} đơn (Đã duyệt: ${pt.approved}, ` +
+                      `Chờ duyệt: ${pt.pending ?? 0}, Hoàn thành: ${pt.completed ?? 0}, ` +
+                      `Từ chối: ${pt.rejected}, Đã hủy: ${pt.cancelled})`;
 
                     return (
                       <div
@@ -378,7 +435,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                         }}
                       >
                         {/* Value label */}
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#334155", marginBottom: "4px" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--rp-text)", marginBottom: "4px" }}>
                           {pt.total}
                         </span>
 
@@ -392,20 +449,29 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                             overflow: "hidden",
                             display: "flex",
                             flexDirection: "column-reverse",
-                            background: "#e2e8f0",
+                            background: "var(--rp-border)",
                             boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
                           }}
-                          title={`Ngày ${pt.dateString}: Tổng ${pt.total} đơn (Đã duyệt: ${pt.approved}, Từ chối: ${pt.rejected}, Hủy: ${pt.cancelled})`}
+                          title={barBreakdown}
+                          role="img"
+                          aria-label={barBreakdown}
                         >
-                          <div style={{ height: `${approvedHeightPct}%`, background: "#10b981" }} />
-                          <div style={{ height: `${rejectedHeightPct}%`, background: "#ef4444" }} />
+                          {segments.filter((segment) => segment.value > 0).map((segment) => (
+                            <div
+                              key={segment.key}
+                              style={{
+                                height: `${(segment.value / barBase) * 100}%`,
+                                background: segment.color,
+                              }}
+                            />
+                          ))}
                         </div>
 
                         {/* X-axis date label */}
                         <span
                           style={{
                             fontSize: "11px",
-                            color: "#64748b",
+                            color: "var(--rp-muted)",
                             marginTop: "6px",
                             whiteSpace: "nowrap",
                             fontWeight: 600,
@@ -422,18 +488,18 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           </div>
 
           {/* Two-column layout: Status Breakdown & Purpose */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
+          <div className="report-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
             {/* Status Breakdown */}
             <div
               className="profile-section-card"
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: "var(--rp-surface)",
+                border: "1px solid var(--rp-border)",
                 borderRadius: "12px",
                 padding: "20px",
               }}
             >
-              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#1e293b", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--rp-title)", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <PieChartIcon size={17} />
                 <span>TỶ LỆ PHÂN BỐ TRẠNG THÁI ĐƠN MƯỢN</span>
               </h4>
@@ -441,17 +507,17 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                 {bookingReport?.statusDistribution.map((item) => (
                   <div key={item.name}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
-                      <span style={{ fontWeight: 600, color: "#334155" }}>{item.name}</span>
-                      <span style={{ fontWeight: 700, color: item.color || "#0f172a" }}>
+                      <span style={{ fontWeight: 600, color: "var(--rp-text)" }}>{item.name}</span>
+                      <span style={{ fontWeight: 700, color: "var(--rp-title)" }}>
                         {item.count} đơn ({item.percentage}%)
                       </span>
                     </div>
-                    <div style={{ width: "100%", height: "8px", background: "#f1f5f9", borderRadius: "4px", overflow: "hidden" }}>
+                    <div style={{ width: "100%", height: "8px", background: "var(--rp-track)", borderRadius: "4px", overflow: "hidden" }}>
                       <div
                         style={{
                           width: `${item.percentage}%`,
                           height: "100%",
-                          background: item.color || "#3b82f6",
+                          background: item.color || "var(--rp-link)",
                           borderRadius: "4px",
                         }}
                       />
@@ -465,13 +531,13 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
             <div
               className="profile-section-card"
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: "var(--rp-surface)",
+                border: "1px solid var(--rp-border)",
                 borderRadius: "12px",
                 padding: "20px",
               }}
             >
-              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#1e293b", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--rp-title)", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <TargetIcon size={17} />
                 <span>MỤC ĐÍCH SỬ DỤNG PHÒNG PHỔ BIẾN</span>
               </h4>
@@ -484,22 +550,34 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                       alignItems: "center",
                       justifyContent: "space-between",
                       padding: "8px 12px",
-                      background: "#f8fafc",
+                      background: "var(--rp-soft)",
                       borderRadius: "6px",
                       fontSize: "13px",
                     }}
                   >
-                    <span style={{ fontWeight: 600, color: "#1e293b" }}>
+                    <span
+                      title={item.name}
+                      style={{
+                        fontWeight: 600,
+                        color: "var(--rp-title)",
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        paddingRight: "10px",
+                      }}
+                    >
                       {idx + 1}. {item.name}
                     </span>
                     <span
                       style={{
                         fontWeight: 700,
-                        background: "#e0f2fe",
-                        color: "#0369a1",
+                        background: "var(--rp-info-bg)",
+                        color: "var(--rp-info-ink)",
                         padding: "2px 8px",
                         borderRadius: "10px",
                         fontSize: "12px",
+                        flexShrink: 0,
                       }}
                     >
                       {item.count} lượt ({item.percentage}%)
@@ -514,8 +592,8 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           <div
             className="profile-section-card"
             style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
+              background: "var(--rp-surface)",
+              border: "1px solid var(--rp-border)",
               borderRadius: "12px",
               padding: "20px",
               marginBottom: "20px",
@@ -525,7 +603,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
               style={{
                 fontSize: "15px",
                 fontWeight: 800,
-                color: "#1e293b",
+                color: "var(--rp-title)",
                 marginBottom: "14px",
                 display: "flex",
                 alignItems: "center",
@@ -543,35 +621,35 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                 marginBottom: bookingReport?.cancellationReasonStats?.length ? "16px" : 0,
               }}
             >
-              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "12px 14px" }}>
-                <div style={{ fontSize: "12px", color: "#15803d", fontWeight: 700, marginBottom: "4px" }}>
+              <div style={{ background: "var(--rp-success-bg)", border: "1px solid var(--rp-success-border)", borderRadius: "10px", padding: "12px 14px" }}>
+                <div style={{ fontSize: "12px", color: "var(--rp-success-text)", fontWeight: 700, marginBottom: "4px" }}>
                   Sinh viên tự hủy
                 </div>
-                <div style={{ fontSize: "22px", fontWeight: 800, color: "#166534" }}>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--rp-success-ink)" }}>
                   {bookingReport?.overview?.cancelledByStudent ?? 0}
                 </div>
               </div>
-              <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: "10px", padding: "12px 14px" }}>
-                <div style={{ fontSize: "12px", color: "#c2410c", fontWeight: 700, marginBottom: "4px" }}>
+              <div style={{ background: "var(--rp-warn-bg)", border: "1px solid var(--rp-warn-border)", borderRadius: "10px", padding: "12px 14px" }}>
+                <div style={{ fontSize: "12px", color: "var(--rp-warn-text)", fontWeight: 700, marginBottom: "4px" }}>
                   Tự động hủy (không nhận phòng)
                 </div>
-                <div style={{ fontSize: "22px", fontWeight: 800, color: "#9a3412" }}>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--rp-warn-ink)" }}>
                   {bookingReport?.overview?.cancelledByNoShow ?? 0}
                 </div>
               </div>
-              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px" }}>
-                <div style={{ fontSize: "12px", color: "#475569", fontWeight: 700, marginBottom: "4px" }}>
+              <div style={{ background: "var(--rp-soft)", border: "1px solid var(--rp-border)", borderRadius: "10px", padding: "12px 14px" }}>
+                <div style={{ fontSize: "12px", color: "var(--rp-text)", fontWeight: 700, marginBottom: "4px" }}>
                   Quản trị / nhân sự hủy
                 </div>
-                <div style={{ fontSize: "22px", fontWeight: 800, color: "#334155" }}>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--rp-text)" }}>
                   {bookingReport?.overview?.cancelledByStaff ?? 0}
                 </div>
               </div>
-              <div style={{ background: "#f1f5f9", border: "1px dashed #cbd5e1", borderRadius: "10px", padding: "12px 14px" }}>
-                <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 700, marginBottom: "4px" }}>
+              <div style={{ background: "var(--rp-track)", border: "1px dashed var(--rp-border-strong)", borderRadius: "10px", padding: "12px 14px" }}>
+                <div style={{ fontSize: "12px", color: "var(--rp-muted)", fontWeight: 700, marginBottom: "4px" }}>
                   Đơn cũ chưa rõ lý do
                 </div>
-                <div style={{ fontSize: "22px", fontWeight: 800, color: "#94a3b8" }}>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--rp-muted)" }}>
                   {bookingReport?.overview?.cancelledUnknownSource ?? 0}
                 </div>
               </div>
@@ -579,23 +657,24 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
 
             {(bookingReport?.cancellationReasonStats?.length ?? 0) > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--rp-text)" }}>
                   Số lượng hủy theo lý do:
                 </div>
                 {bookingReport?.cancellationReasonStats?.map((item) => (
                   <div
                     key={item.name}
-                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc", borderRadius: "8px", padding: "8px 12px" }}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--rp-soft)", borderRadius: "8px", padding: "8px 12px" }}
                   >
-                    <span style={{ fontSize: "13px", color: "#334155" }}>{item.name}</span>
+                    <span style={{ fontSize: "13px", color: "var(--rp-text)" }}>{item.name}</span>
                     <span
                       style={{
                         fontWeight: 700,
-                        background: "#fee2e2",
-                        color: "#b91c1c",
+                        background: "var(--rp-danger-bg)",
+                        color: "var(--rp-danger-text)",
                         padding: "2px 8px",
                         borderRadius: "10px",
                         fontSize: "12px",
+                        flexShrink: 0,
                       }}
                     >
                       {item.count} đơn ({item.percentage}%)
@@ -610,13 +689,13 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           <div
             className="profile-section-card"
             style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
+              background: "var(--rp-surface)",
+              border: "1px solid var(--rp-border)",
               borderRadius: "12px",
               padding: "20px",
             }}
           >
-            <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#1e293b", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--rp-title)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
               <GraduationCapIcon size={17} />
               <span>THỐNG KÊ LƯỢT MƯỢN THEO KHOA / ĐƠN VỊ</span>
             </h4>
@@ -625,7 +704,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                 <tr>
                   <th>Tên Khoa / Đơn vị</th>
                   <th style={{ width: "140px", textAlign: "center" }}>Tổng đơn đặt</th>
-                  <th style={{ width: "140px", textAlign: "center" }}>Đã duyệt thành công</th>
+                  <th style={{ width: "140px", textAlign: "center" }}>Đã duyệt</th>
                   <th style={{ width: "140px", textAlign: "center" }}>Tỷ lệ duyệt (%)</th>
                   <th style={{ width: "160px", textAlign: "right" }}>Tổng giờ sử dụng</th>
                 </tr>
@@ -634,16 +713,16 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                 {bookingReport?.departmentStats.map((dept) => (
                   <tr key={dept.departmentName}>
                     <td>
-                      <strong style={{ color: "#0f172a" }}>{dept.departmentName}</strong>
+                      <strong style={{ color: "var(--rp-title)" }}>{dept.departmentName}</strong>
                     </td>
                     <td style={{ textAlign: "center", fontWeight: 700 }}>{dept.totalBookings}</td>
-                    <td style={{ textAlign: "center", color: "#15803d", fontWeight: 700 }}>
+                    <td style={{ textAlign: "center", color: "var(--rp-success-text)", fontWeight: 700 }}>
                       {dept.approvedBookings}
                     </td>
                     <td style={{ textAlign: "center" }}>
                       <span className="table-status-pill pill-approved">{dept.successRate}%</span>
                     </td>
-                    <td style={{ textAlign: "right", fontWeight: 800, color: "#0284c7" }}>
+                    <td style={{ textAlign: "right", fontWeight: 800, color: "var(--rp-link)" }}>
                       {dept.totalHoursUsed} giờ
                     </td>
                   </tr>
@@ -659,8 +738,8 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           <div
             className="profile-section-card"
             style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
+              background: "var(--rp-surface)",
+              border: "1px solid var(--rp-border)",
               borderRadius: "12px",
               padding: "20px",
               marginBottom: "20px",
@@ -668,11 +747,11 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
               <div>
-                <h3 style={{ fontSize: "16px", fontWeight: 800, color: "#1e293b", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                <h3 style={{ fontSize: "16px", fontWeight: 800, color: "var(--rp-title)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                   <TrophyIcon size={18} />
                   <span>BẢNG XẾP HẠNG PHÒNG ĐƯỢC MƯỢN NHIỀU NHẤT</span>
                 </h3>
-                <span style={{ fontSize: "12.5px", color: "#64748b" }}>
+                <span style={{ fontSize: "12.5px", color: "var(--rp-muted)" }}>
                   Tỷ lệ lấp đầy (Occupancy Rate) và số giờ khai thác thực tế của từng phòng thư viện.
                 </span>
               </div>
@@ -704,29 +783,29 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                       <span className="font-mono bold color-blue">{room.roomCode}</span>
                     </td>
                     <td>
-                      <strong style={{ color: "#0f172a" }}>{room.roomName}</strong>
+                      <strong style={{ color: "var(--rp-title)" }}>{room.roomName}</strong>
                     </td>
                     <td>
                       {room.building} — {room.floor}
                     </td>
                     <td>
-                      <span className="user-badge-pill" style={{ background: "#f1f5f9" }}>
+                      <span className="user-badge-pill" style={{ background: "var(--rp-track)" }}>
                         {room.roomTypeName}
                       </span>
                     </td>
                     <td style={{ textAlign: "center" }}>{room.capacity} chỗ</td>
                     <td style={{ textAlign: "center", fontWeight: 700 }}>{room.totalBookings}</td>
-                    <td style={{ textAlign: "right", fontWeight: 800, color: "#0284c7" }}>
+                    <td style={{ textAlign: "right", fontWeight: 800, color: "var(--rp-link)" }}>
                       {room.totalHours} giờ
                     </td>
                     <td style={{ textAlign: "center" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", justifyContent: "center" }}>
-                        <div style={{ width: "60px", height: "6px", background: "#e2e8f0", borderRadius: "3px" }}>
+                        <div style={{ width: "60px", height: "6px", background: "var(--rp-border)", borderRadius: "3px" }}>
                           <div
                             style={{
                               width: `${Math.min(100, room.occupancyRate)}%`,
                               height: "100%",
-                              background: room.occupancyRate > 50 ? "#16a34a" : "#3b82f6",
+                              background: room.occupancyRate > 50 ? "#16a34a" : "var(--rp-link)",
                               borderRadius: "3px",
                             }}
                           />
@@ -741,17 +820,17 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           </div>
 
           {/* Two Columns: Room Types & Building Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+          <div className="report-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
             <div
               className="profile-section-card"
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: "var(--rp-surface)",
+                border: "1px solid var(--rp-border)",
                 borderRadius: "12px",
                 padding: "20px",
               }}
             >
-              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#1e293b", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--rp-title)", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <TagIcon size={17} />
                 <span>KHAI THÁC THEO LOẠI PHÒNG</span>
               </h4>
@@ -764,18 +843,18 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                       justifyContent: "space-between",
                       alignItems: "center",
                       padding: "8px 12px",
-                      background: "#f8fafc",
+                      background: "var(--rp-soft)",
                       borderRadius: "6px",
                       fontSize: "13px",
                     }}
                   >
                     <div>
-                      <strong style={{ color: "#1e293b" }}>{item.roomTypeName}</strong>
-                      <span style={{ fontSize: "12px", color: "#64748b", marginLeft: "6px" }}>
+                      <strong style={{ color: "var(--rp-title)" }}>{item.roomTypeName}</strong>
+                      <span style={{ fontSize: "12px", color: "var(--rp-muted)", marginLeft: "6px" }}>
                         ({item.roomCount} phòng)
                       </span>
                     </div>
-                    <span style={{ fontWeight: 800, color: "#0284c7" }}>
+                    <span style={{ fontWeight: 800, color: "var(--rp-link)" }}>
                       {item.totalHours} giờ ({item.sharePercentage}%)
                     </span>
                   </div>
@@ -786,20 +865,20 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
             <div
               className="profile-section-card"
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: "var(--rp-surface)",
+                border: "1px solid var(--rp-border)",
                 borderRadius: "12px",
                 padding: "20px",
               }}
             >
-              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#1e293b", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--rp-title)", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <WrenchIcon size={17} />
                 <span>TÌNH TRẠNG THIẾT BỊ SAU KHI TRẢ PHÒNG</span>
               </h4>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13.5px" }}>
                   <span>Tỷ lệ bàn giao thiết bị tốt:</span>
-                  <strong style={{ color: "#15803d" }}>{roomReport?.equipmentGoodRate || 100}%</strong>
+                  <strong style={{ color: "var(--rp-success-text)" }}>{roomReport?.equipmentGoodRate || 100}%</strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13.5px" }}>
                   <span>Số ca trả phòng bình thường / sạch sẽ:</span>
@@ -820,8 +899,8 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           <div
             className="profile-section-card"
             style={{
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
+              background: "var(--rp-surface)",
+              border: "1px solid var(--rp-border)",
               borderRadius: "12px",
               padding: "20px",
               marginBottom: "20px",
@@ -829,17 +908,17 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
               <div>
-                <h3 style={{ fontSize: "16px", fontWeight: 800, color: "#b91c1c", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                <h3 style={{ fontSize: "16px", fontWeight: 800, color: "var(--rp-danger-text)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                   <AlertTriangleIcon size={18} /> DANH SÁCH TÀI KHOẢN ĐANG BỊ CẤM MƯỢN PHÒNG ({violationReport?.activeBansCount || 0})
                 </h3>
-                <span style={{ fontSize: "12.5px", color: "#64748b" }}>
+                <span style={{ fontSize: "12.5px", color: "var(--rp-muted)" }}>
                   Các sinh viên / người dùng có quyết định kỷ luật cấm mượn phòng còn hiệu lực thi hành.
                 </span>
               </div>
             </div>
 
             {violationReport?.currentActiveBans.length === 0 ? (
-              <div style={{ padding: "24px", textAlign: "center", color: "#15803d", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+              <div style={{ padding: "24px", textAlign: "center", color: "var(--rp-success-text)", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
                 <CheckCircleIcon size={16} />
                 <span>Hiện không có tài khoản nào bị cấm mượn phòng.</span>
               </div>
@@ -863,14 +942,14 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                         <span className="font-mono bold color-blue">{ban.cardCode}</span>
                       </td>
                       <td>
-                        <strong style={{ color: "#0f172a" }}>{ban.fullName}</strong>
+                        <strong style={{ color: "var(--rp-title)" }}>{ban.fullName}</strong>
                       </td>
                       <td>
                         <span className="table-status-pill pill-rejected" style={{ fontWeight: 700 }}>
                           {ban.restrictionType}
                         </span>
                       </td>
-                      <td style={{ fontSize: "13px", color: "#334155" }}>{ban.reason}</td>
+                      <td style={{ fontSize: "13px", color: "var(--rp-text)" }}>{ban.reason}</td>
                       <td>{new Date(ban.startAt).toLocaleDateString("vi-VN")}</td>
                       <td>
                         {ban.endAt ? new Date(ban.endAt).toLocaleDateString("vi-VN") : "Vô thời hạn"}
@@ -878,8 +957,8 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                       <td style={{ textAlign: "center" }}>
                         <span
                           style={{
-                            background: "#fee2e2",
-                            color: "#991b1b",
+                            background: "var(--rp-danger-bg)",
+                            color: "var(--rp-danger-ink)",
                             padding: "3px 8px",
                             borderRadius: "10px",
                             fontWeight: 800,
@@ -897,17 +976,17 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           </div>
 
           {/* Severity & Violation Type Breakdown */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+          <div className="report-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
             <div
               className="profile-section-card"
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: "var(--rp-surface)",
+                border: "1px solid var(--rp-border)",
                 borderRadius: "12px",
                 padding: "20px",
               }}
             >
-              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#1e293b", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--rp-title)", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <ScaleIcon size={17} />
                 <span>PHÂN BỐ THEO MỨC ĐỘ NGHIÊM TRỌNG</span>
               </h4>
@@ -915,12 +994,12 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                 {violationReport?.severityDistribution.map((item) => (
                   <div key={item.name}>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
-                      <span style={{ fontWeight: 600, color: "#334155" }}>{item.name}</span>
-                      <span style={{ fontWeight: 700, color: item.color || "#0f172a" }}>
+                      <span style={{ fontWeight: 600, color: "var(--rp-text)" }}>{item.name}</span>
+                      <span style={{ fontWeight: 700, color: "var(--rp-title)" }}>
                         {item.count} vụ ({item.percentage}%)
                       </span>
                     </div>
-                    <div style={{ width: "100%", height: "8px", background: "#f1f5f9", borderRadius: "4px", overflow: "hidden" }}>
+                    <div style={{ width: "100%", height: "8px", background: "var(--rp-track)", borderRadius: "4px", overflow: "hidden" }}>
                       <div
                         style={{
                           width: `${item.percentage}%`,
@@ -938,13 +1017,13 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
             <div
               className="profile-section-card"
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
+                background: "var(--rp-surface)",
+                border: "1px solid var(--rp-border)",
                 borderRadius: "12px",
                 padding: "20px",
               }}
             >
-              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#1e293b", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--rp-title)", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <ClipboardListIcon size={17} />
                 <span>CÁC LỖI VI PHẠM THƯỜNG GẶP</span>
               </h4>
@@ -957,22 +1036,34 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                       alignItems: "center",
                       justifyContent: "space-between",
                       padding: "8px 12px",
-                      background: "#f8fafc",
+                      background: "var(--rp-soft)",
                       borderRadius: "6px",
                       fontSize: "13px",
                     }}
                   >
-                    <span style={{ fontWeight: 600, color: "#1e293b" }}>
+                    <span
+                      title={item.name}
+                      style={{
+                        fontWeight: 600,
+                        color: "var(--rp-title)",
+                        minWidth: 0,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        paddingRight: "10px",
+                      }}
+                    >
                       {idx + 1}. {item.name}
                     </span>
                     <span
                       style={{
                         fontWeight: 700,
-                        background: "#fee2e2",
-                        color: "#991b1b",
+                        background: "var(--rp-danger-bg)",
+                        color: "var(--rp-danger-ink)",
                         padding: "2px 8px",
                         borderRadius: "10px",
                         fontSize: "12px",
+                        flexShrink: 0,
                       }}
                     >
                       {item.count} biên bản

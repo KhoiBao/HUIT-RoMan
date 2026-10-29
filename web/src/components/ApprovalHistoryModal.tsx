@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   fetchApprovalHistoryApi,
   type ApprovalHistoryItem,
 } from "../lib/booking";
+import { ClipboardListIcon, UsersIcon } from "./Icon";
 
 interface ApprovalHistoryModalProps {
   isOpen: boolean;
@@ -50,6 +51,17 @@ export const ApprovalHistoryModal: React.FC<ApprovalHistoryModalProps> = ({
   const [histories, setHistories] = useState<ApprovalHistoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    closeBtnRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (!isOpen || !bookingId) return;
@@ -83,14 +95,19 @@ export const ApprovalHistoryModal: React.FC<ApprovalHistoryModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="roman-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="roman-modal-backdrop" onClick={onClose} role="presentation">
       <div
         className="roman-modal-content history-modal-container"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="approval-history-title"
       >
         <div className="history-modal-header">
           <div>
-            <h3 className="history-modal-title">Lịch sử duyệt đơn</h3>
+            <h3 className="history-modal-title" id="approval-history-title">
+              Lịch sử duyệt đơn
+            </h3>
             <p className="history-modal-subtitle">
               Đơn đặt #{bookingId} {activityName ? `• ${activityName}` : ""}
             </p>
@@ -99,7 +116,8 @@ export const ApprovalHistoryModal: React.FC<ApprovalHistoryModalProps> = ({
             type="button"
             className="history-modal-close-btn"
             onClick={onClose}
-            aria-label="Đóng"
+            aria-label="Đóng lịch sử duyệt"
+            ref={closeBtnRef}
           >
             &times;
           </button>
@@ -116,7 +134,9 @@ export const ApprovalHistoryModal: React.FC<ApprovalHistoryModalProps> = ({
 
           {!loading && !errorMsg && histories.length === 0 && (
             <div className="history-empty-state">
-              <div className="history-empty-icon">📋</div>
+              <div className="history-empty-icon" aria-hidden="true">
+                <ClipboardListIcon size={26} />
+              </div>
               <p>Chưa có lịch sử duyệt nào cho đơn đặt phòng này.</p>
               <small>Hệ thống tự động ghi nhận khi cán bộ quản trị hoặc nhân sự xử lý đơn.</small>
             </div>
@@ -139,7 +159,7 @@ export const ApprovalHistoryModal: React.FC<ApprovalHistoryModalProps> = ({
 
                     <div className="history-actor">
                       <span className="history-actor-name">
-                        👤 {h.employeeName || "Nhân sự quản lý"}
+                        <UsersIcon size={13} /> {h.employeeName || "Nhân sự quản lý"}
                       </span>
                       {h.employeeCode && (
                         <span className="history-actor-code">({h.employeeCode})</span>

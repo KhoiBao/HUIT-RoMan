@@ -36,6 +36,8 @@ export interface TimeSeriesPoint {
   dateString: string;
   total: number;
   approved: number;
+  pending?: number;
+  completed?: number;
   rejected: number;
   cancelled: number;
 }

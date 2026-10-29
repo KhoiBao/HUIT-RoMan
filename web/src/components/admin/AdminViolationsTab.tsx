@@ -880,7 +880,7 @@ export default function AdminViolationsTab({
 
           {/* Table */}
           <div className="table-responsive-wrapper">
-            <table className="admin-custom-table">
+            <table className="admin-custom-table has-actions">
               <thead>
                 <tr>
                   <th style={{ width: "120px" }}>Mã biên bản</th>
@@ -1010,6 +1010,7 @@ export default function AdminViolationsTab({
                               className="btn-table-action btn-action-delete"
                               onClick={() => handleDeleteViolation(v)}
                               title="Xóa biên bản này"
+                              aria-label={`Xóa biên bản ${v.code}`}
                             >
                               <XIcon size={14} />
                             </button>

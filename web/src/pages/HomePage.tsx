@@ -19,6 +19,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [activeSessions, setActiveSessions] = useState<UsageSessionItem[]>([]);
 
   const loadData = useCallback(async () => {
@@ -28,6 +29,7 @@ export default function HomePage() {
       const data = await loadHomeSnapshot(toISODateString(new Date()), new Date());
       setSnapshot(data);
       setNow(new Date());
+      setUpdatedAt(new Date());
     } catch {
       setError(
         "Không thể tải dữ liệu phòng từ hệ thống. Vui lòng thử lại sau ít phút."
@@ -96,10 +98,12 @@ export default function HomePage() {
   );
 
   const dateLabel = formatVietnameseDate(toISODateString(now));
-  const updatedLabel = now.toLocaleTimeString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const updatedLabel = updatedAt
+    ? updatedAt.toLocaleTimeString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
 
   return (
     <div className="rh-page">

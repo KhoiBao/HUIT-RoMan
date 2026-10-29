@@ -35,6 +35,11 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 rooms = rooms.Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value).ToList();
             }
 
+            if (StudentBookingPolicy.IsStudent(_currentUser.Role))
+            {
+                rooms = rooms.Where(r => StudentBookingPolicy.IsBookableRoomType(r.RoomType?.Name)).ToList();
+            }
+
             var dtos = rooms.Select(r => new RoomDto
             {
                 Id = r.Id,
@@ -179,6 +184,11 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
             {
                 rooms = rooms.Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value).ToList();
+            }
+
+            if (StudentBookingPolicy.IsStudent(_currentUser.Role))
+            {
+                rooms = rooms.Where(r => StudentBookingPolicy.IsBookableRoomType(r.RoomType?.Name)).ToList();
             }
 
             var query = rooms.AsEnumerable();

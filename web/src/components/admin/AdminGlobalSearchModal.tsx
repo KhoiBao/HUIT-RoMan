@@ -43,12 +43,44 @@ export default function AdminGlobalSearchModal({
   });
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
+
+  // Escape để đóng + trap focus trong dialog
+  useEffect(() => {
+    if (!isOpen) return;
+    const root = cardRef.current;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !root) return;
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute("disabled"));
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Debounced search
   useEffect(() => {
@@ -87,9 +119,17 @@ export default function AdminGlobalSearchModal({
     results.violations.length;
 
   return (
-    <div className="admin-modal-overlay global-search-overlay" onClick={onClose}>
+    <div
+      className="admin-modal-overlay global-search-overlay"
+      onClick={onClose}
+      role="presentation"
+    >
       <div
+        ref={cardRef}
         className="admin-modal-card global-search-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tìm kiếm nhanh toàn hệ thống"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input Bar */}
@@ -102,6 +142,7 @@ export default function AdminGlobalSearchModal({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="global-search-input"
+            aria-label="Từ khóa tìm kiếm"
           />
           {loading && <RefreshCwIcon size={18} className="spin-icon" />}
           {query && !loading && (
@@ -109,6 +150,7 @@ export default function AdminGlobalSearchModal({
               type="button"
               className="global-search-clear"
               onClick={() => setQuery("")}
+              aria-label="Xóa từ khóa"
             >
               <XIcon size={16} />
             </button>
@@ -117,8 +159,10 @@ export default function AdminGlobalSearchModal({
             type="button"
             className="global-search-close-btn"
             onClick={onClose}
+            aria-label="Đóng tìm kiếm (Esc)"
+            title="Đóng (Esc)"
           >
-            Esc
+            <XIcon size={16} />
           </button>
         </div>
 
