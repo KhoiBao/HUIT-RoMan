@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HUIT_RoMan.Domain;
 using HUIT_RoMan.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +33,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             var deptAdmin = await EnsureDepartmentAsync(dbContext, "Trường ĐH Công Thương TPHCM", "Management");
             var deptDaoTao = await EnsureDepartmentAsync(dbContext, "Phòng Đào tạo", "Office");
             var deptThuVien = await EnsureDepartmentAsync(dbContext, "Thư viện", "Library");
+            await EnsureLibraryWorkingHoursAsync(dbContext, deptThuVien.Id);
             var deptCNTT = await EnsureDepartmentAsync(dbContext, "Khoa CNTT", "Faculty");
 
             // 3. Khởi tạo tài khoản Admin mặc định
@@ -63,6 +65,9 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             // 4. Khởi tạo 2 Nhân viên
             await EnsureEmployeeAsync(userManager, dbContext, "NV001", "Nhân Viên Đào Tạo", deptDaoTao.Id, "Chuyên viên");
             await EnsureEmployeeAsync(userManager, dbContext, "NV002", "Nhân Viên Thư Viện", deptThuVien.Id, "Thủ thư");
+
+            // 4b. Tài khoản hệ thống cho chế độ tự động duyệt + cấu hình mặc định
+            await EnsureAutoApproveSystemAccountAsync(userManager, dbContext, deptAdmin.Id);
 
             // 5. Khởi tạo Sinh viên & Giảng viên thuộc Khoa CNTT
             await EnsureUserAsync(userManager, "SV001", "Sinh Viên CNTT 01", "Student", deptCNTT.Id);
@@ -115,6 +120,9 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             // 6. Apply Stored Procedures / Functions PostgreSQL
             await SeedStoredProceduresAsync(dbContext);
 
+            // 6b. Dọn phiên nhận phòng mồ côi của các chi tiết đã hủy/từ chối
+            await EnsureUsageSessionConsistencyAsync(dbContext);
+
             // 7. Khởi tạo danh mục Tiết học cho phòng lý thuyết và phòng thực hành
             await EnsurePeriodsAsync(dbContext, deptDaoTao.Id);
 
@@ -132,6 +140,26 @@ namespace HUIT_RoMan.Infrastructure.Persistence
 
             // 11. Khởi tạo lịch trực mẫu cho nhân viên (Shifts & ShiftLogs)
             await EnsureDemoShiftsAsync(dbContext);
+        }
+
+        /// <summary>
+        /// Đồng bộ trạng thái phiên nhận phòng với chi tiết đơn: các phiên còn
+        /// "Chờ nhận phòng" nhưng chi tiết đã hủy/từ chối là dữ liệu cũ do luồng
+        /// hủy đơn trước đây không cập nhật phiên. Idempotent, chạy mỗi lần khởi động.
+        /// </summary>
+        private static async Task EnsureUsageSessionConsistencyAsync(ApplicationDbContext dbContext)
+        {
+            var sql = """
+                UPDATE "UsageSessions" us
+                SET "Status" = 'Đã hủy', "UpdatedAt" = NOW()
+                FROM "BookingDetails" bd
+                WHERE bd."Id" = us."BookingDetailId"
+                  AND us."IsDeleted" = FALSE
+                  AND us."Status" = 'Chờ nhận phòng'
+                  AND bd."IsDeleted" = FALSE
+                  AND bd."Status" IN ('Đã hủy', 'Từ chối');
+                """;
+            await dbContext.Database.ExecuteSqlRawAsync(sql);
         }
 
         /// <summary>
@@ -180,7 +208,39 @@ namespace HUIT_RoMan.Infrastructure.Persistence
         }
 
 
-        private static async Task<Department> EnsureDepartmentAsync(ApplicationDbContext dbContext, string name, string type)
+        /// <summary>
+        /// Bổ sung giờ phục vụ mặc định cho Thư viện nếu chưa có.
+        /// Không ghi đè cấu hình do quản trị viên đã thay đổi.
+        /// </summary>
+        private static async Task EnsureLibraryWorkingHoursAsync(
+            ApplicationDbContext dbContext, int departmentId)
+        {
+            var existingDays = await dbContext.WorkingHours
+                .IgnoreQueryFilters()
+                .Where(w => w.DepartmentId == departmentId)
+                .Select(w => w.DayOfWeek)
+                .ToListAsync();
+
+            for (var day = 0; day <= 6; day++)
+            {
+                if (existingDays.Contains(day)) continue;
+
+                dbContext.WorkingHours.Add(new WorkingHour
+                {
+                    DepartmentId = departmentId,
+                    DayOfWeek = day,
+                    OpenTime = new TimeSpan(7, 0, 0),
+                    CloseTime = new TimeSpan(20, 0, 0),
+                    IsClosed = day == (int)DayOfWeek.Sunday,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await dbContext.SaveChangesAsync();
+        }
+
+        private static async Task<Department> EnsureDepartmentAsync(
+            ApplicationDbContext dbContext, string name, string type)
         {
             var dept = await dbContext.Departments.FirstOrDefaultAsync(d => d.Name == name);
             if (dept == null)
@@ -190,6 +250,71 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 await dbContext.SaveChangesAsync();
             }
             return dept;
+        }
+
+        /// <summary>
+        /// Tạo tài khoản "hệ thống tự động duyệt" một lần duy nhất: không mật khẩu,
+        /// không role, email không tồn tại nên không thể đăng nhập hay đặt lại mật khẩu.
+        /// Tài khoản chỉ tồn tại để làm chủ thể FK cho các bản ghi duyệt tự động.
+        /// </summary>
+        private static async Task EnsureAutoApproveSystemAccountAsync(
+            UserManager<User> userManager, ApplicationDbContext dbContext, int departmentId)
+        {
+            var user = await userManager.FindByNameAsync(SystemAccounts.AutoApproveUserName)
+                ?? await dbContext.Users.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(u => u.CardCode == SystemAccounts.AutoApproveEmployeeCode);
+
+            if (user == null)
+            {
+                user = new User
+                {
+                    UserName = SystemAccounts.AutoApproveUserName,
+                    CardCode = SystemAccounts.AutoApproveEmployeeCode,
+                    FullName = SystemAccounts.AutoApproveDisplayName,
+                    Email = "system.auto-approve@huit.invalid",
+                    EmailConfirmed = false,
+                    Status = "Hoạt động",
+                    DepartmentId = departmentId
+                };
+
+                // CreateAsync không kèm mật khẩu => PasswordHash = NULL => không thể đăng nhập.
+                var created = await userManager.CreateAsync(user);
+                if (!created.Succeeded) return;
+            }
+
+            if (user.PasswordHash != null || user.EmailConfirmed)
+            {
+                user.PasswordHash = null;
+                user.EmailConfirmed = false;
+                await userManager.UpdateAsync(user);
+            }
+
+            var roles = await userManager.GetRolesAsync(user);
+            if (roles.Count > 0)
+                await userManager.RemoveFromRolesAsync(user, roles);
+
+            if (!await dbContext.Employees.IgnoreQueryFilters().AnyAsync(e => e.UserId == user.Id))
+            {
+                dbContext.Employees.Add(new Employee
+                {
+                    Code = SystemAccounts.AutoApproveEmployeeCode,
+                    Position = "Tự động duyệt",
+                    Status = "Hoạt động",
+                    UserId = user.Id
+                });
+                await dbContext.SaveChangesAsync();
+            }
+
+            if (!await dbContext.SystemSettings.AnyAsync(s => s.Key == SystemSettingKeys.BookingAutoApprove))
+            {
+                dbContext.SystemSettings.Add(new SystemSetting
+                {
+                    Key = SystemSettingKeys.BookingAutoApprove,
+                    Value = "false",
+                    UpdatedAt = DateTime.UtcNow
+                });
+                await dbContext.SaveChangesAsync();
+            }
         }
 
         private static async Task EnsureUserAsync(UserManager<User> userManager, string code, string fullName, string role, int departmentId)
@@ -408,7 +533,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                         RoomNumber = r.RoomNumber,
                         Capacity = r.Capacity,
                         RoomTypeId = r.TypeId,
-                        Status = "Available",
+                        Status = RoomStatuses.Available,
                         Description = r.Description,
                         CreatedAt = DateTime.UtcNow
                     });
@@ -423,7 +548,10 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 existing.Capacity = r.Capacity;
                 existing.RoomTypeId = r.TypeId;
                 existing.Description = r.Description;
-                existing.Status = "Available";
+                // Giữ nguyên trạng thái do quản trị viên thiết lập (vd. Bảo trì);
+                // chỉ chuẩn hoá lại giá trị cũ không còn hợp lệ.
+                if (!RoomStatuses.IsValid(existing.Status))
+                    existing.Status = RoomStatuses.Available;
                 existing.IsDeleted = false;
                 existing.UpdatedAt = DateTime.UtcNow;
             }
@@ -445,7 +573,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             foreach (var room in staleRooms)
             {
                 room.IsDeleted = true;
-                room.Status = "Ngừng sử dụng";
+                room.Status = RoomStatuses.Maintenance;
                 room.UpdatedAt = DateTime.UtcNow;
             }
 
@@ -526,8 +654,8 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                     room.UpdatedAt = DateTime.UtcNow;
                     // Chỉ đặt lại trạng thái khi phòng được tái sử dụng; giữ
                     // nguyên trạng thái bảo trì do quản trị viên thiết lập.
-                    if (reclassified || room.Status == "Ngừng sử dụng")
-                        room.Status = "Available";
+                    if (reclassified || !RoomStatuses.IsValid(room.Status))
+                        room.Status = RoomStatuses.Available;
                     if (reclassified || string.IsNullOrWhiteSpace(room.Description))
                         room.Description = seed.Description;
                     continue;
@@ -542,7 +670,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                     RoomNumber = seed.RoomNumber,
                     Capacity = seed.Capacity,
                     RoomTypeId = roomTypeId,
-                    Status = "Available",
+                    Status = RoomStatuses.Available,
                     Description = seed.Description,
                     CreatedAt = DateTime.UtcNow
                 });

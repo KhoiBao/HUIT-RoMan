@@ -15,6 +15,7 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
         Task<ApiResponse<UsageSummaryDto>> GetSummaryTodayAsync();
         Task<ApiResponse<UsageSessionDto>> CheckInAsync(CheckInRequestDto request);
         Task<ApiResponse<UsageSessionDto>> CheckOutAsync(CheckOutRequestDto request);
+        Task<ApiResponse<UsageSessionDto>> ExtendAsync(int usageSessionId, ExtendUsageSessionRequestDto request);
         Task<ApiResponse<bool>> CancelNoShowAsync(int usageSessionId, string? reason = null);
         Task EnsureSessionForBookingDetailAsync(int bookingDetailId);
     }

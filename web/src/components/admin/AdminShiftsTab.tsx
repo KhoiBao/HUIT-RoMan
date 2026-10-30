@@ -48,6 +48,28 @@ interface EmployeeItem {
   departmentName?: string;
 }
 
+/** Ca "Lên lịch" chỉ được bắt đầu khi đang trong khung giờ của ca. */
+function canStartShift(shift: ShiftItem, now: Date = new Date()): boolean {
+  if (shift.status !== "Lên lịch") return false;
+  const dayKey = (shift.date || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return false;
+  const start = new Date(`${dayKey}T${shift.startTime}`);
+  const end = new Date(`${dayKey}T${shift.endTime}`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+  return now >= start && now <= end;
+}
+
+/** Ca "Đang trực" chỉ được hoàn tất trong đúng ngày diễn ra ca. */
+function canCompleteShift(shift: ShiftItem, now: Date = new Date()): boolean {
+  if (shift.status !== "Đang trực") return false;
+  const dayKey = (shift.date || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return false;
+  const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+    now.getDate(),
+  ).padStart(2, "0")}`;
+  return dayKey === localDay;
+}
+
 export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
@@ -753,7 +775,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                               alignItems: "center",
                             }}
                           >
-                            {s.status === "Lên lịch" && (
+                            {s.status === "Lên lịch" && canStartShift(s) && (
                               <button
                                 type="button"
                                 style={{
@@ -786,14 +808,20 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                                   background: "#16a34a",
                                   color: "#fff",
                                   border: "none",
-                                  cursor: "pointer",
+                                  cursor: canCompleteShift(s) ? "pointer" : "not-allowed",
+                                  opacity: canCompleteShift(s) ? 1 : 0.5,
                                   fontWeight: 600,
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "3px",
                                 }}
                                 onClick={() => handleChangeStatus(s, "Hoàn thành")}
-                                title="Bàn giao & Hoàn tất ca trực"
+                                disabled={!canCompleteShift(s)}
+                                title={
+                                  canCompleteShift(s)
+                                    ? "Bàn giao & Hoàn tất ca trực"
+                                    : "Ca đã qua ngày — không thể hoàn tất"
+                                }
                               >
                                 <CheckIcon size={11} />
                                 <span>Hoàn tất</span>
@@ -944,7 +972,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                     </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                        {s.status === "Lên lịch" && (
+                        {s.status === "Lên lịch" && canStartShift(s) && (
                           <button
                             type="button"
                             className="btn-shift-action btn-shift-start"
@@ -960,7 +988,12 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                             type="button"
                             className="btn-shift-action btn-shift-complete"
                             onClick={() => handleChangeStatus(s, "Hoàn thành")}
-                            title="Hoàn tất ca trực"
+                            disabled={!canCompleteShift(s)}
+                            title={
+                              canCompleteShift(s)
+                                ? "Hoàn tất ca trực"
+                                : "Ca đã qua ngày — không thể hoàn tất"
+                            }
                           >
                             <CheckIcon size={12} />
                             <span>Hoàn tất</span>

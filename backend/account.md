@@ -6,7 +6,7 @@ Pass chung: `Huit@123`
 
 ## Quản trị hệ thống (Admin) — 3 acc
 
-- admin@huit.edu.vn / Admin@123 (seed cũ, giữ tương thích)
+    - admin@huit.edu.vn / Admin@123 (seed cũ, giữ tương thích)
 - admin02@huit.edu.vn / Huit@123 (ADMIN002)
 - admin03@huit.edu.vn / Huit@123 (ADMIN003)
 

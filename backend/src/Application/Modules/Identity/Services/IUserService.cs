@@ -19,6 +19,9 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         /// <summary>Lấy danh sách giảng viên</summary>
         Task<ApiResponse<IEnumerable<UserDto>>> GetLecturersAsync();
 
+        /// <summary>Tạo tài khoản người dùng mới (Admin only)</summary>
+        Task<ApiResponse<CreatedUserDto>> CreateAsync(CreateUserDto request);
+
         /// <summary>Cập nhật thông tin user</summary>
         Task<ApiResponse<bool>> UpdateAsync(int id, UpdateUserDto request);
 

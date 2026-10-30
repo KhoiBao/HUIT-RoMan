@@ -927,9 +927,8 @@
   color: #bf3b2f;
 }
 
-/* ── Session / error banners ───────────────────────────────────────────── */
+/* ── Session toast / error banners ─────────────────────────────────────── */
 
-.rh-session-wrap,
 .rh-error-wrap {
   width: 100%;
   max-width: var(--rh-content);
@@ -937,21 +936,67 @@
   padding: 0 24px;
 }
 
-.rh-session-banner {
+.rh-session-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1200;
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 13px 16px;
+  gap: 12px;
+  max-width: 440px;
+  padding: 13px 14px;
   border: 1px solid #bfdcf7;
   border-radius: 13px;
   background: linear-gradient(90deg, #edf7ff, #f8fcff);
-  box-shadow: 0 6px 18px rgba(0, 90, 158, 0.06);
+  box-shadow: 0 12px 32px rgba(0, 90, 158, 0.2);
+  color: #173b5c;
+  animation: rh-toast-in 0.22s ease-out;
+}
+
+.rh-session-toast.is-inuse {
+  border-color: #bfe8d9;
+  background: linear-gradient(90deg, #effcf7, #f8fffc);
+}
+
+@keyframes rh-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rh-session-toast-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #64809a;
+  cursor: pointer;
+}
+
+.rh-session-toast-close:hover {
+  background: rgba(23, 59, 92, 0.08);
   color: #173b5c;
 }
 
-.rh-session-banner.is-inuse {
-  border-color: #bfe8d9;
-  background: linear-gradient(90deg, #effcf7, #f8fffc);
+@media (max-width: 640px) {
+  .rh-session-toast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    max-width: none;
+  }
 }
 
 .rh-session-dot {
@@ -964,7 +1009,7 @@
   animation: rh-pulse 2s ease infinite;
 }
 
-.rh-session-banner.is-inuse .rh-session-dot {
+.rh-session-toast.is-inuse .rh-session-dot {
   background: #0d8a62;
   box-shadow: 0 0 0 4px rgba(13, 138, 98, 0.13);
 }
@@ -1008,7 +1053,7 @@
   background: #eaf5fe;
 }
 
-.rh-session-banner.is-inuse .rh-session-action {
+.rh-session-toast.is-inuse .rh-session-action {
   border-color: #a7dcca;
   color: #0d8a62;
 }
@@ -3667,24 +3712,17 @@
 .admin-sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 18px 16px;
+  gap: 14px;
+  padding: 26px 18px 22px;
   text-decoration: none;
 }
 
-.admin-brand-icon-box {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #0F2C59 0%, #1E3A8A 100%);
-  color: #FFFFFF;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 16px;
-  box-shadow: 0 3px 8px rgba(15, 44, 89, 0.25);
+.admin-brand-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
   flex-shrink: 0;
+  border-radius: 10px;
 }
 
 .admin-brand-info {
@@ -4668,7 +4706,7 @@
 }
 
 .admin-data-table thead th {
-  background: #FFFFFF !important;
+  background: #F7F9FC !important;
   border-bottom: 2px solid #E2E8F0 !important;
   padding: 10px 12px !important;
   font-size: 11.5px !important;
@@ -5259,4 +5297,567 @@
 
 .admin-workspace-layout.dark-mode .warehouse-card-title {
   color: #f1f5f9 !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ACADEMIC POLISH & MOTION
+   Institutional navy + restrained gold accent, calm motion for the admin shell
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.admin-tab-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: adminTabIn 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes adminTabIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Academic rule under the page title */
+.admin-hero-main-title {
+  position: relative;
+  padding-bottom: 10px;
+}
+
+.admin-hero-main-title::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 44px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #c8a24a 0%, #e7cf8b 100%);
+}
+
+/* Sidebar navigation motion + active indicator */
+.admin-nav-item-btn {
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.admin-nav-item-btn::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #e7cf8b, #c8a24a);
+  opacity: 0;
+  transform: translateY(-50%) scaleY(0);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-nav-item-btn.is-active::before {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
+
+.admin-nav-item-btn:hover:not(.is-active) {
+  transform: translateX(2px);
+}
+
+/* Card surfaces */
+.admin-subtab-header,
+.admin-filter-bar,
+.auto-approve-panel,
+.admin-stat-card {
+  border-radius: 14px;
+  border-color: #e3e9f2;
+  box-shadow: 0 1px 2px rgba(15, 44, 89, 0.04), 0 6px 18px rgba(15, 44, 89, 0.04);
+}
+
+.admin-workspace-layout.dark-mode .admin-subtab-header,
+.admin-workspace-layout.dark-mode .admin-filter-bar,
+.admin-workspace-layout.dark-mode .auto-approve-panel,
+.admin-workspace-layout.dark-mode .admin-stat-card {
+  border-color: #2a3a52;
+  box-shadow: none;
+}
+
+.admin-data-table tbody tr {
+  transition: background-color 0.16s ease;
+}
+
+/* Status pills settle in when they appear */
+.admin-status-pill {
+  animation: adminPillPop 220ms ease-out;
+}
+
+@keyframes adminPillPop {
+  from {
+    opacity: 0.6;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-tab-pane,
+  .admin-status-pill,
+  .auto-approve-pill.is-on .auto-approve-dot {
+    animation: none !important;
+  }
+
+  .admin-nav-item-btn,
+  .admin-nav-item-btn::before,
+  .admin-data-table tbody tr {
+    transition: none !important;
+  }
+
+  .admin-nav-item-btn:hover:not(.is-active) {
+    transform: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BUTTON ICON ALIGNMENT
+   These classes only set colours/padding, so icon + label sat off-centre.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.btn-confirm-save,
+.filter-pill-btn,
+.btn-modal-submit,
+.btn-danger-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  line-height: 1.2;
+}
+
+.btn-confirm-save > svg,
+.filter-pill-btn > svg,
+.btn-modal-submit > svg,
+.btn-danger-outline > svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.btn-shift-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-shift-complete:disabled:hover {
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DARK MODE — PHIÊN SỬ DỤNG & QUẢN LÝ PHÒNG
+   Reuses the --rp-* palette defined on .admin-workspace-layout.dark-mode
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Page header, filter bar, toolbar */
+.admin-workspace-layout.dark-mode .admin-subtab-header,
+.admin-workspace-layout.dark-mode .admin-filter-bar,
+.admin-workspace-layout.dark-mode .usage-toolbar-panel,
+.admin-workspace-layout.dark-mode .usage-stat-card,
+.admin-workspace-layout.dark-mode .usage-table-card,
+.admin-workspace-layout.dark-mode .matrix-pagination,
+.admin-workspace-layout.dark-mode .admin-empty-state,
+.admin-workspace-layout.dark-mode .admin-loading-state {
+  background: var(--rp-surface);
+  border-color: var(--rp-border);
+  box-shadow: none;
+}
+
+.admin-workspace-layout.dark-mode .admin-subtab-title,
+.admin-workspace-layout.dark-mode .empty-title {
+  color: var(--rp-title);
+}
+
+.admin-workspace-layout.dark-mode .admin-subtab-subtitle,
+.admin-workspace-layout.dark-mode .empty-desc,
+.admin-workspace-layout.dark-mode .stat-label,
+.admin-workspace-layout.dark-mode .stat-sub {
+  color: var(--rp-muted);
+}
+
+.admin-workspace-layout.dark-mode .stat-number {
+  color: var(--rp-title);
+}
+
+/* Stat icon tiles */
+.admin-workspace-layout.dark-mode .stat-icon-wrap.in-use-icon { background: #14351f; color: #4ade80; }
+.admin-workspace-layout.dark-mode .stat-icon-wrap.scheduled-icon { background: #3a2410; color: #fdba74; }
+.admin-workspace-layout.dark-mode .stat-icon-wrap.completed-icon { background: #12314a; color: #7dd3fc; }
+.admin-workspace-layout.dark-mode .stat-icon-wrap.total-icon { background: #1e1b4b; color: #a5b4fc; }
+
+/* Buttons in the page headers */
+.admin-workspace-layout.dark-mode .admin-btn-refresh {
+  background: var(--rp-soft);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .admin-btn-refresh:hover:not(:disabled) {
+  background: var(--rp-track);
+  color: var(--rp-title);
+}
+
+/* Rooms search + filters */
+.admin-workspace-layout.dark-mode .admin-search-box,
+.admin-workspace-layout.dark-mode .usage-search-box,
+.admin-workspace-layout.dark-mode .usage-date-picker-wrap {
+  background: var(--rp-soft);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .admin-search-box input,
+.admin-workspace-layout.dark-mode .usage-search-box input,
+.admin-workspace-layout.dark-mode .usage-date-picker {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .admin-search-box input::placeholder,
+.admin-workspace-layout.dark-mode .usage-search-box input::placeholder {
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .admin-search-box:focus-within,
+.admin-workspace-layout.dark-mode .usage-search-box:focus-within,
+.admin-workspace-layout.dark-mode .usage-date-picker-wrap:focus-within {
+  background: var(--rp-track);
+  border-color: #0284c7;
+}
+.admin-workspace-layout.dark-mode .search-clear-btn,
+.admin-workspace-layout.dark-mode .clear-search-btn {
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .search-clear-btn:hover,
+.admin-workspace-layout.dark-mode .clear-search-btn:hover {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .admin-select-filter {
+  background: var(--rp-soft);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-title);
+  color-scheme: dark;
+}
+.admin-workspace-layout.dark-mode .usage-date-icon {
+  color: #7dd3fc;
+}
+.admin-workspace-layout.dark-mode .usage-date-picker {
+  color-scheme: dark;
+}
+.admin-workspace-layout.dark-mode .clear-date-filter-btn {
+  background: var(--rp-track);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .clear-date-filter-btn:hover {
+  background: var(--rp-border-strong);
+  color: var(--rp-title);
+}
+
+/* Status filter pills */
+.admin-workspace-layout.dark-mode .pill-btn {
+  background: var(--rp-soft);
+  border-color: var(--rp-border);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .pill-btn:hover {
+  background: var(--rp-track);
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .pill-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.admin-workspace-layout.dark-mode .btn-quick-code-checkin {
+  background: #14351f;
+  border-color: #1f5c3a;
+  color: #86efac;
+}
+.admin-workspace-layout.dark-mode .btn-quick-code-checkin:hover {
+  background: #1f5c3a;
+  color: #ecfdf5;
+}
+.admin-workspace-layout.dark-mode .btn-usage-refresh {
+  background: var(--rp-soft);
+  border-color: var(--rp-border);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .btn-usage-refresh:hover {
+  background: var(--rp-track);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-title);
+}
+
+/* Session table cells */
+.admin-workspace-layout.dark-mode .code-badge-pill {
+  background: var(--rp-track);
+  border-color: var(--rp-border-strong);
+  color: #7dd3fc;
+}
+.admin-workspace-layout.dark-mode .room-primary-name strong,
+.admin-workspace-layout.dark-mode .borrower-name strong {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .room-code-tag {
+  background: #12314a;
+  color: #7dd3fc;
+}
+.admin-workspace-layout.dark-mode .room-sub-loc,
+.admin-workspace-layout.dark-mode .borrower-sub {
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .borrower-mssv {
+  background: var(--rp-soft);
+  border-color: var(--rp-border);
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .guest-badge {
+  background: var(--rp-track);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .schedule-period-tag {
+  background: var(--rp-soft);
+  border-color: var(--rp-border);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .schedule-time-range {
+  color: var(--rp-muted);
+}
+
+/* Session status badges */
+.admin-workspace-layout.dark-mode .actual-time-badge.checkin-done,
+.admin-workspace-layout.dark-mode .badge-in-use {
+  background: #14351f;
+  border-color: #1f5c3a;
+  color: #86efac;
+}
+.admin-workspace-layout.dark-mode .actual-time-badge.checkout-done,
+.admin-workspace-layout.dark-mode .badge-completed {
+  background: #12314a;
+  border-color: #1e4b6b;
+  color: #7dd3fc;
+}
+.admin-workspace-layout.dark-mode .badge-scheduled {
+  background: #3a2410;
+  border-color: #7c4a1c;
+  color: #fdba74;
+}
+.admin-workspace-layout.dark-mode .badge-cancelled {
+  background: var(--rp-track);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .done-pill {
+  background: var(--rp-track);
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .btn-noshow {
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+.admin-workspace-layout.dark-mode .btn-noshow:hover {
+  background: #4c1d1d;
+  border-color: #b91c1c;
+}
+
+/* Rooms table */
+.admin-workspace-layout.dark-mode .room-code-badge-lg {
+  background: #12314a !important;
+  border-color: #1e4b6b !important;
+  color: #7dd3fc !important;
+}
+.admin-workspace-layout.dark-mode .text-highlight {
+  color: #7dd3fc !important;
+}
+
+/* Room status pills */
+.admin-workspace-layout.dark-mode .admin-status-pill.pill-approved {
+  background: #14351f;
+  border-color: #1f5c3a;
+  color: #86efac;
+}
+.admin-workspace-layout.dark-mode .admin-status-pill.pill-inuse {
+  background: #12314a;
+  border-color: #1e4b6b;
+  color: #7dd3fc;
+}
+.admin-workspace-layout.dark-mode .admin-status-pill.pill-maintenance {
+  background: #3a2410;
+  border-color: #7c4a1c;
+  color: #fdba74;
+}
+
+/* Room action buttons */
+.admin-workspace-layout.dark-mode .btn-action-icon:hover {
+  background: #243047 !important;
+}
+.admin-workspace-layout.dark-mode .btn-action-icon.btn-equip-glow {
+  background: #12314a !important;
+  border-color: #1e4b6b !important;
+  color: #7dd3fc !important;
+}
+.admin-workspace-layout.dark-mode .btn-action-icon.btn-equip-glow:hover {
+  background: #16405f !important;
+}
+.admin-workspace-layout.dark-mode .btn-action-icon.btn-status-wrench {
+  background: #3a2410 !important;
+  border-color: #7c4a1c !important;
+  color: #fdba74 !important;
+}
+.admin-workspace-layout.dark-mode .btn-action-icon.btn-status-wrench:hover {
+  background: #4a2f14 !important;
+}
+.admin-workspace-layout.dark-mode .btn-action-icon.btn-status-restore {
+  background: #14351f !important;
+  border-color: #1f5c3a !important;
+  color: #86efac !important;
+}
+.admin-workspace-layout.dark-mode .btn-action-icon.btn-status-restore:hover {
+  background: #1a4428 !important;
+}
+.admin-workspace-layout.dark-mode .btn-action-icon.btn-action-delete {
+  background: #4c1d1d !important;
+  border-color: #7f1d1d !important;
+  color: #fecaca !important;
+}
+.admin-workspace-layout.dark-mode .btn-action-icon.btn-action-delete:hover {
+  background: #5c2323 !important;
+  color: #fee2e2 !important;
+}
+
+/* Pagination */
+.admin-workspace-layout.dark-mode .pagination-summary,
+.admin-workspace-layout.dark-mode .pagination-size {
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .pagination-summary strong {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .pagination-controls button {
+  background: var(--rp-soft);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .pagination-controls button:hover:not(:disabled):not(.is-active) {
+  background: var(--rp-track);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .pagination-controls button.is-active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+.admin-workspace-layout.dark-mode .pagination-gap {
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .pagination-size select {
+  background: var(--rp-soft);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-title);
+  color-scheme: dark;
+}
+
+/* Dialogs opened from these two pages */
+.admin-workspace-layout.dark-mode .admin-modal-box,
+.admin-workspace-layout.dark-mode .admin-modal-content {
+  background: var(--rp-surface);
+  border: 1px solid var(--rp-border);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .modal-header {
+  border-bottom-color: var(--rp-border);
+}
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .modal-footer,
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .modal-footer-actions {
+  border-top-color: var(--rp-border);
+  background: var(--rp-soft);
+}
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .modal-title,
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) strong {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .modal-sub-tag,
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .banner-label,
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .radio-desc,
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .quick-checkin-hint {
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .modal-close-btn {
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .modal-close-btn:hover {
+  background: var(--rp-track);
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .form-field label,
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .form-group-admin label {
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .form-field input:not([type="checkbox"]):not([type="radio"]),
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .form-field select,
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .form-field textarea,
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .admin-input,
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .admin-textarea {
+  background: var(--rp-soft);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode :is(.admin-modal-box, .admin-modal-content) .form-field select {
+  color-scheme: dark;
+}
+.admin-workspace-layout.dark-mode .checkout-summary-banner,
+.admin-workspace-layout.dark-mode .checklist-group {
+  background: var(--rp-soft);
+  border-color: var(--rp-border);
+}
+.admin-workspace-layout.dark-mode .checkbox-item-row {
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .checklist-heading {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .condition-radio-card {
+  background: var(--rp-surface);
+  border-color: var(--rp-border);
+}
+.admin-workspace-layout.dark-mode .condition-radio-card:hover {
+  background: var(--rp-soft);
+  border-color: var(--rp-border-strong);
+}
+.admin-workspace-layout.dark-mode .condition-radio-card.active {
+  background: #14351f;
+  border-color: #1f5c3a;
+}
+.admin-workspace-layout.dark-mode .condition-radio-card.active.danger {
+  background: #4c1d1d;
+  border-color: #b91c1c;
+}
+.admin-workspace-layout.dark-mode .radio-title {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .radio-title.text-success {
+  color: #4ade80;
+}
+.admin-workspace-layout.dark-mode .radio-title.text-danger {
+  color: #f87171;
+}
+.admin-workspace-layout.dark-mode .btn-modal-cancel {
+  background: var(--rp-soft);
+  border-color: var(--rp-border-strong);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .btn-modal-cancel:hover {
+  background: var(--rp-track);
+  color: var(--rp-title);
 }

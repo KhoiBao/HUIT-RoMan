@@ -18,7 +18,14 @@ import {
   HistoryIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
-import { describeCancelSource, describeCancelReason } from "../../lib/booking";
+import {
+  describeCancelSource,
+  describeCancelReason,
+  fetchAutoApprovalSettingApi,
+  updateAutoApprovalSettingApi,
+  approvePendingBookingsApi,
+  type AutoApprovalSetting,
+} from "../../lib/booking";
 import { ApprovalHistoryModal } from "../ApprovalHistoryModal";
 
 export interface BookingDetail {
@@ -37,6 +44,10 @@ export interface BookingDetail {
   status: string;
   rejectionReason?: string;
   createdAt: string;
+  approvedByUserId?: number | null;
+  approvedByName?: string | null;
+  approvedAt?: string | null;
+  approvalMode?: string | null;
 }
 
 export interface BookingItem {
@@ -59,14 +70,23 @@ export interface BookingItem {
   cancelReasonDetail?: string | null;
   /** Nguồn hủy: STUDENT | AUTO | STAFF. NULL = không ghi nhận */
   cancelSource?: string | null;
+  approvedByUserId?: number | null;
+  approvedByName?: string | null;
+  approvedAt?: string | null;
+  approvalMode?: string | null;
   details: BookingDetail[];
 }
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
+  /** Chỉ Admin/Manager được đổi chế độ duyệt của toàn hệ thống */
+  canManageAutoApproval?: boolean;
 }
 
-export default function AdminBookingApprovalTab({ onNotify }: Props) {
+export default function AdminBookingApprovalTab({
+  onNotify,
+  canManageAutoApproval = false,
+}: Props) {
   const { alert } = useConfirm();
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -93,6 +113,13 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
   } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<BookingItem | null>(null);
 
+  // Chế độ duyệt tự động
+  const [autoSetting, setAutoSetting] = useState<AutoApprovalSetting | null>(null);
+  const [autoLoading, setAutoLoading] = useState<boolean>(true);
+  const [autoSaving, setAutoSaving] = useState<boolean>(false);
+  /** "on" = đang chờ xác nhận bật kèm duyệt đơn tồn */
+  const [autoConfirm, setAutoConfirm] = useState<"on" | null>(null);
+
   useEffect(() => {
     if (!approveTarget) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -118,8 +145,63 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
     }
   };
 
+  const fetchAutoSetting = async () => {
+    try {
+      setAutoLoading(true);
+      setAutoSetting(await fetchAutoApprovalSettingApi());
+    } catch (err) {
+      console.error("Failed to load auto approval setting:", err);
+    } finally {
+      setAutoLoading(false);
+    }
+  };
+
+  const applyAutoSetting = async (enabled: boolean, approvePending: boolean) => {
+    try {
+      setAutoSaving(true);
+      setAutoSetting(await updateAutoApprovalSettingApi(enabled));
+
+      if (approvePending) {
+        const result = await approvePendingBookingsApi();
+        onNotify(
+          result.failedCount > 0
+            ? `Đã bật duyệt tự động. Duyệt được ${result.approvedCount} đơn, ${result.failedCount} đơn lỗi.`
+            : `Đã bật duyệt tự động và duyệt ${result.approvedCount} đơn.`,
+          result.failedCount > 0 ? "warning" : "success"
+        );
+      } else {
+        onNotify(
+          enabled ? "Đã bật duyệt tự động." : "Đã tắt duyệt tự động.",
+          "success"
+        );
+      }
+
+      setAutoConfirm(null);
+      await Promise.all([fetchBookings(), fetchAutoSetting()]);
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message ||
+          err.message ||
+          "Không thể cập nhật chế độ duyệt tự động.",
+        "warning"
+      );
+    } finally {
+      setAutoSaving(false);
+    }
+  };
+
+  const handleToggleAuto = (next: boolean) => {
+    if (!autoSetting || autoSaving) return;
+    if (next && autoSetting.pendingCount > 0) {
+      setAutoConfirm("on");
+      return;
+    }
+    void applyAutoSetting(next, false);
+  };
+
   useEffect(() => {
     fetchBookings();
+    fetchAutoSetting();
   }, []);
 
   // Quick stats
@@ -438,6 +520,57 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
         </button>
       </div>
 
+      {/* Duyệt tự động */}
+      {canManageAutoApproval && (
+        <div className="auto-approve-panel">
+          <div className="auto-approve-text">
+            <h3 className="auto-approve-title">
+              <ZapIcon size={16} /> Duyệt tự động
+            </h3>
+            <span className="auto-approve-status-row">
+              {autoLoading ? (
+                <span className="auto-approve-pill is-loading">Đang tải...</span>
+              ) : (
+                <>
+                  <span
+                    className={`auto-approve-pill ${
+                      autoSetting?.enabled ? "is-on" : "is-off"
+                    }`}
+                  >
+                    <span className="auto-approve-dot" aria-hidden="true" />
+                    {autoSetting?.enabled ? "Đang bật" : "Đang tắt"}
+                  </span>
+                  <span className="auto-approve-state-text">
+                    {autoSetting?.enabled
+                      ? "Đơn mới được duyệt ngay"
+                      : "Đơn mới chờ duyệt thủ công"}
+                  </span>
+                  {autoSetting && autoSetting.pendingCount > 0 && (
+                    <span className="auto-approve-pill is-pending">
+                      {autoSetting.pendingCount} đơn chờ duyệt
+                    </span>
+                  )}
+                </>
+              )}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoSetting?.enabled ?? false}
+            aria-label="Bật hoặc tắt duyệt tự động"
+            className={`toggle-switch ${
+              autoSetting?.enabled ? "toggle-switch-on" : ""
+            }`}
+            onClick={() => handleToggleAuto(!autoSetting?.enabled)}
+            disabled={autoLoading || autoSaving || !autoSetting}
+          >
+            <span className="toggle-knob" />
+          </button>
+        </div>
+      )}
+
       {/* Stats Cards */}
       <div className="admin-stat-row">
         <div className="admin-stat-card">
@@ -581,6 +714,13 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                         <strong>Mục đích:</strong> {b.purpose}
                       </p>
                     )}
+                    {b.approvedByName &&
+                      (b.status === "Đã duyệt" || b.status === "Duyệt một phần") && (
+                        <p className="booking-approver-line">
+                          Duyệt bởi <strong>{b.approvedByName}</strong>
+                          {b.approvedAt ? ` • ${formatDateTime(b.approvedAt)}` : ""}
+                        </p>
+                      )}
                     {b.rejectionReason && (
                       <div className="booking-reject-notice">
                         <strong>Lý do từ chối:</strong> {b.rejectionReason}
@@ -725,6 +865,14 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
                                     Lý do: {detail.rejectionReason}
                                   </div>
                                 )}
+                                {detail.approvedByName && detail.status === "Đã duyệt" && (
+                                  <div className="detail-approver-line">
+                                    Duyệt bởi {detail.approvedByName}
+                                    {detail.approvedAt
+                                      ? ` • ${formatDateTime(detail.approvedAt)}`
+                                      : ""}
+                                  </div>
+                                )}
                               </td>
                               <td style={{ textAlign: "right" }}>
                                 {detail.status === "Chờ duyệt" ? (
@@ -780,6 +928,66 @@ export default function AdminBookingApprovalTab({ onNotify }: Props) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Xác nhận bật duyệt tự động khi còn đơn chờ */}
+      {autoConfirm === "on" && autoSetting && (
+        <div
+          className="admin-modal-overlay"
+          role="presentation"
+          onClick={() => !autoSaving && setAutoConfirm(null)}
+        >
+          <div
+            className="admin-modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="auto-approve-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3 id="auto-approve-modal-title" className="modal-title">
+                <ZapIcon size={18} className="mr-1" /> Bật duyệt tự động
+              </h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setAutoConfirm(null)}
+                aria-label="Đóng hộp thoại xác nhận duyệt tự động"
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p className="modal-prompt-text">
+                Có {autoSetting.pendingCount} đơn đang chờ duyệt. Duyệt luôn các
+                đơn này?
+              </p>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setAutoConfirm(null)}
+                disabled={autoSaving}
+                autoFocus
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="btn-confirm-approve"
+                onClick={() => void applyAutoSetting(true, true)}
+                disabled={autoSaving}
+              >
+                {autoSaving
+                  ? "Đang duyệt..."
+                  : `Bật & duyệt ${autoSetting.pendingCount} đơn`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

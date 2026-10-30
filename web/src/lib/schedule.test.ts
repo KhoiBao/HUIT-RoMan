@@ -219,13 +219,13 @@ describe("schedule pure functions", () => {
     expect(past.startMinutes).toBe(420);
     expect(past.endMinutes).toBe(585);
     expect(past.title).toBe("Đã qua: 07:00 - 09:45");
-    expect(past.actionText).toBeUndefined();
+    expect(past).not.toHaveProperty("actionText");
 
     expect(future.type).toBe("full-free");
     expect(future.startMinutes).toBe(585);
     expect(future.endMinutes).toBe(1200);
     expect(future.title).toBe("Trống cả ngày (07:00 - 20:00)");
-    expect(future.actionText).toBe("ĐẶT PHÒNG");
+    expect(future).not.toHaveProperty("actionText");
     expect(future.widthPercent).toBeCloseTo(78.846, 2);
   });
 
@@ -243,7 +243,7 @@ describe("schedule pure functions", () => {
     expect(segments).toHaveLength(1);
     expect(segments[0].type).toBe("full-free");
     expect(segments[0].widthPercent).toBe(100);
-    expect(segments[0].actionText).toBe("ĐẶT PHÒNG");
+    expect(segments[0]).not.toHaveProperty("actionText");
   });
 
   it("buildRoomTimelineSegments clips free time to the room bookable window", () => {
@@ -323,7 +323,7 @@ describe("schedule pure functions", () => {
     const segments = buildRoomTimelineSegments(room, [], 24 * 60);
     expect(segments[0].type).toBe("full-free");
     expect(segments[0].subtitle).toBe("Ngày đã qua");
-    expect(segments[0].actionText).toBeUndefined();
+    expect(segments[0]).not.toHaveProperty("actionText");
   });
 
   it("buildRoomTimelineSegments builds booked, free and gap segments", () => {

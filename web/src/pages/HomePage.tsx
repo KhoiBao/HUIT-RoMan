@@ -11,16 +11,21 @@ import {
   type HomeSnapshot,
 } from "../lib/home";
 import { formatVietnameseDate, toISODateString } from "../lib/schedule";
+import { evaluateCheckInWindow } from "../lib/booking";
 import { fetchMyUsageSessions, type UsageSessionItem } from "../lib/usage";
+import { useAuth } from "../auth/AuthContext";
+import { XIcon } from "../components/Icon";
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [snapshot, setSnapshot] = useState<HomeSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [activeSessions, setActiveSessions] = useState<UsageSessionItem[]>([]);
+  const [sessionToastClosed, setSessionToastClosed] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -49,6 +54,10 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (!user) {
+      setActiveSessions([]);
+      return;
+    }
     let mounted = true;
     fetchMyUsageSessions()
       .then((list) => {
@@ -67,7 +76,7 @@ export default function HomePage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user]);
 
   const states = useMemo(
     () =>
@@ -97,6 +106,21 @@ export default function HomePage() {
     (session) => session.status === "Đang sử dụng"
   );
 
+  // Chỉ nhắc "sẵn sàng nhận" khi đã mở cửa sổ nhận phòng (T-15 phút).
+  const pendingWindow = pendingSession
+    ? evaluateCheckInWindow(pendingSession.startAt, now)
+    : null;
+  const readySession =
+    pendingWindow?.state === "open" ? pendingSession : undefined;
+  const sessionToast = readySession ?? inUseSession;
+
+  useEffect(() => {
+    setSessionToastClosed(false);
+    if (!sessionToast) return;
+    const timer = window.setTimeout(() => setSessionToastClosed(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [sessionToast?.id, sessionToast?.status]);
+
   const dateLabel = formatVietnameseDate(toISODateString(now));
   const updatedLabel = updatedAt
     ? updatedAt.toLocaleTimeString("vi-VN", {
@@ -107,43 +131,48 @@ export default function HomePage() {
 
   return (
     <div className="rh-page">
-      {(pendingSession || inUseSession) && (
-        <div className="rh-session-wrap">
-          <div
-            className={`rh-session-banner ${
-              inUseSession && !pendingSession ? "is-inuse" : ""
-            }`}
-          >
-            <span className="rh-session-dot" />
-            <div className="rh-session-text">
-              {pendingSession ? (
-                <>
-                  <strong>
-                    Bạn có phòng sẵn sàng nhận: {pendingSession.roomCode} (
-                    {pendingSession.roomName})
-                  </strong>
-                  <p>
-                    Mã nhận phòng: <strong>{pendingSession.confirmationCode}</strong>
-                  </p>
-                </>
-              ) : (
-                <>
-                  <strong>
-                    Bạn đang sử dụng phòng: {inUseSession?.roomCode} (
-                    {inUseSession?.roomName})
-                  </strong>
-                  <p>Đừng quên trả phòng khi kết thúc buổi sử dụng.</p>
-                </>
-              )}
-            </div>
-            <button
-              type="button"
-              className="rh-session-action"
-              onClick={() => navigate("/dat-phong?tab=my-bookings")}
-            >
-              {pendingSession ? "Nhận phòng ngay" : "Xem & trả phòng"}
-            </button>
+      {sessionToast && !sessionToastClosed && (
+        <div
+          className={`rh-session-toast ${sessionToast === inUseSession ? "is-inuse" : ""}`}
+          role="status"
+        >
+          <span className="rh-session-dot" />
+          <div className="rh-session-text">
+            {sessionToast === inUseSession ? (
+              <>
+                <strong>
+                  Bạn đang sử dụng phòng: {sessionToast.roomCode} (
+                  {sessionToast.roomName})
+                </strong>
+                <p>Đừng quên trả phòng khi kết thúc buổi sử dụng.</p>
+              </>
+            ) : (
+              <>
+                <strong>
+                  Bạn có phòng sẵn sàng nhận: {sessionToast.roomCode} (
+                  {sessionToast.roomName})
+                </strong>
+                <p>
+                  Mã nhận phòng: <strong>{sessionToast.confirmationCode}</strong>
+                </p>
+              </>
+            )}
           </div>
+          <button
+            type="button"
+            className="rh-session-action"
+            onClick={() => navigate("/dat-phong?tab=my-bookings")}
+          >
+            {sessionToast === inUseSession ? "Xem & trả phòng" : "Nhận phòng ngay"}
+          </button>
+          <button
+            type="button"
+            className="rh-session-toast-close"
+            aria-label="Đóng thông báo"
+            onClick={() => setSessionToastClosed(true)}
+          >
+            <XIcon size={14} />
+          </button>
         </div>
       )}
 

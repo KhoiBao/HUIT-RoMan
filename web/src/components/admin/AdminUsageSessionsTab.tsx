@@ -545,8 +545,8 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                   <th className="cell-room">PHÒNG HỌC &amp; VỊ TRÍ</th>
                   <th className="cell-borrower">NGƯỜI CHỊU TRÁCH NHIỆM</th>
                   <th className="cell-schedule">LỊCH ĐĂNG KÝ</th>
-                  <th className="cell-checkin">CHECK-IN THỰC TẾ</th>
-                  <th className="cell-checkout">CHECK-OUT THỰC TẾ</th>
+                  <th className="cell-checkin">CHECK-IN</th>
+                  <th className="cell-checkout">CHECK-OUT</th>
                   <th className="cell-status">TRẠNG THÁI</th>
                   <th className="cell-actions text-right">THAO TÁC</th>
                 </tr>

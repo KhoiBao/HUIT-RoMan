@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Common.Models;
@@ -73,6 +74,110 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         }
 
         // ─────────────────────────────────────────────────────────────────
+        // CREATE
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<CreatedUserDto>> CreateAsync(CreateUserDto request)
+        {
+            if (request == null)
+                return ApiResponse<CreatedUserDto>.ErrorResponse("Dữ liệu không hợp lệ.");
+
+            var cardCode = request.CardCode?.Trim();
+            var fullName = request.FullName?.Trim();
+            var email = request.Email?.Trim();
+            var role = request.Role?.Trim();
+
+            if (string.IsNullOrWhiteSpace(cardCode))
+                return ApiResponse<CreatedUserDto>.ErrorResponse("Mã thẻ / MSSV không được để trống.");
+            if (cardCode.Length > 50)
+                return ApiResponse<CreatedUserDto>.ErrorResponse("Mã thẻ / MSSV tối đa 50 ký tự.");
+            if (string.IsNullOrWhiteSpace(fullName))
+                return ApiResponse<CreatedUserDto>.ErrorResponse("Họ và tên không được để trống.");
+            if (string.IsNullOrWhiteSpace(email) || !EmailPattern.IsMatch(email))
+                return ApiResponse<CreatedUserDto>.ErrorResponse("Email không hợp lệ.");
+            if (!TryNormalizePhone(request.PhoneNumber, out var normalizedPhone))
+                return ApiResponse<CreatedUserDto>.ErrorResponse(
+                    "Số điện thoại không hợp lệ. Vui lòng nhập 10-11 chữ số, ví dụ 0912345678.");
+
+            var allowedRoles = new[] { "Student", "Lecturer", "Employee", "Manager", "Admin" };
+            var matchedRole = allowedRoles.FirstOrDefault(
+                r => string.Equals(r, role, StringComparison.OrdinalIgnoreCase));
+            if (matchedRole == null)
+                return ApiResponse<CreatedUserDto>.ErrorResponse(
+                    $"Vai trò không hợp lệ. Chỉ chấp nhận: {string.Join(", ", allowedRoles)}");
+
+            if (await _userManager.FindByNameAsync(cardCode) != null ||
+                _userManager.Users.Any(u => u.CardCode == cardCode))
+                return ApiResponse<CreatedUserDto>.ErrorResponse(
+                    $"Mã thẻ / MSSV '{cardCode}' đã tồn tại trong hệ thống.");
+
+            if (await _userManager.FindByEmailAsync(email) != null)
+                return ApiResponse<CreatedUserDto>.ErrorResponse(
+                    $"Email '{email}' đã được sử dụng bởi tài khoản khác.");
+
+            if (request.DepartmentId.HasValue && request.DepartmentId.Value > 0 && _unitOfWork != null)
+            {
+                var dept = await _unitOfWork.Repository<HUIT_RoMan.Domain.Entities.Department>()
+                    .GetByIdAsync(request.DepartmentId.Value);
+                if (dept == null)
+                    return ApiResponse<CreatedUserDto>.ErrorResponse("Khoa / đơn vị không tồn tại.");
+            }
+
+            var password = string.IsNullOrWhiteSpace(request.Password)
+                ? DefaultInitialPassword
+                : request.Password.Trim();
+            if (password.Length < 6)
+                return ApiResponse<CreatedUserDto>.ErrorResponse("Mật khẩu phải có ít nhất 6 ký tự.");
+
+            var user = new User
+            {
+                UserName = cardCode,
+                CardCode = cardCode,
+                FullName = fullName,
+                Email = email,
+                PhoneNumber = normalizedPhone,
+                Status = "Hoạt động",
+                DepartmentId = request.DepartmentId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var createResult = await _userManager.CreateAsync(user, password);
+            if (!createResult.Succeeded)
+                return ApiResponse<CreatedUserDto>.ErrorResponse(
+                    string.Join("; ", createResult.Errors.Select(e => e.Description)));
+
+            var roleResult = await _userManager.AddToRoleAsync(user, matchedRole);
+            if (!roleResult.Succeeded)
+            {
+                await _userManager.DeleteAsync(user);
+                return ApiResponse<CreatedUserDto>.ErrorResponse(
+                    string.Join("; ", roleResult.Errors.Select(e => e.Description)));
+            }
+
+            if (_unitOfWork != null && (matchedRole == "Employee" || matchedRole == "Manager"))
+            {
+                var empRepo = _unitOfWork.Repository<Employee>();
+                await empRepo.AddAsync(new Employee
+                {
+                    UserId = user.Id,
+                    Code = cardCode,
+                    Position = matchedRole == "Manager" ? "Quản lý đơn vị" : "Nhân viên",
+                    Status = "Hoạt động",
+                    HireDate = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            return ApiResponse<CreatedUserDto>.SuccessResponse(
+                new CreatedUserDto
+                {
+                    User = await MapUserDtoAsync(user, matchedRole),
+                    Password = password
+                },
+                $"Đã tạo tài khoản {fullName} ({cardCode}).");
+        }
+
+        // ─────────────────────────────────────────────────────────────────
         // UPDATE
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<bool>> UpdateAsync(int id, UpdateUserDto request)
@@ -81,9 +186,14 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             if (u == null)
                 return ApiResponse<bool>.ErrorResponse("Không tìm thấy người dùng.");
 
+            if (!TryNormalizePhone(request.PhoneNumber, out var normalizedPhone))
+                return ApiResponse<bool>.ErrorResponse(
+                    "Số điện thoại không hợp lệ. Vui lòng nhập 10-11 chữ số, ví dụ 0912345678.");
+
             u.FullName = request.FullName ?? u.FullName;
             u.Email = request.Email ?? u.Email;
-            u.PhoneNumber = request.PhoneNumber ?? u.PhoneNumber;
+            if (request.PhoneNumber != null)
+                u.PhoneNumber = normalizedPhone;
             u.Status = request.Status ?? u.Status;
             if (request.DepartmentId.HasValue)
                 u.DepartmentId = request.DepartmentId;
@@ -285,6 +395,33 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         // ─────────────────────────────────────────────────────────────────
         // PRIVATE HELPERS
         // ─────────────────────────────────────────────────────────────────
+        private static readonly Regex PhonePattern = new(@"^0\d{9,10}$", RegexOptions.Compiled);
+        private static readonly Regex EmailPattern = new(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
+        private const string DefaultInitialPassword = "Huit@123";
+
+        /// <summary>
+        /// Chuẩn hoá số điện thoại Việt Nam về dạng 0xxxxxxxxx.
+        /// Trả về true khi bỏ trống (xoá số) hoặc số hợp lệ.
+        /// </summary>
+        private static bool TryNormalizePhone(string? raw, out string? normalized)
+        {
+            normalized = null;
+            if (string.IsNullOrWhiteSpace(raw)) return true;
+
+            var digits = raw.Trim()
+                .Replace(" ", string.Empty)
+                .Replace(".", string.Empty)
+                .Replace("-", string.Empty)
+                .Replace("(", string.Empty)
+                .Replace(")", string.Empty);
+
+            if (digits.StartsWith("+84")) digits = "0" + digits.Substring(3);
+            if (!PhonePattern.IsMatch(digits)) return false;
+
+            normalized = digits;
+            return true;
+        }
+
         private async Task<UserDto> MapUserDtoAsync(User u, string? knownRole = null)
         {
             var roles = await _userManager.GetRolesAsync(u);

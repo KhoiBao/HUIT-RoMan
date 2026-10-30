@@ -18,14 +18,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route element={<PortalLayout />}>
-              <Route
-                path="/home"
-                element={
-                  <RequireAuth>
-                    <HomePage />
-                  </RequireAuth>
-                }
-              />
+              <Route path="/home" element={<HomePage />} />
               <Route
                 path="/dat-phong"
                 element={
@@ -34,14 +27,7 @@ export default function App() {
                   </RequireAuth>
                 }
               />
-              <Route
-                path="/lich-phong"
-                element={
-                  <RequireAuth>
-                    <SchedulePage />
-                  </RequireAuth>
-                }
-              />
+              <Route path="/lich-phong" element={<SchedulePage />} />
               <Route
                 path="/staff"
                 element={
@@ -59,8 +45,8 @@ export default function App() {
                 }
               />
             </Route>
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
           <LiveChatWidget />
         </ConfirmProvider>

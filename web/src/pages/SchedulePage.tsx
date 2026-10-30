@@ -138,6 +138,21 @@ export default function SchedulePage() {
     null
   );
 
+  // Tooltip công khai hiển thị theo toạ độ chuột để không bị khung lịch cắt mất.
+  const [hoverCard, setHoverCard] = useState<{
+    x: number;
+    y: number;
+    bookedByName?: string;
+    purpose?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!hoverCard) return;
+    const hide = () => setHoverCard(null);
+    window.addEventListener("scroll", hide, true);
+    return () => window.removeEventListener("scroll", hide, true);
+  }, [hoverCard]);
+
   // Đồng hồ nội bộ: cập nhật mỗi 30 giây để vạch giờ hiện tại và trạng thái
   // "đã qua" luôn đúng mà không cần tải lại trang.
   useEffect(() => {
@@ -1209,15 +1224,14 @@ export default function SchedulePage() {
                                         <div className="full-free-icon">
                                           <CalendarIcon size={18} />
                                         </div>
-                                        <div className="full-free-text">
-                                          <div className="full-free-sub">
-                                            {segment.subtitle}
+                                        {segment.subtitle && (
+                                          <div className="full-free-text">
+                                            <div className="full-free-sub">
+                                              {segment.subtitle}
+                                            </div>
                                           </div>
-                                        </div>
+                                        )}
                                       </div>
-                                      <span className="btn-full-free-action">
-                                        {segment.actionText}
-                                      </span>
                                     </div>
                                   );
                                 }
@@ -1313,11 +1327,7 @@ export default function SchedulePage() {
                                     onClick={bookGap}
                                     onKeyDown={keyboardActivate(bookGap)}
                                     title={`Đặt phòng ${gapStart} - ${gapEnd}`}
-                                  >
-                                    <span className="free-segment-text">
-                                      Nhấp để đặt phòng
-                                    </span>
-                                  </div>
+                                  ></div>
                                 );
                               }
 
@@ -1335,6 +1345,43 @@ export default function SchedulePage() {
                                   style={segmentStyle}
                                   onClick={openDetail}
                                   onKeyDown={keyboardActivate(openDetail)}
+                                  onMouseEnter={
+                                    segment.booking
+                                      ? (event) =>
+                                          setHoverCard({
+                                            x: event.clientX,
+                                            y: event.clientY,
+                                            bookedByName:
+                                              segment.booking?.bookedByName,
+                                            purpose: segment.booking?.purpose,
+                                          })
+                                      : undefined
+                                  }
+                                  onMouseLeave={
+                                    segment.booking
+                                      ? () => setHoverCard(null)
+                                      : undefined
+                                  }
+                                  onFocus={
+                                    segment.booking
+                                      ? (event) => {
+                                          const rect =
+                                            event.currentTarget.getBoundingClientRect();
+                                          setHoverCard({
+                                            x: rect.left,
+                                            y: rect.bottom - 8,
+                                            bookedByName:
+                                              segment.booking?.bookedByName,
+                                            purpose: segment.booking?.purpose,
+                                          });
+                                        }
+                                      : undefined
+                                  }
+                                  onBlur={
+                                    segment.booking
+                                      ? () => setHoverCard(null)
+                                      : undefined
+                                  }
                                   title={`${segment.title || "Lịch đặt phòng"} (${segment.startTimeStr} - ${segment.endTimeStr})`}
                                 >
                                   <div className="card-top-row">
@@ -1717,6 +1764,29 @@ export default function SchedulePage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {hoverCard && (
+        <div
+          className="schedule-hover-float"
+          role="tooltip"
+          style={{
+            left: Math.min(hoverCard.x + 14, window.innerWidth - 272),
+            top:
+              hoverCard.y > window.innerHeight - 96
+                ? hoverCard.y - 72
+                : hoverCard.y + 18,
+          }}
+        >
+          <span>
+            <em>Người đặt</em>
+            {hoverCard.bookedByName || "Không có thông tin"}
+          </span>
+          <span>
+            <em>Mục đích</em>
+            {hoverCard.purpose || "—"}
+          </span>
         </div>
       )}
     </div>

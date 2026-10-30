@@ -207,6 +207,45 @@ describe("booking pure functions", () => {
     expect(res.errors.date).toContain("Chủ Nhật");
   });
 
+  it("rejects student bookings more than 2 weeks ahead", () => {
+    const form: BookingFormState = {
+      activityName: "Học nhóm",
+      purpose: "Ôn tập",
+      guestCount: 5,
+      note: "",
+      date: "2026-11-14",
+      bookingMode: "time",
+      startTime: "08:00",
+      endTime: "09:00",
+    };
+
+    const res = validateStudentBookingWindow(
+      form,
+      new Date(2026, 9, 30, 10, 0)
+    );
+    expect(res.isValid).toBe(false);
+    expect(res.errors.date).toContain("2 tuần");
+  });
+
+  it("accepts student bookings on the 14th day ahead", () => {
+    const form: BookingFormState = {
+      activityName: "Học nhóm",
+      purpose: "Ôn tập",
+      guestCount: 5,
+      note: "",
+      date: "2026-11-13",
+      bookingMode: "time",
+      startTime: "08:00",
+      endTime: "09:00",
+    };
+
+    const res = validateStudentBookingWindow(
+      form,
+      new Date(2026, 9, 30, 10, 0)
+    );
+    expect(res.errors.date).toBeUndefined();
+  });
+
   it("rejects student bookings outside 07:00–20:00", () => {
     const form: BookingFormState = {
       activityName: "Học nhóm",

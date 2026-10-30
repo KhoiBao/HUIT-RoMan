@@ -75,6 +75,14 @@ namespace HUIT_RoMan.Application.Modules.Usage.DTOs
         public bool LightsOff { get; set; } = true;
     }
 
+    /// <summary>Gia hạn phiên đang sử dụng. Phòng theo tiết truyền NewEndPeriodId; phòng theo giờ truyền NewEndAt.</summary>
+    public class ExtendUsageSessionRequestDto
+    {
+        public DateTime? NewEndAt { get; set; }
+        public int? NewEndPeriodId { get; set; }
+        public string? StaffNote { get; set; }
+    }
+
     public class UsageSessionQueryDto
     {
         public string? Status { get; set; } // "ALL", "Chờ nhận phòng", "Đang sử dụng", "Hoàn thành", "Đã hủy"

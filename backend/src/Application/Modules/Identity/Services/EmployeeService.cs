@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Common.Models;
 using HUIT_RoMan.Application.Modules.Identity.DTOs;
+using HUIT_RoMan.Domain;
 using HUIT_RoMan.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 
@@ -31,6 +32,11 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         public async Task<ApiResponse<IEnumerable<EmployeeDto>>> GetAllAsync()
         {
             var employees = await _employeeRepo.GetAllAsync(e => e.User, e => e.User.Department);
+
+            // Tài khoản hệ thống tự động duyệt không phải nhân sự thật, không hiển thị/không sửa được.
+            employees = employees
+                .Where(e => e.Code != SystemAccounts.AutoApproveEmployeeCode)
+                .ToList();
             
             // Nếu người gọi là Employee hoặc Manager, chỉ thấy danh sách nhân sự thuộc đơn vị của mình
             if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
@@ -135,6 +141,9 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             if (e == null)
                 return ApiResponse<bool>.ErrorResponse("Không tìm thấy nhân viên.");
 
+            if (e.Code == SystemAccounts.AutoApproveEmployeeCode)
+                return ApiResponse<bool>.ErrorResponse("Không thể sửa hồ sơ của tài khoản hệ thống.");
+
             if (_currentUser.Role == "Manager" && _currentUser.DepartmentId.HasValue)
             {
                 if (e.User?.DepartmentId != _currentUser.DepartmentId.Value)
@@ -195,6 +204,9 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             var e = await _employeeRepo.GetByIdAsync(id, e => e.User);
             if (e == null)
                 return ApiResponse<bool>.ErrorResponse("Không tìm thấy nhân viên.");
+
+            if (e.Code == SystemAccounts.AutoApproveEmployeeCode)
+                return ApiResponse<bool>.ErrorResponse("Không thể xoá hồ sơ của tài khoản hệ thống.");
 
             // Thu hồi role Employee hoặc Manager, chuyển về Lecturer hoặc Student tuỳ trường hợp
             if (e.User != null)

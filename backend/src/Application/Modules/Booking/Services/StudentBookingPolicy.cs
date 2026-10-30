@@ -12,6 +12,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         public static readonly TimeSpan OpenTime = new TimeSpan(7, 0, 0);
         public static readonly TimeSpan CloseTime = new TimeSpan(20, 0, 0);
         public static readonly TimeSpan MaxDuration = TimeSpan.FromHours(2);
+        public const int MaxAdvanceDays = 14;
 
         public static bool IsStudent(string? role)
         {
@@ -63,6 +64,21 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
 
             if (end - start > MaxDuration)
                 return "Sinh viên chỉ được đặt tối đa 2 giờ mỗi lượt.";
+
+            return null;
+        }
+
+        /// <summary>
+        /// Chặn đặt phòng thư viện trước quá 14 ngày (tính theo ngày lịch Việt Nam).
+        /// Trả về thông báo lỗi, hoặc null nếu hợp lệ.
+        /// </summary>
+        public static string? ValidateAdvanceWindow(DateTime startUtc, DateTime nowUtc)
+        {
+            var localStart = startUtc.ToUniversalTime().AddHours(7).Date;
+            var localToday = nowUtc.ToUniversalTime().AddHours(7).Date;
+
+            if (localStart > localToday.AddDays(MaxAdvanceDays))
+                return "Chỉ được đặt phòng trước tối đa 2 tuần.";
 
             return null;
         }

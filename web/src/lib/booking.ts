@@ -47,6 +47,13 @@ export interface BookingDetailItem {
   status: string;
   rejectionReason?: string;
   createdAt: string;
+  /** Tài khoản quyết định duyệt phòng này. NULL = chưa duyệt */
+  approvedByUserId?: number | null;
+  /** Tên hiển thị người duyệt (tài khoản hệ thống có tên riêng) */
+  approvedByName?: string | null;
+  approvedAt?: string | null;
+  /** MANUAL | AUTO. NULL = chưa duyệt */
+  approvalMode?: string | null;
 }
 
 export interface CheckInWindow {
@@ -85,6 +92,12 @@ export interface BookingResponse {
   cancelSource?: string | null;
   /** Cửa sổ nhận phòng theo thời gian server (chỉ đơn đã duyệt, chưa check-in) */
   checkInWindow?: CheckInWindow | null;
+  /** Tài khoản quyết định duyệt đơn. NULL = chưa duyệt hoặc bị từ chối */
+  approvedByUserId?: number | null;
+  approvedByName?: string | null;
+  approvedAt?: string | null;
+  /** MANUAL | AUTO. NULL = chưa duyệt */
+  approvalMode?: string | null;
   details: BookingDetailItem[];
 }
 
@@ -109,6 +122,8 @@ export interface ValidationResult {
 export interface BookingValidationOptions {
   role?: string | null;
   now?: Date;
+  /** Sức chứa nhỏ nhất trong các phòng đã chọn (nếu có). */
+  maxCapacity?: number;
 }
 
 export interface AvailableRoomGroup {
@@ -135,6 +150,8 @@ export type AvailableRoomScope = "hall" | "library" | "all";
 export const STUDENT_OPEN_TIME = "07:00";
 export const STUDENT_CLOSE_TIME = "20:00";
 export const STUDENT_MAX_DURATION_MINUTES = 120;
+/** Sinh viên chỉ được đặt phòng thư viện trước tối đa 2 tuần. */
+export const STUDENT_MAX_ADVANCE_DAYS = 14;
 
 const STUDENT_OPEN_MINUTES = 7 * 60;
 const STUDENT_CLOSE_MINUTES = 20 * 60;
@@ -383,8 +400,13 @@ export function validateStudentBookingWindow(
     errors.date = "Ngày sử dụng phòng không hợp lệ.";
   } else {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const lastBookable = new Date(today);
+    lastBookable.setDate(lastBookable.getDate() + STUDENT_MAX_ADVANCE_DAYS);
+
     if (date < today) {
       errors.date = "Không thể đặt phòng cho ngày trong quá khứ.";
+    } else if (date > lastBookable) {
+      errors.date = "Chỉ được đặt phòng trước tối đa 2 tuần.";
     } else if (date.getDay() === 0) {
       errors.date = "Thư viện không phục vụ mượn phòng vào Chủ Nhật.";
     }
@@ -519,6 +541,13 @@ export function validateBookingForm(
 
   if (!form.guestCount || form.guestCount < 1) {
     errors.guestCount = "Số lượng người tham gia phải lớn hơn 0.";
+  } else if (!Number.isInteger(form.guestCount)) {
+    errors.guestCount = "Số lượng người tham gia phải là số nguyên.";
+  } else if (
+    options.maxCapacity !== undefined &&
+    form.guestCount > options.maxCapacity
+  ) {
+    errors.guestCount = `Số lượng người vượt quá sức chứa của phòng đã chọn (tối đa ${options.maxCapacity} người).`;
   }
 
   if (student) {
@@ -1027,10 +1056,16 @@ export interface ApprovalHistoryItem {
   statusName: string;
   comment: string;
   decidedAt: string;
-  employeeId?: number;
+  employeeId?: number | null;
   employeeName: string;
   employeeCode: string;
   employeePosition: string;
+  /** Tài khoản đã thực hiện thao tác. NULL với dữ liệu cũ */
+  actorUserId?: number | null;
+  /** Tên hiển thị người thao tác (hệ thống tự động duyệt có tên riêng) */
+  actorName?: string;
+  /** MANUAL | AUTO. NULL với dữ liệu cũ */
+  approvalMode?: string | null;
 }
 
 /** Lấy lịch sử phê duyệt / từ chối / hủy đơn đặt phòng */
@@ -1038,4 +1073,37 @@ export async function fetchApprovalHistoryApi(bookingId: number): Promise<Approv
   const res = await api.get(`/api/Bookings/${bookingId}/approval-history`);
   const data = res.data?.data ?? res.data;
   return Array.isArray(data) ? (data as ApprovalHistoryItem[]) : [];
+}
+
+// ── CHẾ ĐỘ DUYỆT TỰ ĐỘNG ───────────────────────────────────────────
+
+export interface AutoApprovalSetting {
+  enabled: boolean;
+  updatedAt?: string | null;
+  updatedByName?: string | null;
+  /** Số đơn đang chờ duyệt trong phạm vi quản lý */
+  pendingCount: number;
+}
+
+export interface BulkApproveResult {
+  approvedCount: number;
+  failedCount: number;
+}
+
+/** Lấy cấu hình duyệt tự động hiện tại */
+export async function fetchAutoApprovalSettingApi(): Promise<AutoApprovalSetting> {
+  const res = await api.get("/api/Bookings/auto-approval");
+  return (res.data?.data ?? res.data) as AutoApprovalSetting;
+}
+
+/** Bật/tắt duyệt tự động cho toàn bộ đơn mới */
+export async function updateAutoApprovalSettingApi(enabled: boolean): Promise<AutoApprovalSetting> {
+  const res = await api.put("/api/Bookings/auto-approval", { enabled });
+  return (res.data?.data ?? res.data) as AutoApprovalSetting;
+}
+
+/** Duyệt toàn bộ đơn đang chờ duyệt trong phạm vi quản lý */
+export async function approvePendingBookingsApi(): Promise<BulkApproveResult> {
+  const res = await api.post("/api/Bookings/auto-approval/approve-pending");
+  return (res.data?.data ?? res.data) as BulkApproveResult;
 }

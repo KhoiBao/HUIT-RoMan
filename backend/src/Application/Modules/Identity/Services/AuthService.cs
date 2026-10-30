@@ -38,7 +38,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             
             if (user == null)
             {
-                throw new Exception("Không tìm thấy người dùng hoặc thông tin đăng nhập không hợp lệ.");
+                throw new Exception("Thông tin đăng nhập không hợp lệ.");
             }
 
             if (!await _userManager.CheckPasswordAsync(user, request.Password))

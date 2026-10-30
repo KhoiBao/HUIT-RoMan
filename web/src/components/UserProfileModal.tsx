@@ -19,6 +19,14 @@ interface UserProfileModalProps {
   onClose: () => void;
 }
 
+const PHONE_PATTERN = /^0\d{9,10}$/;
+
+function normalizePhoneInput(raw: string): string {
+  let digits = raw.replace(/[\s.\-()]/g, "");
+  if (digits.startsWith("+84")) digits = `0${digits.slice(3)}`;
+  return digits;
+}
+
 interface FullUserProfile {
   id: number;
   userName: string;
@@ -107,11 +115,21 @@ export default function UserProfileModal({
   const handleSaveProfile = async (e: FormEvent) => {
     e.preventDefault();
     setToastMsg(null);
+
+    const normalizedPhone = normalizePhoneInput(phoneInput);
+    if (!PHONE_PATTERN.test(normalizedPhone)) {
+      setToastMsg({
+        text: "Số điện thoại không hợp lệ. Vui lòng nhập 10-11 chữ số, ví dụ 0912345678.",
+        type: "error",
+      });
+      return;
+    }
+
     try {
       await api.put("/api/Users/me", {
         fullName: profile?.fullName,
         email: emailInput.trim(),
-        phoneNumber: phoneInput.trim(),
+        phoneNumber: normalizedPhone,
         status: profile?.status,
       });
 
@@ -121,7 +139,7 @@ export default function UserProfileModal({
           ? {
               ...prev,
               email: emailInput.trim(),
-              phoneNumber: phoneInput.trim(),
+              phoneNumber: normalizedPhone,
             }
           : null
       );
@@ -378,6 +396,10 @@ export default function UserProfileModal({
                       <input
                         type="tel"
                         required
+                        inputMode="tel"
+                        maxLength={15}
+                        pattern={"(\\+84|0)[0-9 .\\-()]{8,14}"}
+                        title="Nhập số điện thoại 10-11 chữ số, ví dụ 0912345678"
                         placeholder="VD: 0912 345 678"
                         value={phoneInput}
                         onChange={(e) => setPhoneInput(e.target.value)}

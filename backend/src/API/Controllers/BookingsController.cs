@@ -13,10 +13,14 @@ namespace HUIT_RoMan.API.Controllers
     public class BookingsController : ControllerBase
     {
         private readonly IBookingService _bookingService;
+        private readonly IBookingApprovalSettingService _approvalSettings;
 
-        public BookingsController(IBookingService bookingService)
+        public BookingsController(
+            IBookingService bookingService,
+            IBookingApprovalSettingService approvalSettings)
         {
             _bookingService = bookingService;
+            _approvalSettings = approvalSettings;
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -125,6 +129,41 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         // ─────────────────────────────────────────────────────────────────
+        // AUTO APPROVAL SETTING
+        // ─────────────────────────────────────────────────────────────────
+
+        /// <summary>Lấy cấu hình duyệt tự động và số đơn đang chờ duyệt</summary>
+        [HttpGet("auto-approval")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        public async Task<IActionResult> GetAutoApproval()
+        {
+            var response = await _approvalSettings.GetAsync();
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
+        /// <summary>Bật/tắt duyệt tự động</summary>
+        [HttpPut("auto-approval")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> UpdateAutoApproval([FromBody] UpdateAutoApprovalSettingDto request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var response = await _approvalSettings.UpdateAsync(request);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
+        /// <summary>Duyệt toàn bộ đơn đang chờ duyệt trong phạm vi quản lý</summary>
+        [HttpPost("auto-approval/approve-pending")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> ApprovePending()
+        {
+            var response = await _bookingService.ApprovePendingBookingsAsync();
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
+        // ─────────────────────────────────────────────────────────────────
         // ROOM SCHEDULE
         // ─────────────────────────────────────────────────────────────────
 
@@ -135,6 +174,7 @@ namespace HUIT_RoMan.API.Controllers
         /// - Chỉ truyền date → trả toàn bộ lịch trong ngày.
         /// </summary>
         [HttpGet("rooms/{roomId}/schedule")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetRoomSchedule(
             int roomId,
             [FromQuery] DateTime date,
@@ -164,6 +204,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Dùng cho chế độ xem Ngày / Tuần / Tháng của trang lịch phòng.
         /// </summary>
         [HttpGet("schedules")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetSchedules(
             [FromQuery] DateTime from,
             [FromQuery] DateTime to)

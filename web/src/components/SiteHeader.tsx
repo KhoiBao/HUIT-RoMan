@@ -153,32 +153,40 @@ export default function SiteHeader() {
           </nav>
 
           <div className="roman-header-actions">
-            <NotificationCenter />
-            <Link to="/dat-phong" className="roman-header-cta">
-              <PlusIcon size={15} />
-              Đặt phòng
-            </Link>
-            <button
-              type="button"
-              className="roman-user"
-              onClick={() => setShowProfileModal(true)}
-              title="Xem thông tin tài khoản"
-            >
-              <span className="roman-avatar">{initials(displayName)}</span>
-              <span className="roman-user-text">
-                <strong>{displayName}</strong>
-                <small>{role}</small>
-              </span>
-            </button>
-            <button
-              type="button"
-              className="roman-icon-btn"
-              onClick={handleLogout}
-              title="Đăng xuất"
-              aria-label="Đăng xuất"
-            >
-              <LogOutIcon size={18} />
-            </button>
+            {user ? (
+              <>
+                <NotificationCenter />
+                <Link to="/dat-phong" className="roman-header-cta">
+                  <PlusIcon size={15} />
+                  Đặt phòng
+                </Link>
+                <button
+                  type="button"
+                  className="roman-user"
+                  onClick={() => setShowProfileModal(true)}
+                  title="Xem thông tin tài khoản"
+                >
+                  <span className="roman-avatar">{initials(displayName)}</span>
+                  <span className="roman-user-text">
+                    <strong>{displayName}</strong>
+                    <small>{role}</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="roman-icon-btn"
+                  onClick={handleLogout}
+                  title="Đăng xuất"
+                  aria-label="Đăng xuất"
+                >
+                  <LogOutIcon size={18} />
+                </button>
+              </>
+            ) : (
+              <Link to="/login" className="roman-header-cta">
+                Đăng nhập
+              </Link>
+            )}
             <button
               type="button"
               className="roman-mobile-toggle"
@@ -226,18 +234,29 @@ export default function SiteHeader() {
                 Quản lý
               </NavLink>
             )}
-            <button type="button" className="roman-mobile-logout" onClick={handleLogout}>
-              <LogOutIcon size={16} />
-              Đăng xuất
-            </button>
+            {user ? (
+              <button type="button" className="roman-mobile-logout" onClick={handleLogout}>
+                <LogOutIcon size={16} />
+                Đăng xuất
+              </button>
+            ) : (
+              <NavLink
+                to="/login"
+                className={({ isActive }) => navLinkClass(isActive)}
+              >
+                Đăng nhập
+              </NavLink>
+            )}
           </nav>
         )}
       </header>
 
-      <UserProfileModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-      />
+      {user && (
+        <UserProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+        />
+      )}
     </>
   );
 }

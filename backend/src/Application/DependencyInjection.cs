@@ -10,6 +10,7 @@ using HUIT_RoMan.Application.Modules.Report.Services;
 using HUIT_RoMan.Application.Modules.Chat.Services;
 using HUIT_RoMan.Application.Modules.Notification.Services;
 using HUIT_RoMan.Application.Modules.Feedback.Services;
+using HUIT_RoMan.Application.Modules.WorkingHours.Services;
 
 namespace HUIT_RoMan.Application;
 
@@ -36,6 +37,8 @@ public static class DependencyInjection
 
         // Booking Services
         services.AddScoped<IBookingService, BookingService>();
+        // Cấu hình chế độ tự động duyệt đơn đặt phòng
+        services.AddScoped<IBookingApprovalSettingService, BookingApprovalSettingService>();
         // Tác vụ nền tự động hủy đơn không nhận phòng đúng hạn (no-show)
         services.AddScoped<IBookingNoShowService, BookingNoShowService>();
         // Tác vụ nền nhắc lịch sắp đến / sắp kết thúc
@@ -61,6 +64,10 @@ public static class DependencyInjection
 
         // Feedback Module (Đánh giá sau khi sử dụng phòng)
         services.AddScoped<IFeedbackService, FeedbackService>();
+
+        // Working Hours Module (Giờ phục vụ của Thư viện)
+        services.AddScoped<ILibraryWorkingHoursProvider, LibraryWorkingHoursProvider>();
+        services.AddScoped<IWorkingHourService, WorkingHourService>();
 
         return services;
     }
