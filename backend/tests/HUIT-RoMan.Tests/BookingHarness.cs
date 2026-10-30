@@ -24,6 +24,7 @@ namespace HUIT_RoMan.Tests
         public IUnitOfWork UoW { get; }
         public FakeCurrentUser CurrentUser { get; } = new() { UserId = BookingTestSeed.StudentAId, Role = "student" };
         public UsageService UsageService { get; }
+        public BookingApprovalSettingService ApprovalSettings { get; }
         public BookingService BookingService { get; }
         public BookingNoShowService NoShowService { get; }
         public Mock<IEmailService> EmailMock { get; } = new();
@@ -38,7 +39,8 @@ namespace HUIT_RoMan.Tests
             var loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<BookingNoShowService>>();
 
             UsageService = new UsageService(UoW, CurrentUser, spMock.Object);
-            BookingService = new BookingService(UoW, CurrentUser, UsageService, EmailMock.Object);
+            ApprovalSettings = new BookingApprovalSettingService(UoW, CurrentUser);
+            BookingService = new BookingService(UoW, CurrentUser, UsageService, ApprovalSettings, EmailMock.Object);
             NoShowService = new BookingNoShowService(UoW, loggerMock.Object);
         }
 

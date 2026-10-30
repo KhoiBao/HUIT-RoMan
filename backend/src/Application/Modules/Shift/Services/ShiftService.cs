@@ -249,6 +249,32 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
             if (shift == null)
                 return ApiResponse<ShiftDto>.ErrorResponse("Không tìm thấy ca trực.");
 
+            // Chỉ cho bắt đầu khi đang trong thời gian ca; ca đã qua hoặc chưa tới
+            // không được phép bắt đầu.
+            if (string.Equals(status, "Đang trực", StringComparison.OrdinalIgnoreCase))
+            {
+                var localNow = DateTime.UtcNow.AddHours(7);
+                var shiftStart = shift.Date.Date.Add(shift.StartTime);
+                var shiftEnd = shift.Date.Date.Add(shift.EndTime);
+                if (localNow < shiftStart || localNow > shiftEnd)
+                {
+                    return ApiResponse<ShiftDto>.ErrorResponse(
+                        $"Chỉ có thể bắt đầu ca trực trong thời gian diễn ra ca ({shiftStart:HH:mm} - {shiftEnd:HH:mm} ngày {shiftStart:dd/MM/yyyy}).");
+                }
+            }
+
+            // Ca đã qua ngày (sang ngày mới) thì không được hoàn tất nữa;
+            // quản lý vẫn chỉnh được trạng thái qua chức năng sửa ca.
+            if (string.Equals(status, "Hoàn thành", StringComparison.OrdinalIgnoreCase))
+            {
+                var localNow = DateTime.UtcNow.AddHours(7);
+                if (localNow.Date != shift.Date.Date)
+                {
+                    return ApiResponse<ShiftDto>.ErrorResponse(
+                        $"Chỉ có thể hoàn tất ca trực trong ngày diễn ra ca ({shift.Date:dd/MM/yyyy}).");
+                }
+            }
+
             shift.Status = status;
             shift.UpdatedAt = DateTime.UtcNow;
             _shiftRepo.Update(shift);

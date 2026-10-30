@@ -23,36 +23,8 @@ builder.Services.AddCors(options =>
         .AllowCredentials());
 });
 
-// SignalR & Cấu hình Redis Backplane (Docker)
-var signalRBuilder = builder.Services.AddSignalR();
-var redisConnectionString = builder.Configuration["Redis:ConnectionString"];
-if (!string.IsNullOrWhiteSpace(redisConnectionString))
-{
-    try
-    {
-        var redisConfig = StackExchange.Redis.ConfigurationOptions.Parse(redisConnectionString);
-        redisConfig.ConnectTimeout = 1500;
-        redisConfig.SyncTimeout = 1500;
-        redisConfig.AbortOnConnectFail = true;
-        using var multiplexer = StackExchange.Redis.ConnectionMultiplexer.Connect(redisConfig);
-        if (multiplexer.IsConnected)
-        {
-            signalRBuilder.AddStackExchangeRedis(redisConnectionString, options =>
-            {
-                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("HUIT_RoMan_Chat");
-            });
-            Console.WriteLine($"[SignalR] Kết nối Redis Backplane thành công tại: {redisConnectionString}");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[SignalR] Không thể kết nối Redis Backplane ({ex.Message}). Tự động fallback sang In-memory SignalR.");
-    }
-}
-else
-{
-    Console.WriteLine("[SignalR] Không cấu hình Redis ConnectionString. Sử dụng In-memory SignalR.");
-}
+// SignalR (in-memory; hệ thống chỉ chạy một instance API)
+builder.Services.AddSignalR();
 
 // PostgreSQL + EF Core (giữ nguyên connection string từ db_Library cũ)
 builder.Services.AddDbContext<ApplicationDbContext>(options =>

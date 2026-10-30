@@ -460,7 +460,7 @@ namespace HUIT_RoMan.Tests
             {
                 ActivityName = "Sinh hoạt chuyên môn",
                 Purpose = "Họp nhóm",
-                GuestCount = 10,
+                GuestCount = 6,
                 UserId = userId,
                 AutoApprove = autoApprove,
                 Details = new List<BookingDetailItemDto>
@@ -470,7 +470,7 @@ namespace HUIT_RoMan.Tests
                         RoomId = roomId,
                         StartAt = ToUtc(localStart),
                         EndAt = ToUtc(localEnd),
-                        GuestCount = 10,
+                        GuestCount = 6,
                         Purpose = "Họp nhóm"
                     }
                 }

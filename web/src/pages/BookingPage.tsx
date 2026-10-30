@@ -40,6 +40,7 @@ import {
   groupPeriodsByRoomType,
   STUDENT_OPEN_TIME,
   STUDENT_CLOSE_TIME,
+  STUDENT_MAX_ADVANCE_DAYS,
   buildBookingPayload,
   formatDetailTimeRange,
   fetchAvailableRoomsApi,
@@ -80,6 +81,20 @@ import {
   type UsageSessionItem,
 } from "../lib/usage";
 import { useConfirm } from "../context/ConfirmContext";
+
+function shouldHideConfirmationCode(
+  booking: BookingResponse,
+  detail: BookingDetailItem,
+  session?: UsageSessionItem
+): boolean {
+  return (
+    booking.status === "Đã hủy" ||
+    booking.status === "Từ chối" ||
+    detail.status === "Từ chối" ||
+    detail.status === "Hoàn thành" ||
+    Boolean(session?.actualCheckOut)
+  );
+}
 
 export default function BookingPage() {
   const [searchParams] = useSearchParams();
@@ -130,6 +145,13 @@ export default function BookingPage() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const maxBookingDate = useMemo(() => {
+    if (!isStudent) return undefined;
+    const last = new Date();
+    last.setDate(last.getDate() + STUDENT_MAX_ADVANCE_DAYS);
+    return toISODateString(last);
+  }, [isStudent]);
 
   // Mỗi loại phòng (lý thuyết / thực hành) có bộ 16 tiết riêng; chỉ hiển thị
   // các tiết thuộc bộ lịch đang chọn để tránh trộn lịch.
@@ -253,6 +275,7 @@ export default function BookingPage() {
     detail: BookingDetailItem;
     booking: BookingResponse;
     session?: UsageSessionItem;
+    hideConfirmationCode: boolean;
   } | null>(null);
 
   // Check-In form state
@@ -293,6 +316,7 @@ export default function BookingPage() {
     isPending: boolean;
     canCancel: boolean;
     isCancelExpired: boolean;
+    hideConfirmationCode: boolean;
     statusBadge: { label: string; cssClass: string };
   } | null>(null);
   const [usageToast, setUsageToast] = useState<{
@@ -638,6 +662,7 @@ export default function BookingPage() {
       isPending: boolean;
       canCancel: boolean;
       isCancelExpired: boolean;
+      hideConfirmationCode: boolean;
       statusBadge: { label: string; cssClass: string };
     }[] = [];
 
@@ -694,6 +719,9 @@ export default function BookingPage() {
 
           const statusBadge = getScheduleStatusBadge(effectiveStatus);
 
+          const isRejected = d.status === "Từ chối" || b.status === "Từ chối";
+          const hasCheckedOut = Boolean(session?.actualCheckOut) || isCompleted;
+
           items.push({
             booking: b,
             detail: d,
@@ -705,6 +733,7 @@ export default function BookingPage() {
             isPending,
             canCancel,
             isCancelExpired,
+            hideConfirmationCode: isCancelled || isRejected || hasCheckedOut,
             statusBadge,
           });
         }
@@ -740,6 +769,8 @@ export default function BookingPage() {
           isPending,
           canCancel,
           isCancelExpired,
+          hideConfirmationCode:
+            isCancelled || isCompleted || b.status === "Từ chối",
           statusBadge,
         });
       }
@@ -883,7 +914,12 @@ export default function BookingPage() {
     booking: BookingResponse,
     session?: UsageSessionItem
   ) {
-    setSelectedDetailItem({ detail, booking, session });
+    setSelectedDetailItem({
+      detail,
+      booking,
+      session,
+      hideConfirmationCode: shouldHideConfirmationCode(booking, detail, session),
+    });
     setCheckInGuestCount(detail.guestCount || 1);
     setCheckInNote("");
     setIsCheckInModalOpen(true);
@@ -924,7 +960,12 @@ export default function BookingPage() {
     booking: BookingResponse,
     session?: UsageSessionItem
   ) {
-    setSelectedDetailItem({ detail, booking, session });
+    setSelectedDetailItem({
+      detail,
+      booking,
+      session,
+      hideConfirmationCode: shouldHideConfirmationCode(booking, detail, session),
+    });
     setCheckOutNote("");
     setDevicesOk(true);
     setCleaned(true);
@@ -994,18 +1035,21 @@ export default function BookingPage() {
       return;
     }
 
+    const selectedRooms = availableRooms.filter((r) =>
+      selectedRoomIds.includes(r.roomId)
+    );
+
     const validation = validateBookingForm(form, selectedRoomIds, {
       role: user?.role,
+      maxCapacity: selectedRooms.length
+        ? Math.min(...selectedRooms.map((r) => r.capacity))
+        : undefined,
     });
     if (!validation.isValid) {
       setErrors(validation.errors);
       return;
     }
     setErrors({});
-
-    const selectedRooms = availableRooms.filter((r) =>
-      selectedRoomIds.includes(r.roomId)
-    );
 
     const payload = buildBookingPayload(form, selectedRooms, periods);
 
@@ -1162,6 +1206,10 @@ export default function BookingPage() {
   const selectedRoomsList = scopedAvailableRooms.filter((r) =>
     selectedRoomIds.includes(r.roomId)
   );
+
+  const maxGuestCapacity = selectedRoomsList.length
+    ? Math.min(...selectedRoomsList.map((r) => r.capacity))
+    : undefined;
 
   const availableRoomGroups = useMemo(
     () => groupAvailableRoomsByType(scopedAvailableRooms),
@@ -1392,9 +1440,19 @@ export default function BookingPage() {
                       }`}
                       value={form.date}
                       min={toISODateString(new Date())}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, date: e.target.value }))
-                      }
+                      max={maxBookingDate}
+                      onInvalid={(e) => {
+                        const el = e.currentTarget;
+                        el.setCustomValidity(
+                          el.validity.rangeOverflow
+                            ? "Chỉ được đặt phòng trước tối đa 2 tuần."
+                            : "Không thể đặt phòng cho ngày trong quá khứ."
+                        );
+                      }}
+                      onChange={(e) => {
+                        e.currentTarget.setCustomValidity("");
+                        setForm((prev) => ({ ...prev, date: e.target.value }));
+                      }}
                     />
                     {errors.date && (
                       <span className="err-text">{errors.date}</span>
@@ -1666,16 +1724,29 @@ export default function BookingPage() {
                       id="guest-count"
                       type="number"
                       min={1}
+                      max={maxGuestCapacity}
+                      step={1}
                       className={`form-input ${
                         errors.guestCount ? "input-error" : ""
                       }`}
                       value={form.guestCount}
-                      onChange={(e) =>
+                      onInvalid={(e) => {
+                        const el = e.currentTarget;
+                        el.setCustomValidity(
+                          el.validity.rangeOverflow
+                            ? `Số lượng người không hợp lệ (tối đa ${maxGuestCapacity} người).`
+                            : el.validity.rangeUnderflow
+                              ? "Số lượng người không hợp lệ (tối thiểu 1 người)."
+                              : "Số lượng người không hợp lệ."
+                        );
+                      }}
+                      onChange={(e) => {
+                        e.currentTarget.setCustomValidity("");
                         setForm((prev) => ({
                           ...prev,
                           guestCount: Number(e.target.value),
-                        }))
-                      }
+                        }));
+                      }}
                     />
                     {errors.guestCount && (
                       <span className="err-text">{errors.guestCount}</span>
@@ -2386,7 +2457,7 @@ export default function BookingPage() {
 
                                 {/* Mã nhận phòng */}
                                 <td className="table-code-col">
-                                  {item.session?.confirmationCode ? (
+                                  {!item.hideConfirmationCode && item.session?.confirmationCode ? (
                                     <div className="table-code-wrapper">
                                       <span className="table-code-val" title="Mã nhận phòng">
                                         {item.session.confirmationCode}
@@ -2630,7 +2701,8 @@ export default function BookingPage() {
                         {viewingDetailItem.statusBadge.label}
                       </span>
                     </div>
-                    {viewingDetailItem.session?.confirmationCode && (
+                    {!viewingDetailItem.hideConfirmationCode &&
+                      viewingDetailItem.session?.confirmationCode && (
                       <div className="user-modal-summary-row">
                         <span>Mã nhận phòng:</span>
                         <strong className="text-primary">
@@ -2909,7 +2981,8 @@ export default function BookingPage() {
                       <span>Thời gian:</span>
                       <strong>{formatDetailTimeRange(selectedDetailItem.detail)}</strong>
                     </div>
-                    {selectedDetailItem.session?.confirmationCode && (
+                    {!selectedDetailItem.hideConfirmationCode &&
+                      selectedDetailItem.session?.confirmationCode && (
                       <div className="user-modal-summary-row">
                         <span>Mã nhận phòng:</span>
                         <strong className="text-primary">

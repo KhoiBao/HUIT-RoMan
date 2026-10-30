@@ -37,6 +37,53 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.ToTable("EmployeeShift");
                 });
 
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.ApprovalHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ApprovalMode")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<int>("BookingId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("BookingId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("ApprovalHistories", t =>
+                        {
+                            t.HasCheckConstraint("CK_ApprovalHistories_Actor", "\"ActorUserId\" IS NOT NULL OR \"EmployeeId\" IS NOT NULL OR \"ApprovalMode\" = 'AUTO'");
+
+                            t.HasCheckConstraint("CK_ApprovalHistories_Mode", "\"ApprovalMode\" IS NULL OR \"ApprovalMode\" IN ('MANUAL', 'AUTO')");
+                        });
+                });
+
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.Booking", b =>
                 {
                     b.Property<int>("Id")
@@ -49,6 +96,16 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
+
+                    b.Property<string>("ApprovalMode")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("CancelReason")
                         .HasMaxLength(50)
@@ -101,9 +158,18 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ApprovedByUserId");
+
                     b.HasIndex("UserId");
 
-                    b.ToTable("Bookings");
+                    b.ToTable("Bookings", t =>
+                        {
+                            t.HasCheckConstraint("CK_Bookings_Approval_Audit", "(\"ApprovalMode\" IS NULL AND \"ApprovedByUserId\" IS NULL AND \"ApprovedAt\" IS NULL) OR (\"ApprovalMode\" IN ('MANUAL', 'AUTO') AND \"ApprovedByUserId\" IS NOT NULL AND \"ApprovedAt\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_Bookings_GuestCount_Positive", "\"GuestCount\" > 0");
+
+                            t.HasCheckConstraint("CK_Bookings_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Duyệt một phần', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
+                        });
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.BookingDetail", b =>
@@ -113,6 +179,16 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApprovalMode")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("BookingId")
                         .HasColumnType("integer");
@@ -158,15 +234,92 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ApprovedByUserId");
+
                     b.HasIndex("BookingId");
 
                     b.HasIndex("EndPeriodId");
 
-                    b.HasIndex("RoomId");
-
                     b.HasIndex("StartPeriodId");
 
-                    b.ToTable("BookingDetails");
+                    b.HasIndex("RoomId", "Status", "StartAt", "EndAt");
+
+                    b.ToTable("BookingDetails", t =>
+                        {
+                            t.HasCheckConstraint("CK_BookingDetails_Approval_Audit", "(\"ApprovalMode\" IS NULL AND \"ApprovedByUserId\" IS NULL AND \"ApprovedAt\" IS NULL) OR (\"ApprovalMode\" IN ('MANUAL', 'AUTO') AND \"ApprovedByUserId\" IS NOT NULL AND \"ApprovedAt\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_BookingDetails_GuestCount_Positive", "\"GuestCount\" > 0");
+
+                            t.HasCheckConstraint("CK_BookingDetails_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
+
+                            t.HasCheckConstraint("CK_BookingDetails_Time_Range", "\"EndAt\" > \"StartAt\"");
+                        });
+                });
+
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.BookingExtension", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BookingDetailId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("NewEndAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("NewEndPeriodId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("PreviousEndAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("PreviousEndPeriodId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RequestedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UsageSessionId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("UsageSessionId");
+
+                    b.HasIndex("BookingDetailId", "RequestedAt");
+
+                    b.ToTable("BookingExtensions", t =>
+                        {
+                            t.HasCheckConstraint("CK_BookingExtensions_Status", "\"Status\" IN ('Đã áp dụng')");
+
+                            t.HasCheckConstraint("CK_BookingExtensions_Time_Range", "\"NewEndAt\" > \"PreviousEndAt\"");
+                        });
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.ChatConversation", b =>
@@ -637,7 +790,10 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                     b.HasIndex("RoomTypeId");
 
-                    b.ToTable("Periods");
+                    b.ToTable("Periods", t =>
+                        {
+                            t.HasCheckConstraint("CK_Periods_Time_Range", "\"EndTime\" > \"StartTime\"");
+                        });
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.Room", b =>
@@ -704,7 +860,12 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                     b.HasIndex("RoomTypeId");
 
-                    b.ToTable("Rooms");
+                    b.ToTable("Rooms", t =>
+                        {
+                            t.HasCheckConstraint("CK_Rooms_Capacity_Positive", "\"Capacity\" > 0");
+
+                            t.HasCheckConstraint("CK_Rooms_Status", "\"Status\" IN ('Trống', 'Đang sử dụng', 'Bảo trì')");
+                        });
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.RoomEquipment", b =>
@@ -789,7 +950,10 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("RoomTypes");
+                    b.ToTable("RoomTypes", t =>
+                        {
+                            t.HasCheckConstraint("CK_RoomTypes_DefaultCapacity_Positive", "\"DefaultCapacity\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.RoomTypeCondition", b =>
@@ -902,6 +1066,30 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.ToTable("ShiftLogs");
                 });
 
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.SystemSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("SystemSettings");
+                });
+
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.UsageCondition", b =>
                 {
                     b.Property<int>("Id")
@@ -959,8 +1147,14 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Property<DateTime?>("ActualCheckOut")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("ActualGuestCount")
+                        .HasColumnType("integer");
+
                     b.Property<int>("BookingDetailId")
                         .HasColumnType("integer");
+
+                    b.Property<bool?>("Cleaned")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("ConfirmationCode")
                         .IsRequired()
@@ -970,8 +1164,18 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool?>("DevicesOk")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<bool?>("LightsOff")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("StaffNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -985,11 +1189,24 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BookingDetailId");
+                    b.HasIndex("BookingDetailId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.HasIndex("ConfirmationCode")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UsageSessions");
+                    b.ToTable("UsageSessions", t =>
+                        {
+                            t.HasCheckConstraint("CK_UsageSessions_ActualGuestCount_Positive", "\"ActualGuestCount\" IS NULL OR \"ActualGuestCount\" > 0");
+
+                            t.HasCheckConstraint("CK_UsageSessions_Checkout_After_Checkin", "\"ActualCheckOut\" IS NULL OR \"ActualCheckIn\" IS NULL OR \"ActualCheckOut\" >= \"ActualCheckIn\"");
+
+                            t.HasCheckConstraint("CK_UsageSessions_Status", "\"Status\" IN ('Chờ nhận phòng', 'Đang sử dụng', 'Hoàn thành', 'Đã hủy')");
+                        });
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.User", b =>
@@ -1236,6 +1453,52 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.ToTable("ViolationTypes");
                 });
 
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.WorkingHour", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<TimeSpan>("CloseTime")
+                        .HasColumnType("interval");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DepartmentId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<TimeSpan>("OpenTime")
+                        .HasColumnType("interval");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DepartmentId", "DayOfWeek")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.ToTable("WorkingHours", t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkingHours_DayOfWeek", "\"DayOfWeek\" BETWEEN 0 AND 6");
+
+                            t.HasCheckConstraint("CK_WorkingHours_Time_Range", "\"IsClosed\" = TRUE OR \"CloseTime\" > \"OpenTime\"");
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<int>", b =>
                 {
                     b.Property<int>("Id")
@@ -1383,19 +1646,56 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.ApprovalHistory", b =>
+                {
+                    b.HasOne("HUIT_RoMan.Domain.Entities.User", "ActorUser")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.Booking", "Booking")
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ActorUser");
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.Booking", b =>
                 {
+                    b.HasOne("HUIT_RoMan.Domain.Entities.User", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("HUIT_RoMan.Domain.Entities.User", "User")
                         .WithMany("Bookings")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.Navigation("ApprovedByUser");
+
                     b.Navigation("User");
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.BookingDetail", b =>
                 {
+                    b.HasOne("HUIT_RoMan.Domain.Entities.User", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("HUIT_RoMan.Domain.Entities.Booking", "Booking")
                         .WithMany("BookingDetails")
                         .HasForeignKey("BookingId")
@@ -1418,6 +1718,8 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .HasForeignKey("StartPeriodId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.Navigation("ApprovedByUser");
+
                     b.Navigation("Booking");
 
                     b.Navigation("EndPeriod");
@@ -1425,6 +1727,33 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Navigation("Room");
 
                     b.Navigation("StartPeriod");
+                });
+
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.BookingExtension", b =>
+                {
+                    b.HasOne("HUIT_RoMan.Domain.Entities.BookingDetail", "BookingDetail")
+                        .WithMany("Extensions")
+                        .HasForeignKey("BookingDetailId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.User", "RequestedByUser")
+                        .WithMany("BookingExtensions")
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.UsageSession", "UsageSession")
+                        .WithMany("Extensions")
+                        .HasForeignKey("UsageSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BookingDetail");
+
+                    b.Navigation("RequestedByUser");
+
+                    b.Navigation("UsageSession");
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.ChatConversation", b =>
@@ -1627,6 +1956,16 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.SystemSetting", b =>
+                {
+                    b.HasOne("HUIT_RoMan.Domain.Entities.User", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("UpdatedByUser");
+                });
+
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.UsageSession", b =>
                 {
                     b.HasOne("HUIT_RoMan.Domain.Entities.BookingDetail", "BookingDetail")
@@ -1693,6 +2032,17 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Navigation("ViolationType");
                 });
 
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.WorkingHour", b =>
+                {
+                    b.HasOne("HUIT_RoMan.Domain.Entities.Department", "Department")
+                        .WithMany()
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Department");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<int>", null)
@@ -1751,6 +2101,8 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.BookingDetail", b =>
                 {
+                    b.Navigation("Extensions");
+
                     b.Navigation("UsageSessions");
                 });
 
@@ -1810,6 +2162,8 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                 {
                     b.Navigation("EquipmentConditionLogs");
 
+                    b.Navigation("Extensions");
+
                     b.Navigation("Feedbacks");
 
                     b.Navigation("ViolationRecords");
@@ -1817,6 +2171,8 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.User", b =>
                 {
+                    b.Navigation("BookingExtensions");
+
                     b.Navigation("Bookings");
 
                     b.Navigation("ChatConversations");

@@ -7,6 +7,7 @@ import AdminBookingApprovalTab from "../components/admin/AdminBookingApprovalTab
 import AdminRoomsManagementTab from "../components/admin/AdminRoomsManagementTab";
 import AdminEquipmentsManagementTab from "../components/admin/AdminEquipmentsManagementTab";
 import AdminRoomTypesTab from "../components/admin/AdminRoomTypesTab";
+import AdminWorkingHoursTab from "../components/admin/AdminWorkingHoursTab";
 import AdminDepartmentsTab from "../components/admin/AdminDepartmentsTab";
 import AdminEmployeesTab from "../components/admin/AdminEmployeesTab";
 import AdminUsersTab from "../components/admin/AdminUsersTab";
@@ -64,6 +65,7 @@ export type AdminTabType =
   | "rooms"
   | "equipments"
   | "roomTypes"
+  | "workingHours"
   | "departments"
   | "employees"
   | "users"
@@ -753,14 +755,12 @@ export default function AdminDashboardPage() {
       id: "overview" as AdminTabType,
       label: "Tổng quan",
       title: "Tổng quan điều hành & Báo cáo thống kê",
-      subtitle: "Báo cáo số liệu tổng quan, phân tích tần suất sử dụng và hiệu suất khai thác phòng học HUIT.",
       icon: GridIcon,
     },
     {
       id: "approvals" as AdminTabType,
       label: "Duyệt đơn đặt",
       title: "Duyệt đơn đăng ký mượn phòng",
-      subtitle: "Xét duyệt và phân luồng đơn đăng ký mượn phòng từ sinh viên, giảng viên.",
       icon: ClipboardListIcon,
       badge: pendingCount,
       badgeVariant: "primary" as const,
@@ -769,63 +769,60 @@ export default function AdminDashboardPage() {
       id: "sessions" as AdminTabType,
       label: "Phiên sử dụng",
       title: "Phiên phòng & Khảo sát bàn giao",
-      subtitle: "Giám sát quy trình Check-in, khảo sát hiện trạng và hoàn tất trả phòng.",
       icon: ShieldCheckIcon,
     },
     {
       id: "rooms" as AdminTabType,
       label: "Quản lý phòng",
       title: "Quản lý phòng & Cơ sở vật chất",
-      subtitle: "Danh mục phòng học, hội trường và cấu hình trạng thái sử dụng.",
       icon: DoorIcon,
     },
     {
       id: "equipments" as AdminTabType,
       label: "Thiết bị",
       title: "Quản lý thiết bị & Tài sản",
-      subtitle: "Theo dõi tình trạng Smart TV, micro, hub kết nối và thiết bị hỗ trợ.",
       icon: TvIcon,
     },
     {
       id: "roomTypes" as AdminTabType,
       label: "Loại phòng",
       title: "Cấu hình phân loại phòng",
-      subtitle: "Quản lý nhóm phòng học nhóm, hội thảo và nghiên cứu chuyên sâu.",
       icon: TagIcon,
+    },
+    {
+      id: "workingHours" as AdminTabType,
+      label: "Giờ phục vụ",
+      title: "Giờ phục vụ Thư viện",
+      icon: ClockIcon,
     },
     {
       id: "departments" as AdminTabType,
       label: "Khoa / Đơn vị",
       title: "Khoa & Đơn vị trực thuộc",
-      subtitle: "Cơ cấu tổ chức các khoa và phòng ban chức năng Trường ĐH Công Thương TP.HCM.",
       icon: BankIcon,
     },
     {
       id: "employees" as AdminTabType,
       label: "Nhân sự",
       title: "Quản lý Nhân sự & Thủ thư",
-      subtitle: "Danh sách cán bộ quản trị, thủ thư trực ca và phân quyền vận hành.",
       icon: BriefcaseIcon,
     },
     {
       id: "users" as AdminTabType,
       label: "Người dùng",
       title: "Tài khoản Sinh viên & Giảng viên",
-      subtitle: "Tra cứu hồ sơ, phân quyền và lịch sử hoạt động của người dùng hệ thống.",
       icon: GraduationCapIcon,
     },
     {
       id: "shifts" as AdminTabType,
       label: "Ca trực & Sổ trực",
       title: "Ca trực & Sổ trực nhật ký",
-      subtitle: "Phân bổ lịch trực ca, ghi nhận bàn giao và lưu trữ sự cố trong ca.",
       icon: CalendarIcon,
     },
     {
       id: "violations" as AdminTabType,
       label: "Xử lý vi phạm",
       title: "Xử lý vi phạm & Chế tài mượn",
-      subtitle: "Ghi nhận vi phạm quy chế, chế tài điểm rèn luyện và tạm khóa quyền mượn.",
       icon: AlertTriangleIcon,
       badge: pendingViolationsCount,
       badgeVariant: "warning" as const,
@@ -834,14 +831,12 @@ export default function AdminDashboardPage() {
       id: "chat" as AdminTabType,
       label: "Tin nhắn hỗ trợ",
       title: "Trung tâm tin nhắn trực tuyến",
-      subtitle: "Hỗ trợ giải đáp thắc mắc và tiếp nhận yêu cầu từ người mượn phòng.",
       icon: ChatIcon,
     },
     {
       id: "timeline" as AdminTabType,
       label: "Lịch tổng thể",
       title: "Lịch tổng thể & Giám sát trực quan",
-      subtitle: "Ma trận biểu đồ thời gian thực trực quan từng phòng học và khung giờ.",
       icon: ClockIcon,
     },
     ];
@@ -849,8 +844,8 @@ export default function AdminDashboardPage() {
     if (!isAdmin) {
       const adminOnlyTabs = new Set(
         isManager
-          ? ["roomTypes", "departments", "users"]
-          : ["roomTypes", "departments", "employees", "users"]
+          ? ["roomTypes", "workingHours", "departments", "users"]
+          : ["roomTypes", "workingHours", "departments", "employees", "users"]
       );
       return list.filter((t) => !adminOnlyTabs.has(t.id));
     }
@@ -860,8 +855,8 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     const forbiddenTabs = isManager
-      ? ["roomTypes", "departments", "users"]
-      : ["roomTypes", "departments", "employees", "users"];
+      ? ["roomTypes", "workingHours", "departments", "users"]
+      : ["roomTypes", "workingHours", "departments", "employees", "users"];
     if (!isAdmin && forbiddenTabs.includes(activeTab)) {
       setActiveTab("overview");
     }
@@ -924,7 +919,11 @@ export default function AdminDashboardPage() {
         <div className="admin-sidebar-top-section">
           {/* Brand header */}
           <div className="admin-sidebar-brand">
-            <div className="admin-brand-icon-box">H</div>
+            <img
+              src="/roman-logo-icon.png"
+              alt="HUIT RoMan"
+              className="admin-brand-logo"
+            />
             {!isSidebarCompact && (
               <div className="admin-brand-info">
                 <span className="admin-brand-title">Quản lý phòng HUIT</span>
@@ -952,9 +951,6 @@ export default function AdminDashboardPage() {
                 >
                   {isAdmin ? "QUẢN LÝ" : "NHÂN VIÊN"}
                 </span>
-              </div>
-              <div style={{ fontSize: "11px", color: "var(--rp-muted)", fontWeight: 600, paddingLeft: "2px" }}>
-                {user?.departmentName || (isAdmin ? "Ban Quản lý HUIT" : "Đơn vị Thư viện")}
               </div>
             </div>
           )}
@@ -1115,7 +1111,6 @@ export default function AdminDashboardPage() {
                   </div>
                   <div className="admin-hero-text-wrap">
                     <h1 className="admin-hero-main-title">{activeTabConfig.title}</h1>
-                    <p className="admin-hero-sub-desc">{activeTabConfig.subtitle}</p>
                   </div>
                 </div>
 
@@ -1151,12 +1146,17 @@ export default function AdminDashboardPage() {
           )}
 
           {/* ── Active Tab Contents ────────────────────────── */}
+          <div className="admin-tab-pane" key={activeTab}>
           {(activeTab === "overview" || activeTab === "reports") && (
           <AdminReportsTab onNotify={showToast} />
         )}
 
         {activeTab === "approvals" && (
-          <AdminBookingApprovalTab key={approvalRefreshKey} onNotify={showToast} />
+          <AdminBookingApprovalTab
+            key={approvalRefreshKey}
+            onNotify={showToast}
+            canManageAutoApproval={isAdmin || isManager}
+          />
         )}
 
         {activeTab === "sessions" && (
@@ -1187,6 +1187,10 @@ export default function AdminDashboardPage() {
           <AdminRoomTypesTab onNotify={showToast} />
         )}
 
+        {activeTab === "workingHours" && isAdmin && (
+          <AdminWorkingHoursTab onNotify={showToast} />
+        )}
+
         {activeTab === "departments" && isAdmin && (
           <AdminDepartmentsTab onNotify={showToast} />
         )}
@@ -1204,6 +1208,7 @@ export default function AdminDashboardPage() {
             <SchedulePage />
           </div>
         )}
+          </div>
         </div>
       </div>
 

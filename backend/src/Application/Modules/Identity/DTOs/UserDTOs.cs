@@ -43,6 +43,23 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
         public string? NewPassword { get; set; }
     }
 
+    public class CreateUserDto
+    {
+        public string CardCode { get; set; }
+        public string FullName { get; set; }
+        public string Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string Role { get; set; } // Student | Lecturer | Employee | Manager | Admin
+        public int? DepartmentId { get; set; }
+        public string? Password { get; set; }
+    }
+
+    public class CreatedUserDto
+    {
+        public UserDto User { get; set; }
+        public string Password { get; set; }
+    }
+
     // ─────────────────────────────────────────────────────────────────
     // EMPLOYEE
     // ─────────────────────────────────────────────────────────────────

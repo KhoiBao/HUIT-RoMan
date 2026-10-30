@@ -116,6 +116,30 @@ namespace HUIT_RoMan.Tests
             Assert.Equal("Đã hủy", detail.Status);
         }
 
+        [Fact]
+        public async Task Cancel_HủyPhiênChờNhậnPhòngTheoĐơn()
+        {
+            using var h = new BookingHarness();
+            var booking = BookingTestSeed.MakeBooking(h.Db, DateTime.UtcNow.AddHours(5));
+            var detail = await h.Db.BookingDetails.FirstAsync(d => d.BookingId == booking.Id);
+
+            var session = new UsageSession
+            {
+                BookingDetailId = detail.Id,
+                UserId = booking.UserId,
+                Status = "Chờ nhận phòng",
+                ConfirmationCode = "HUIT-CANCEL1"
+            };
+            h.Db.UsageSessions.Add(session);
+            await h.Db.SaveChangesAsync();
+
+            var res = await h.BookingService.CancelBookingAsync(booking.Id, Req("CHANGE_PLAN"));
+            Assert.True(res.Success, res.Message);
+
+            var updated = await h.Db.UsageSessions.AsNoTracking().FirstAsync(s => s.Id == session.Id);
+            Assert.Equal("Đã hủy", updated.Status);
+        }
+
         // ── QUYỀN & TRẠNG THÁI ──────────────────────────────────────────
 
         [Fact]

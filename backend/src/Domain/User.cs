@@ -42,5 +42,6 @@ namespace HUIT_RoMan.Domain.Entities
         public virtual ICollection<ViolationRecord> ViolationRecords { get; set; } = new List<ViolationRecord>();
         public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
         public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+        public virtual ICollection<BookingExtension> BookingExtensions { get; set; } = new List<BookingExtension>();
     }
 }

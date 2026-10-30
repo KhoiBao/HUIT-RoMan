@@ -458,7 +458,7 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 - Ma trận quyền phòng khớp theo chuỗi tiếng Việt; nên chuyển sang mã/cờ cấu hình trên `RoomType`.
 - Module rỗng: `Application/Modules/Communication`, `Application/Modules/Reporting`; trang `PlaceholderHome.tsx` không còn dùng.
 - Entity chưa được khai thác: `Feedback`, `Notification`, `MaintenanceRecord`, `ApprovalHistory`, `RoomTypeCondition`.
-- Tài liệu/script cũ: `setup.bat`, `run-redis.bat`, `stop-redis.bat`.
+- Tài liệu/script cũ: `setup.bat` (đã cập nhật); `run-redis.bat`, `stop-redis.bat` (đã xoá).
 
 ---
 
@@ -499,24 +499,20 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 
 | File | Trạng thái | Đề xuất |
 |---|---|---|
-| `setup.bat` | Còn dùng | Giữ; sửa dòng nhắc `run-redis.bat` |
+| `setup.bat` | Còn dùng | Giữ |
 | `update-db.bat` | Còn dùng | Giữ |
 | `run-backend.bat` | Còn dùng | Giữ |
 | `run-web.bat` | Còn dùng | Giữ |
 | `reset-db.bat` | Còn dùng | Giữ |
-| `public-tunnel.bat` | Tùy nhu cầu demo | Giữ nếu cần Cloudflare Tunnel |
-| `run-redis.bat` | **Lỗi thời** | Bỏ — hiện chạy toàn bộ stack, không còn Redis |
-| `stop-redis.bat` | **Lỗi thời** | Bỏ — hiện tắt toàn bộ stack |
+| `public-tunnel.bat` | Tùy nhu cầu demo | Giữ — đã kiểm tra `cloudflared` và cổng 5173 trước khi mở tunnel |
+| `run-redis.bat`, `stop-redis.bat` | **Đã xoá** | Không còn Redis trong hệ thống |
 
 > Các file `.bat` chỉ là wrapper lệnh, không được code/CI/Dockerfile tham chiếu. Bỏ chúng không ảnh hưởng hoạt động của ứng dụng; chỉ cần cập nhật tài liệu.
 
 ### 8.5. Redis
 
-- Code backend hỗ trợ Redis backplane (`Program.cs`, `appsettings.json`).
-- Compose hiện không có service Redis.
-- Cần chọn một hướng:
-  1. Thêm service `redis` + đặt `Redis__ConnectionString=redis:6379` cho API; hoặc
-  2. Bỏ trống `Redis:ConnectionString` để dùng in-memory SignalR (đủ cho 1 instance).
+- **Đã bỏ Redis** (30/10/2026): xoá gói `Microsoft.AspNetCore.SignalR.StackExchangeRedis`, section `Redis` trong `appsettings.json`, khối Redis backplane trong `Program.cs` và hai file `run-redis.bat`/`stop-redis.bat`.
+- SignalR chạy in-memory, phù hợp vì compose chỉ có một instance API.
 
 ---
 
@@ -529,15 +525,15 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 | **P1** | `GET /api/Bookings/{id}`, `GET /api/UsageSessions/{id}` thiếu kiểm tra quyền sở hữu | Lộ dữ liệu đơn/phiên của người khác | Kiểm tra owner/department trước khi trả dữ liệu |
 | **P1** | CORS cho mọi origin + credentials; JWT secret mặc định | Tăng bề mặt tấn công, rò rỉ token | Giới hạn origin; bắt buộc secret từ env; xoay secret |
 | **P1** | Thiếu email/Notification Center/nhắc lịch; no-show chỉ ghi DB | Người dùng không biết đơn bị hủy; thiếu yêu cầu 14, 16, 20 | Notification API/UI + MailKit + background job nhắc lịch |
-| **P1** | Redis cấu hình nhưng không có service | Chat có thể treo/không gửi tin | Thêm Redis hoặc bỏ cấu hình |
-| **P1** | Nginx không proxy `/hubs/` | Chat realtime hỏng khi chạy Docker qua web | Thêm `location /hubs/` kèm header `Upgrade`/`Connection` |
+| ~~P1~~ | ~~Redis cấu hình nhưng không có service~~ | Đã xử lý: bỏ Redis, SignalR in-memory | — |
+| ~~P1~~ | ~~Nginx không proxy `/hubs/`~~ | Đã xử lý: thêm `location /hubs/` + `Upgrade`/`Connection` | — |
 | **P1** | Chưa có E2E/tải; CI không chạy `dotnet test`/lint | Khó regression, dễ tái phát lỗi | Thêm E2E + job test/lint vào CI |
 | **P2** | 296 warning nullable khi build sạch | Khó đọc cảnh báo thật, nợ kỹ thuật | Sửa CS8618/CS8601 theo module; có thể bật nullable có kiểm soát |
 | **P2** | `GetPagedAsync` và báo cáo tổng hợp in-memory | Chậm khi dữ liệu lớn | Chuyển sang query/SQL, phân trang DB |
 | **P2** | File UI quá lớn, bundle 869 kB | Khó bảo trì, tải chậm | Tách component, lazy-load theo tab/route |
 | **P2** | Ma trận quyền phòng khớp chuỗi tiếng Việt | Dễ lệch khi đổi tên loại phòng | Thêm cờ/mã quyền trên `RoomType` |
 | **P2** | Chưa có unique constraint cho bộ tiết theo loại phòng | Có thể seed trùng tiết | Thêm unique index `(RoomTypeId, Name)` hoặc `(RoomTypeId, StartTime)` |
-| **P2** | Tài liệu/script lỗi thời (`setup.bat`, `run-redis`, `stop-redis`) | Người mới làm sai quy trình | Cập nhật theo code hiện tại |
+| ~~P2~~ | ~~Tài liệu/script lỗi thời (`setup.bat`, `run-redis`, `stop-redis`)~~ | Đã xử lý: xoá script Redis, cập nhật `setup.bat` | — |
 | **P3** | Chưa có feedback/rating, mobile, bảo trì thiết bị, lịch sử duyệt | Thiếu phạm vi mở rộng | Làm sau khi ổn định Web |
 
 ---

@@ -159,13 +159,17 @@ export const ApprovalHistoryModal: React.FC<ApprovalHistoryModalProps> = ({
 
                     <div className="history-actor">
                       <span className="history-actor-name">
-                        <UsersIcon size={13} /> {h.employeeName || "Nhân sự quản lý"}
+                        <UsersIcon size={13} />{" "}
+                        {h.actorName || h.employeeName || "Không xác định"}
                       </span>
                       {h.employeeCode && (
                         <span className="history-actor-code">({h.employeeCode})</span>
                       )}
                       {h.employeePosition && (
                         <span className="history-actor-pos">• {h.employeePosition}</span>
+                      )}
+                      {h.approvalMode === "AUTO" && (
+                        <span className="history-actor-mode">Tự động</span>
                       )}
                     </div>
 

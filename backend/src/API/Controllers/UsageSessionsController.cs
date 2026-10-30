@@ -112,6 +112,16 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(response);
         }
 
+        /// <summary>Gia hạn phòng đang sử dụng nếu khung thời gian mới còn trống.</summary>
+        [HttpPost("{id}/extend")]
+        public async Task<IActionResult> Extend(int id, [FromBody] ExtendUsageSessionRequestDto request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var response = await _usageService.ExtendAsync(id, request);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
         /// <summary>
         /// Hủy phiên do quá giờ không nhận phòng (No-show quá 15 phút)
         /// Giải phóng trạng thái phòng về 'Trống'.

@@ -26,7 +26,7 @@ export interface RoomItem {
   floor: string;
   roomNumber: string;
   capacity: number;
-  status: string; // "Available", "InUse", "Maintenance"
+  status: string; // "Trống" | "Đang sử dụng" | "Bảo trì"
   description: string;
   roomTypeId: number;
   roomTypeName: string;
@@ -93,7 +93,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
     capacity: 10,
     roomTypeId: 0,
     description: "",
-    status: "Available",
+    status: "Trống",
   });
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -129,9 +129,9 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
     return rooms.filter((r) => {
       if (statusFilter !== "ALL") {
         const s = (r.status || "").trim().toLowerCase();
-        if (statusFilter === "Maintenance" && s !== "maintenance" && s !== "bảo trì" && s !== "đang bảo trì") return false;
-        if (statusFilter === "Available" && s !== "available" && s !== "trống" && s !== "sẵn sàng") return false;
-        if (statusFilter === "InUse" && s !== "inuse" && s !== "đang sử dụng") return false;
+        if (statusFilter === "Bảo trì" && s !== "maintenance" && s !== "bảo trì" && s !== "đang bảo trì") return false;
+        if (statusFilter === "Trống" && s !== "available" && s !== "trống" && s !== "sẵn sàng") return false;
+        if (statusFilter === "Đang sử dụng" && s !== "inuse" && s !== "đang sử dụng") return false;
       }
       if (typeFilter !== "ALL" && String(r.roomTypeId) !== typeFilter)
         return false;
@@ -170,7 +170,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
       capacity: 10,
       roomTypeId: roomTypes[0]?.id || 0,
       description: "",
-      status: "Available",
+      status: "Trống",
     });
   };
 
@@ -187,7 +187,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
       capacity: r.capacity || 10,
       roomTypeId: r.roomTypeId,
       description: r.description || "",
-      status: r.status || "Available",
+      status: r.status || "Trống",
     });
   };
 
@@ -257,16 +257,16 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
     }
   };
 
-  // Toggle Room Status: Available <=> Maintenance
+  // Toggle Room Status: Trống <=> Bảo trì
   const handleToggleStatus = async (r: RoomItem) => {
-    const isMaintenance = r.status === "Maintenance" || r.status === "Bảo trì";
-    const nextStatus = isMaintenance ? "Available" : "Maintenance";
-    const statusLabel = nextStatus === "Maintenance" ? "Bảo trì" : "Sẵn sàng";
+    const isUnderMaintenance = r.status === "Bảo trì" || r.status === "Maintenance";
+    const nextStatus = isUnderMaintenance ? "Trống" : "Bảo trì";
+    const statusLabel = isUnderMaintenance ? "Sẵn sàng" : "Bảo trì";
     
     const isConfirmed = await confirm({
       title: "Chuyển trạng thái phòng",
       message: `Bạn có muốn chuyển trạng thái phòng ${r.roomCode} sang "${statusLabel}"?`,
-      subMessage: nextStatus === "Maintenance"
+      subMessage: nextStatus === "Bảo trì"
         ? "Phòng bảo trì sẽ tạm thời ngừng phục vụ đặt phòng mới."
         : "Phòng sẽ sẵn sàng tiếp nhận đặt chỗ.",
       itemDetails: [
@@ -276,7 +276,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
       ],
       confirmText: "Xác nhận chuyển",
       cancelText: "Hủy bỏ",
-      type: nextStatus === "Maintenance" ? "warning" : "info",
+      type: nextStatus === "Bảo trì" ? "warning" : "info",
     });
 
     if (!isConfirmed) return;
@@ -284,7 +284,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
     try {
       await api.patch(`/api/Rooms/${r.id}/status`, { 
         status: nextStatus,
-        reason: nextStatus === "Maintenance" ? "Chuyển sang bảo trì" : "Phòng sẵn sàng hoạt động"
+        reason: nextStatus === "Bảo trì" ? "Chuyển sang bảo trì" : "Phòng sẵn sàng hoạt động"
       });
       onNotify(`Đã cập nhật phòng ${r.roomCode} sang "${statusLabel}"!`, "success");
       await fetchData();
@@ -439,9 +439,9 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
             }}
           >
             <option value="ALL">-- Tất cả trạng thái --</option>
-            <option value="Available">Sẵn sàng</option>
-            <option value="InUse">Đang sử dụng</option>
-            <option value="Maintenance">Đang bảo trì</option>
+            <option value="Trống">Sẵn sàng</option>
+            <option value="Đang sử dụng">Đang sử dụng</option>
+            <option value="Bảo trì">Đang bảo trì</option>
           </select>
         </div>
       </div>
@@ -794,9 +794,9 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                         setFormData({ ...formData, status: e.target.value })
                       }
                     >
-                      <option value="Available">Sẵn sàng</option>
-                      <option value="InUse">Đang sử dụng</option>
-                      <option value="Maintenance">Đang bảo trì</option>
+                      <option value="Trống">Sẵn sàng</option>
+                      <option value="Đang sử dụng">Đang sử dụng</option>
+                      <option value="Bảo trì">Đang bảo trì</option>
                     </select>
                   </div>
                 )}

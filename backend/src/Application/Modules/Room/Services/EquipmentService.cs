@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HUIT_RoMan.Application.Modules.Room.DTOs;
+using HUIT_RoMan.Domain;
 using HUIT_RoMan.Domain.Entities;
 using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Common.Models;
@@ -241,9 +242,9 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
                 if (isMaint)
                 {
-                    if (!room.Status.Equals("Maintenance", System.StringComparison.OrdinalIgnoreCase))
+                    if (!room.Status.Equals(RoomStatuses.Maintenance, System.StringComparison.OrdinalIgnoreCase))
                     {
-                        room.Status = "Maintenance";
+                        room.Status = RoomStatuses.Maintenance;
                         roomRepo.Update(room);
                     }
                 }
@@ -262,7 +263,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                         if (room.Status.Equals("Bảo trì", System.StringComparison.OrdinalIgnoreCase) ||
                             room.Status.Equals("Maintenance", System.StringComparison.OrdinalIgnoreCase))
                         {
-                            room.Status = "Available";
+                            room.Status = RoomStatuses.Available;
                             roomRepo.Update(room);
                         }
                     }

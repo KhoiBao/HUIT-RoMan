@@ -74,6 +74,8 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<RoomTypeDto>> CreateAsync(CreateRoomTypeDto request)
         {
+            if (request.DefaultCapacity <= 0)
+                return ApiResponse<RoomTypeDto>.ErrorResponse("Sức chứa mặc định phải lớn hơn 0.");
             var rt = new RoomType
             {
                 Name = request.Name,
@@ -110,6 +112,8 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<bool>> UpdateAsync(int id, CreateRoomTypeDto request)
         {
+            if (request.DefaultCapacity <= 0)
+                return ApiResponse<bool>.ErrorResponse("Sức chứa mặc định phải lớn hơn 0.");
             var rt = await _roomTypeRepo.GetByIdAsync(id);
             if (rt == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy loại phòng");
 

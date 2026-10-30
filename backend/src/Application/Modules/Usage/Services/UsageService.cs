@@ -6,6 +6,7 @@ using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Common.Models;
 using HUIT_RoMan.Application.Modules.Booking.Services;
 using HUIT_RoMan.Application.Modules.Usage.DTOs;
+using HUIT_RoMan.Application.Modules.WorkingHours.Services;
 using HUIT_RoMan.Domain.Entities;
 
 namespace HUIT_RoMan.Application.Modules.Usage.Services
@@ -20,20 +21,27 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
         private readonly IRepository<Domain.Entities.Booking> _bookingRepo;
         private readonly IRepository<Domain.Entities.Room> _roomRepo;
         private readonly IRepository<Domain.Entities.User> _userRepo;
+        private readonly IRepository<Period> _periodRepo;
+        private readonly IRepository<BookingExtension> _bookingExtensionRepo;
+        private readonly ILibraryWorkingHoursProvider? _workingHours;
 
         public UsageService(
             IUnitOfWork unitOfWork,
             ICurrentUserService currentUser,
-            IStoredProcedureService storedProcedureService)
+            IStoredProcedureService storedProcedureService,
+            ILibraryWorkingHoursProvider? workingHours = null)
         {
             _unitOfWork = unitOfWork;
             _currentUser = currentUser;
             _storedProcedureService = storedProcedureService;
+            _workingHours = workingHours;
             _usageRepo = _unitOfWork.Repository<UsageSession>();
             _bookingDetailRepo = _unitOfWork.Repository<BookingDetail>();
             _bookingRepo = _unitOfWork.Repository<Domain.Entities.Booking>();
             _roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
             _userRepo = _unitOfWork.Repository<Domain.Entities.User>();
+            _periodRepo = _unitOfWork.Repository<Period>();
+            _bookingExtensionRepo = _unitOfWork.Repository<BookingExtension>();
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -397,6 +405,14 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             // Thực hiện Check-in
             var checkInTime = request.ActualCheckIn ?? DateTime.UtcNow;
             session.ActualCheckIn = DateTime.SpecifyKind(checkInTime, DateTimeKind.Utc);
+            var actualGuestCount = request.ActualGuestCount ?? session.BookingDetail?.GuestCount;
+            if (!actualGuestCount.HasValue || actualGuestCount.Value <= 0)
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Số người thực tế phải lớn hơn 0.");
+            if (room != null && actualGuestCount.Value > room.Capacity)
+                return ApiResponse<UsageSessionDto>.ErrorResponse($"Số người thực tế ({actualGuestCount}) vượt sức chứa phòng ({room.Capacity}).");
+
+            session.ActualGuestCount = actualGuestCount.Value;
+            session.StaffNote = string.IsNullOrWhiteSpace(request.StaffNote) ? session.StaffNote : request.StaffNote.Trim();
             session.Status = "Đang sử dụng";
             _usageRepo.Update(session);
 
@@ -493,6 +509,10 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             // Cập nhật Entity thông qua EF Core
             session.ActualCheckOut = checkOutTime;
             session.Status = "Hoàn thành";
+            session.StaffNote = string.IsNullOrWhiteSpace(request.StaffNote) ? session.StaffNote : request.StaffNote.Trim();
+            session.DevicesOk = request.DevicesOk;
+            session.Cleaned = request.Cleaned;
+            session.LightsOff = request.LightsOff;
             _usageRepo.Update(session);
 
             if (session.BookingDetail != null)
@@ -541,6 +561,124 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                 : $"Ghi nhận trả phòng #{session.BookingDetail?.Room?.RoomCode ?? ""} thành công! Phòng đã sẵn sàng đón lượt sử dụng mới.";
 
             return ApiResponse<UsageSessionDto>.SuccessResponse(MapToDto(session), noteMsg);
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // EXTEND ACTIVE USAGE
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<UsageSessionDto>> ExtendAsync(int usageSessionId, ExtendUsageSessionRequestDto request)
+        {
+            var session = await _usageRepo.GetByIdAsync(
+                usageSessionId,
+                s => s.User,
+                s => s.BookingDetail,
+                s => s.BookingDetail.Booking,
+                s => s.BookingDetail.Room,
+                s => s.BookingDetail.Room.RoomType,
+                s => s.BookingDetail.Room.RoomType.Department,
+                s => s.BookingDetail.EndPeriod);
+
+            if (session?.BookingDetail == null)
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Không tìm thấy phiên sử dụng phòng.");
+
+            if (session.Status != "Đang sử dụng")
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Chỉ có thể gia hạn phiên đang sử dụng.");
+
+            var detail = session.BookingDetail;
+            var room = detail.Room;
+            if (room == null)
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Không tìm thấy phòng của phiên sử dụng.");
+
+            if (!_currentUser.IsAdmin && _currentUser.Role != "Employee")
+            {
+                if (_currentUser.UserId != session.UserId)
+                    return ApiResponse<UsageSessionDto>.ErrorResponse("Bạn chỉ có thể gia hạn phòng của đơn mượn của mình.");
+            }
+            else if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue
+                     && room.RoomType?.DepartmentId != _currentUser.DepartmentId.Value)
+            {
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Bạn chỉ có quyền gia hạn phòng thuộc đơn vị mình quản lý.");
+            }
+
+            DateTime newEndAt;
+            int? newEndPeriodId = null;
+            if (room.RoomType?.IsBookingByPeriod == true)
+            {
+                if (!request.NewEndPeriodId.HasValue || request.NewEndAt.HasValue)
+                    return ApiResponse<UsageSessionDto>.ErrorResponse("Phòng đặt theo tiết yêu cầu NewEndPeriodId và không nhận NewEndAt.");
+
+                var period = await _periodRepo.GetByIdAsync(request.NewEndPeriodId.Value);
+                if (period == null || (period.RoomTypeId.HasValue && period.RoomTypeId != room.RoomTypeId))
+                    return ApiResponse<UsageSessionDto>.ErrorResponse("Tiết kết thúc không thuộc lịch của loại phòng này.");
+
+                var localStartDate = detail.StartAt.ToUniversalTime().AddHours(7).Date;
+                newEndAt = DateTime.SpecifyKind(localStartDate.Add(period.EndTime).AddHours(-7), DateTimeKind.Utc);
+                newEndPeriodId = period.Id;
+            }
+            else
+            {
+                if (!request.NewEndAt.HasValue || request.NewEndPeriodId.HasValue)
+                    return ApiResponse<UsageSessionDto>.ErrorResponse("Phòng đặt theo giờ yêu cầu NewEndAt và không nhận NewEndPeriodId.");
+                newEndAt = DateTime.SpecifyKind(request.NewEndAt.Value.ToUniversalTime(), DateTimeKind.Utc);
+            }
+
+            if (newEndAt <= detail.EndAt)
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Thời gian gia hạn phải sau giờ kết thúc hiện tại.");
+            if (newEndAt <= DateTime.UtcNow)
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Thời gian kết thúc mới phải ở tương lai.");
+
+            var isLibraryRoom = string.Equals(
+                room.RoomType?.Department?.Type, "Library", StringComparison.OrdinalIgnoreCase);
+            if (_workingHours != null && isLibraryRoom)
+            {
+                var week = await _workingHours.GetWeekAsync();
+                var hoursError = _workingHours.Validate(week, detail.StartAt, newEndAt);
+                if (hoursError != null)
+                    return ApiResponse<UsageSessionDto>.ErrorResponse(hoursError);
+            }
+
+            var conflicts = await _bookingDetailRepo.FindAsync(d =>
+                d.Id != detail.Id
+                && d.RoomId == detail.RoomId
+                && d.Status != "Từ chối"
+                && d.Status != "Đã hủy"
+                && d.StartAt < newEndAt
+                && d.EndAt > detail.EndAt);
+            if (conflicts.Any())
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Không thể gia hạn vì phòng đã có lịch kế tiếp bị trùng.");
+
+            var previousEndAt = detail.EndAt;
+            var previousEndPeriodId = detail.EndPeriodId;
+            detail.EndAt = newEndAt;
+            detail.EndPeriodId = newEndPeriodId;
+            _bookingDetailRepo.Update(detail);
+            session.StaffNote = string.IsNullOrWhiteSpace(request.StaffNote) ? session.StaffNote : request.StaffNote.Trim();
+            _usageRepo.Update(session);
+            await _bookingExtensionRepo.AddAsync(new BookingExtension
+            {
+                BookingDetailId = detail.Id,
+                UsageSessionId = session.Id,
+                PreviousEndAt = previousEndAt,
+                NewEndAt = newEndAt,
+                PreviousEndPeriodId = previousEndPeriodId,
+                NewEndPeriodId = newEndPeriodId,
+                RequestedByUserId = _currentUser.UserId ?? session.UserId,
+                RequestedAt = DateTime.UtcNow,
+                Status = "Đã áp dụng",
+                Note = string.IsNullOrWhiteSpace(request.StaffNote) ? null : request.StaffNote.Trim(),
+                CreatedAt = DateTime.UtcNow
+            });
+
+            try
+            {
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch (HUIT_RoMan.Application.Common.Exceptions.ScheduleConflictException)
+            {
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Phòng vừa có lịch mới trong thời gian gia hạn. Vui lòng chọn thời điểm khác.");
+            }
+
+            return ApiResponse<UsageSessionDto>.SuccessResponse(MapToDto(session), "Gia hạn phòng thành công.");
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -662,8 +800,9 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
 
         private static string GenerateConfirmationCode(string? roomCode)
         {
-            var rand = new Random().Next(10000, 99999);
-            return $"HUIT-{rand}";
+            // Database has a unique constraint; a cryptographically strong 12-hex suffix
+            // makes a collision practically impossible while keeping the code easy to enter.
+            return $"HUIT-{Guid.NewGuid():N}"[..17].ToUpperInvariant();
         }
 
         private static UsageSessionDto MapToDto(UsageSession s)
@@ -689,6 +828,7 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                 ActivityName = s.BookingDetail?.Booking?.ActivityName ?? "Sử dụng phòng học",
                 Purpose = s.BookingDetail?.Purpose ?? s.BookingDetail?.Booking?.Purpose ?? string.Empty,
                 GuestCount = s.BookingDetail?.GuestCount ?? 0,
+                ActualGuestCount = s.ActualGuestCount,
 
                 RoomId = s.BookingDetail?.RoomId ?? 0,
                 RoomName = s.BookingDetail?.Room?.Name ?? string.Empty,
@@ -702,7 +842,8 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                 StartPeriodId = s.BookingDetail?.StartPeriodId,
                 StartPeriodName = s.BookingDetail?.StartPeriod?.Name,
                 EndPeriodId = s.BookingDetail?.EndPeriodId,
-                EndPeriodName = s.BookingDetail?.EndPeriod?.Name
+                EndPeriodName = s.BookingDetail?.EndPeriod?.Name,
+                StaffNote = s.StaffNote
             };
         }
     }

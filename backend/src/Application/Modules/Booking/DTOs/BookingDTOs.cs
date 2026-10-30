@@ -44,6 +44,13 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
         public string Status { get; set; }
         public string RejectionReason { get; set; }
         public DateTime CreatedAt { get; set; }
+        /// <summary>Tài khoản quyết định duyệt chi tiết này. NULL = chưa duyệt.</summary>
+        public int? ApprovedByUserId { get; set; }
+        /// <summary>Tên hiển thị người duyệt (tài khoản hệ thống có tên riêng).</summary>
+        public string? ApprovedByName { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        /// <summary>MANUAL | AUTO. NULL = chưa duyệt.</summary>
+        public string? ApprovalMode { get; set; }
     }
 
     public class BookingResponseDto
@@ -70,6 +77,13 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
         public string? CancelSource { get; set; }
         /// <summary>Thông tin cửa sổ nhận phòng tính tại thời điểm request (server time).</summary>
         public CheckInWindowDto? CheckInWindow { get; set; }
+        /// <summary>Tài khoản quyết định duyệt đơn. NULL = chưa duyệt hoặc bị từ chối.</summary>
+        public int? ApprovedByUserId { get; set; }
+        /// <summary>Tên hiển thị người duyệt (tài khoản hệ thống có tên riêng).</summary>
+        public string? ApprovedByName { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        /// <summary>MANUAL | AUTO. NULL = chưa duyệt.</summary>
+        public string? ApprovalMode { get; set; }
         public List<BookingDetailResponseDto> Details { get; set; } = new();
     }
 

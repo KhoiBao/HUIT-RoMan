@@ -105,6 +105,21 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         // ─────────────────────────────────────────────────────────────────
+        // CREATE
+        // ─────────────────────────────────────────────────────────────────
+
+        /// <summary>Tạo tài khoản người dùng mới (Admin only)</summary>
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Create([FromBody] CreateUserDto request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var response = await _userService.CreateAsync(request);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
+        // ─────────────────────────────────────────────────────────────────
         // UPDATE
         // ─────────────────────────────────────────────────────────────────
 

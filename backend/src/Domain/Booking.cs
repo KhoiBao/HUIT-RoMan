@@ -46,6 +46,19 @@ namespace HUIT_RoMan.Domain.Entities
         [StringLength(20)]
         public string? CancelSource { get; set; }
 
+        // ── Người quyết định đơn ──────────────────────────────────────
+        /// <summary>Tài khoản đã duyệt đơn. AUTO duyệt thì là tài khoản hệ thống.</summary>
+        public int? ApprovedByUserId { get; set; }
+
+        [ForeignKey(nameof(ApprovedByUserId))]
+        public virtual User? ApprovedByUser { get; set; }
+
+        public DateTime? ApprovedAt { get; set; }
+
+        /// <summary>MANUAL (người thật duyệt) | AUTO (chế độ tự động duyệt).</summary>
+        [StringLength(10)]
+        public string? ApprovalMode { get; set; }
+
 
         [ForeignKey("User")]
         public int UserId { get; set; }

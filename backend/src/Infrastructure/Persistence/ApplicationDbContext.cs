@@ -38,6 +38,9 @@ namespace HUIT_RoMan.Infrastructure.Persistence
         public DbSet<UserRestriction> UserRestrictions { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<ApprovalHistory> ApprovalHistories { get; set; }
+        public DbSet<BookingExtension> BookingExtensions { get; set; }
+        public DbSet<WorkingHour> WorkingHours { get; set; }
+        public DbSet<SystemSetting> SystemSettings { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -50,9 +53,111 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 .IsUnique()
                 .HasFilter("\"IsDeleted\" = FALSE");
 
+            // Chỉ ràng buộc trên bản ghi còn sống: phiên đã xoá mềm không được
+            // chặn việc tạo phiên mới cho cùng chi tiết đặt phòng.
+            modelBuilder.Entity<UsageSession>()
+                .HasIndex(s => s.BookingDetailId)
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = FALSE");
+
+            modelBuilder.Entity<UsageSession>()
+                .HasIndex(s => s.ConfirmationCode)
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = FALSE");
+
+            // These database constraints backstop API validation and protect imports/direct SQL.
+            modelBuilder.Entity<Room>().ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_Rooms_Capacity_Positive", "\"Capacity\" > 0");
+                t.HasCheckConstraint("CK_Rooms_Status", "\"Status\" IN ('Trống', 'Đang sử dụng', 'Bảo trì')");
+            });
+            modelBuilder.Entity<RoomType>().ToTable(t =>
+                t.HasCheckConstraint("CK_RoomTypes_DefaultCapacity_Positive", "\"DefaultCapacity\" > 0"));
+            modelBuilder.Entity<Period>().ToTable(t =>
+                t.HasCheckConstraint("CK_Periods_Time_Range", "\"EndTime\" > \"StartTime\""));
+            modelBuilder.Entity<Booking>().ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_Bookings_GuestCount_Positive", "\"GuestCount\" > 0");
+                t.HasCheckConstraint("CK_Bookings_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Duyệt một phần', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
+                t.HasCheckConstraint("CK_Bookings_Approval_Audit",
+                    "(\"ApprovalMode\" IS NULL AND \"ApprovedByUserId\" IS NULL AND \"ApprovedAt\" IS NULL) OR (\"ApprovalMode\" IN ('MANUAL', 'AUTO') AND \"ApprovedByUserId\" IS NOT NULL AND \"ApprovedAt\" IS NOT NULL)");
+            });
+            modelBuilder.Entity<BookingDetail>().ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_BookingDetails_GuestCount_Positive", "\"GuestCount\" > 0");
+                t.HasCheckConstraint("CK_BookingDetails_Time_Range", "\"EndAt\" > \"StartAt\"");
+                t.HasCheckConstraint("CK_BookingDetails_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
+                t.HasCheckConstraint("CK_BookingDetails_Approval_Audit",
+                    "(\"ApprovalMode\" IS NULL AND \"ApprovedByUserId\" IS NULL AND \"ApprovedAt\" IS NULL) OR (\"ApprovalMode\" IN ('MANUAL', 'AUTO') AND \"ApprovedByUserId\" IS NOT NULL AND \"ApprovedAt\" IS NOT NULL)");
+            });
+            modelBuilder.Entity<ApprovalHistory>().ToTable(t =>
+            {
+                // Mỗi dòng phải chỉ rõ một chủ thể: tài khoản thật, hồ sơ nhân sự,
+                // hoặc được đánh dấu là do chế độ tự động duyệt thực hiện.
+                t.HasCheckConstraint("CK_ApprovalHistories_Actor",
+                    "\"ActorUserId\" IS NOT NULL OR \"EmployeeId\" IS NOT NULL OR \"ApprovalMode\" = 'AUTO'");
+                t.HasCheckConstraint("CK_ApprovalHistories_Mode",
+                    "\"ApprovalMode\" IS NULL OR \"ApprovalMode\" IN ('MANUAL', 'AUTO')");
+            });
+            modelBuilder.Entity<UsageSession>().ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_UsageSessions_ActualGuestCount_Positive", "\"ActualGuestCount\" IS NULL OR \"ActualGuestCount\" > 0");
+                t.HasCheckConstraint("CK_UsageSessions_Checkout_After_Checkin", "\"ActualCheckOut\" IS NULL OR \"ActualCheckIn\" IS NULL OR \"ActualCheckOut\" >= \"ActualCheckIn\"");
+                t.HasCheckConstraint("CK_UsageSessions_Status", "\"Status\" IN ('Chờ nhận phòng', 'Đang sử dụng', 'Hoàn thành', 'Đã hủy')");
+            });
+
+            modelBuilder.Entity<BookingDetail>()
+                .HasIndex(d => new { d.RoomId, d.Status, d.StartAt, d.EndAt });
+
+            modelBuilder.Entity<BookingExtension>().ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_BookingExtensions_Time_Range", "\"NewEndAt\" > \"PreviousEndAt\"");
+                t.HasCheckConstraint("CK_BookingExtensions_Status", "\"Status\" IN ('Đã áp dụng')");
+            });
+            modelBuilder.Entity<BookingExtension>()
+                .HasIndex(e => new { e.BookingDetailId, e.RequestedAt });
+
+            modelBuilder.Entity<WorkingHour>().ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_WorkingHours_DayOfWeek", "\"DayOfWeek\" BETWEEN 0 AND 6");
+                t.HasCheckConstraint("CK_WorkingHours_Time_Range",
+                    "\"IsClosed\" = TRUE OR \"CloseTime\" > \"OpenTime\"");
+            });
+            modelBuilder.Entity<WorkingHour>()
+                .HasIndex(w => new { w.DepartmentId, w.DayOfWeek })
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = FALSE");
+
             // Configure Composite Keys
             modelBuilder.Entity<RoomEquipment>()
                 .HasKey(re => new { re.RoomId, re.EquipmentId });
+
+            // Hai khoá ngoại cùng trỏ tới User: người đặt và người phê duyệt.
+            modelBuilder.Entity<Booking>()
+                .HasOne(b => b.User)
+                .WithMany(u => u.Bookings)
+                .HasForeignKey(b => b.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<Booking>()
+                .HasOne(b => b.ApprovedByUser)
+                .WithMany()
+                .HasForeignKey(b => b.ApprovedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<BookingDetail>()
+                .HasOne(d => d.ApprovedByUser)
+                .WithMany()
+                .HasForeignKey(d => d.ApprovedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<ApprovalHistory>()
+                .HasOne(h => h.ActorUser)
+                .WithMany()
+                .HasForeignKey(h => h.ActorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<SystemSetting>()
+                .HasOne(s => s.UpdatedByUser)
+                .WithMany()
+                .HasForeignKey(s => s.UpdatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<RoomTypeCondition>()
                 .HasKey(rtc => new { rtc.RoomTypeId, rtc.UsageConditionId });

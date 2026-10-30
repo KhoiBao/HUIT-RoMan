@@ -447,7 +447,6 @@ export interface TimelineSegment {
   title?: string;
   subtitle?: string;
   badgeText?: string;
-  actionText?: string;
   isPending?: boolean;
   booking?: RoomScheduleItem;
 }
@@ -615,8 +614,6 @@ export function buildRoomTimelineSegments(
           leftPercent: futurePos.leftPercent,
           widthPercent: futurePos.widthPercent,
           title: fullFreeTitle,
-          subtitle: "Nhấp để đặt phòng",
-          actionText: "ĐẶT PHÒNG",
         },
       ];
     }
@@ -633,8 +630,7 @@ export function buildRoomTimelineSegments(
         leftPercent: pos.leftPercent,
         widthPercent: pos.widthPercent,
         title: fullFreeTitle,
-        subtitle: isPastDay ? "Ngày đã qua" : "Nhấp để đặt phòng",
-        actionText: isPastDay ? undefined : "ĐẶT PHÒNG",
+        subtitle: isPastDay ? "Ngày đã qua" : undefined,
       },
     ];
   }

@@ -15,6 +15,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   InfoIcon,
+  PlusIcon,
 } from "../Icon";
 
 export interface UserItem {
@@ -59,6 +60,23 @@ export default function AdminUsersTab({ onNotify }: Props) {
   const [resetSuccessResult, setResetSuccessResult] = useState<{ user: UserItem; password: string } | null>(null);
 
   const [submitting, setSubmitting] = useState<boolean>(false);
+
+  // Create user modal
+  const [createOpen, setCreateOpen] = useState<boolean>(false);
+  const [createSubmitting, setCreateSubmitting] = useState<boolean>(false);
+  const [createForm, setCreateForm] = useState({
+    cardCode: "",
+    fullName: "",
+    email: "",
+    phoneNumber: "",
+    role: "Student",
+    password: "",
+  });
+  const [createdResult, setCreatedResult] = useState<{
+    fullName: string;
+    cardCode: string;
+    password: string;
+  } | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -221,6 +239,57 @@ export default function AdminUsersTab({ onNotify }: Props) {
   };
 
 
+  const openCreate = () => {
+    setCreateForm({
+      cardCode: "",
+      fullName: "",
+      email: "",
+      phoneNumber: "",
+      role: "Student",
+      password: "",
+    });
+    setCreatedResult(null);
+    setCreateOpen(true);
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setCreateSubmitting(true);
+      const res = await api.post("/api/Users", {
+        cardCode: createForm.cardCode.trim(),
+        fullName: createForm.fullName.trim(),
+        email: createForm.email.trim(),
+        phoneNumber: createForm.phoneNumber.trim() || null,
+        role: createForm.role,
+        password: createForm.password.trim() || null,
+      });
+      const created = res.data?.data;
+      setCreatedResult({
+        fullName: created?.user?.fullName || createForm.fullName.trim(),
+        cardCode: created?.user?.cardCode || createForm.cardCode.trim(),
+        password: created?.password || createForm.password.trim() || "Huit@123",
+      });
+      onNotify(res.data?.message || "Đã tạo tài khoản mới!", "success");
+
+      const nextType =
+        createForm.role === "Student"
+          ? "students"
+          : createForm.role === "Lecturer"
+          ? "lecturers"
+          : "all";
+      if (nextType === userType) await fetchUsers();
+      else setUserType(nextType);
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || err.response?.data || "Lỗi khi tạo tài khoản.",
+        "warning"
+      );
+    } finally {
+      setCreateSubmitting(false);
+    }
+  };
+
   return (
     <div className="admin-subtab-container">
       <div className="admin-subtab-header">
@@ -234,15 +303,25 @@ export default function AdminUsersTab({ onNotify }: Props) {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="admin-btn-refresh flex items-center gap-1.5"
-          onClick={fetchUsers}
-          disabled={loading}
-        >
-          <RefreshCwIcon size={14} className={loading ? "animate-spin" : ""} />
-          <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
-        </button>
+        <div className="admin-subtab-actions">
+          <button
+            type="button"
+            className="btn-admin-pill-primary"
+            onClick={openCreate}
+          >
+            <span>Thêm tài khoản</span>
+          </button>
+
+          <button
+            type="button"
+            className="admin-btn-refresh flex items-center gap-1.5"
+            onClick={fetchUsers}
+            disabled={loading}
+          >
+            <RefreshCwIcon size={14} className={loading ? "animate-spin" : ""} />
+            <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
+          </button>
+        </div>
       </div>
 
       {/* Switch between Sinh viên vs Giảng viên vs Tất cả */}
@@ -649,6 +728,198 @@ export default function AdminUsersTab({ onNotify }: Props) {
                       <>
                         <KeyIcon size={15} />
                         <span>Xác nhận đặt lại</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Create User Modal */}
+      {createOpen && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-content" style={{ maxWidth: 560 }}>
+            <div className="modal-header">
+              <h3
+                className="modal-title"
+                style={{ display: "flex", alignItems: "center", gap: 8 }}
+              >
+                <UsersIcon size={20} className="icon-blue-glow" />
+                <span>Thêm tài khoản mới</span>
+              </h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setCreateOpen(false)}
+                aria-label="Đóng hộp thoại thêm tài khoản"
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            {createdResult ? (
+              <div className="modal-body" style={{ textAlign: "center", padding: "20px 16px" }}>
+                <div
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: "50%",
+                    backgroundColor: "#dcfce7",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 14px",
+                    color: "#15803d",
+                  }}
+                >
+                  <CheckIcon size={24} />
+                </div>
+                <h4 style={{ fontSize: 16, fontWeight: 700, color: "#1e293b", marginBottom: 6 }}>
+                  Đã tạo tài khoản thành công!
+                </h4>
+                <p style={{ fontSize: 13, color: "#475569", marginBottom: 14 }}>
+                  Tài khoản <strong>{createdResult.fullName}</strong> ({createdResult.cardCode}) có mật khẩu khởi tạo:
+                </p>
+                <div
+                  style={{
+                    backgroundColor: "#f1f5f9",
+                    padding: "10px 16px",
+                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
+                    border: "1px solid #cbd5e1",
+                    marginBottom: 14,
+                  }}
+                >
+                  <code style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", letterSpacing: "0.05em" }}>
+                    {createdResult.password}
+                  </code>
+                </div>
+                <p style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>
+                  Mật khẩu chỉ hiển thị một lần. Hãy gửi cho người dùng và nhắc họ đổi lại sau khi đăng nhập.
+                </p>
+                <div className="modal-footer" style={{ justifyContent: "center" }}>
+                  <button type="button" className="btn-cancel" onClick={() => setCreateOpen(false)}>
+                    Đóng
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-confirm-save"
+                    onClick={() => {
+                      setCreatedResult(null);
+                      setCreateForm({
+                        cardCode: "",
+                        fullName: "",
+                        email: "",
+                        phoneNumber: "",
+                        role: "Student",
+                        password: "",
+                      });
+                    }}
+                  >
+                    <PlusIcon size={15} />
+                    <span>Tạo tài khoản khác</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleCreateUser}>
+                <div className="modal-body">
+                  <div className="form-group-admin">
+                    <label>Mã thẻ / MSSV (*):</label>
+                    <input
+                      type="text"
+                      className="admin-input"
+                      value={createForm.cardCode}
+                      onChange={(e) => setCreateForm({ ...createForm, cardCode: e.target.value })}
+                      maxLength={50}
+                      required
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="form-group-admin">
+                    <label>Họ và tên (*):</label>
+                    <input
+                      type="text"
+                      className="admin-input"
+                      value={createForm.fullName}
+                      onChange={(e) => setCreateForm({ ...createForm, fullName: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group-admin">
+                    <label>Email đăng nhập (*):</label>
+                    <input
+                      type="email"
+                      className="admin-input"
+                      value={createForm.email}
+                      onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group-admin">
+                    <label>Số điện thoại:</label>
+                    <input
+                      type="tel"
+                      className="admin-input"
+                      value={createForm.phoneNumber}
+                      onChange={(e) => setCreateForm({ ...createForm, phoneNumber: e.target.value })}
+                      placeholder="VD: 0912345678"
+                    />
+                  </div>
+
+                  <div className="grid-2-col">
+                    <div className="form-group-admin">
+                      <label>Vai trò hệ thống:</label>
+                      <select
+                        className="admin-input"
+                        value={createForm.role}
+                        onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })}
+                      >
+                        <option value="Student">Sinh viên</option>
+                        <option value="Lecturer">Giảng viên</option>
+                        <option value="Employee">Nhân viên</option>
+                        <option value="Manager">Quản lý đơn vị</option>
+                        <option value="Admin">Quản trị viên</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group-admin">
+                      <label>Mật khẩu khởi tạo:</label>
+                      <input
+                        type="text"
+                        className="admin-input"
+                        value={createForm.password}
+                        onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                        placeholder="Mặc định: Huit@123"
+                        minLength={6}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button type="button" className="btn-cancel" onClick={() => setCreateOpen(false)}>
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-confirm-save flex items-center gap-1.5"
+                    disabled={createSubmitting}
+                  >
+                    {createSubmitting ? (
+                      "Đang tạo..."
+                    ) : (
+                      <>
+                        <PlusIcon size={15} />
+                        <span>Tạo tài khoản</span>
                       </>
                     )}
                   </button>

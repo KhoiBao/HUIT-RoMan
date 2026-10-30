@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HUIT_RoMan.Application.Modules.Booking.Services;
 using HUIT_RoMan.Application.Modules.Room.DTOs;
+using HUIT_RoMan.Domain;
 using HUIT_RoMan.Domain.Entities;
 using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Application.Common.Models;
@@ -121,6 +122,11 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<RoomDto>> CreateAsync(CreateRoomDto request)
         {
+            if (request.Capacity <= 0)
+                return ApiResponse<RoomDto>.ErrorResponse("Sức chứa phòng phải lớn hơn 0.");
+            if (string.IsNullOrWhiteSpace(request.Name) || string.IsNullOrWhiteSpace(request.Building)
+                || string.IsNullOrWhiteSpace(request.Floor) || string.IsNullOrWhiteSpace(request.RoomNumber))
+                return ApiResponse<RoomDto>.ErrorResponse("Tên phòng, tòa, tầng và số phòng là bắt buộc.");
             if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 var roomType = await _roomTypeRepo.GetByIdAsync(request.RoomTypeId);
@@ -152,6 +158,17 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<bool>> UpdateAsync(int id, UpdateRoomDto request)
         {
+            if (request.Capacity <= 0)
+                return ApiResponse<bool>.ErrorResponse("Sức chứa phòng phải lớn hơn 0.");
+            var normalizedStatus = request.Status switch
+            {
+                "Available" or "Trống" => RoomStatuses.Available,
+                "InUse" or "Đang sử dụng" => RoomStatuses.InUse,
+                "Maintenance" or "Bảo trì" => RoomStatuses.Maintenance,
+                _ => null
+            };
+            if (normalizedStatus == null)
+                return ApiResponse<bool>.ErrorResponse("Trạng thái phòng không hợp lệ.");
             var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType, r => r.RoomType.Department);
             if (r == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy phòng");
 
@@ -169,7 +186,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             r.Floor = request.Floor;
             r.RoomNumber = request.RoomNumber;
             r.Capacity = request.Capacity;
-            r.Status = request.Status;
+            r.Status = normalizedStatus;
             r.Description = request.Description;
             r.RoomTypeId = request.RoomTypeId;
 
@@ -433,23 +450,23 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             if (raw.Equals("Maintenance", System.StringComparison.OrdinalIgnoreCase) ||
                 raw.Equals("Bảo trì", System.StringComparison.OrdinalIgnoreCase))
             {
-                return "Maintenance";
+                return RoomStatuses.Maintenance;
             }
 
             if (room.RoomEquipments != null && room.RoomEquipments.Any(re =>
                 !re.IsDeleted && (RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
                                  (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status)))))
             {
-                return "Maintenance";
+                return RoomStatuses.Maintenance;
             }
 
             if (raw.Equals("InUse", System.StringComparison.OrdinalIgnoreCase) ||
                 raw.Equals("Đang sử dụng", System.StringComparison.OrdinalIgnoreCase))
             {
-                return "InUse";
+                return RoomStatuses.InUse;
             }
 
-            return "Available";
+            return RoomStatuses.Available;
         }
 
         private static string NormalizeRoomStatus(string? status)
