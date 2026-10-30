@@ -57,7 +57,7 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             var queryable = sessions;
 
             // Phân quyền: Nhân sự chỉ xem phòng thuộc đơn vị của mình (nếu có DepartmentId)
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 queryable = queryable.Where(s =>
                     s.BookingDetail?.Room?.RoomType?.DepartmentId == _currentUser.DepartmentId.Value);
@@ -123,7 +123,7 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                 s => s.BookingDetail.EndPeriod
             );
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 sessions = sessions.Where(s =>
                     s.BookingDetail?.Room?.RoomType?.DepartmentId == _currentUser.DepartmentId.Value);
@@ -230,7 +230,7 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
 
             var queryable = sessions;
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 queryable = queryable.Where(s =>
                     s.BookingDetail?.Room?.RoomType?.DepartmentId == _currentUser.DepartmentId.Value);
@@ -339,13 +339,13 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             // 1. Admin: toàn quyền check-in.
             // 2. Nhân sự (Employee): kiểm tra theo đơn vị (nếu có DepartmentId).
             // 3. Người dùng thông thường (Sinh viên, Giảng viên): chỉ được check-in cho đơn mượn của chính mình!
-            if (!_currentUser.IsAdmin && _currentUser.Role != "Employee")
+            if (!_currentUser.IsAdmin && (_currentUser.Role != "Employee" && _currentUser.Role != "Manager"))
             {
                 var sessionOwnerId = session.UserId != 0 ? session.UserId : (session.BookingDetail?.Booking?.UserId ?? 0);
                 if (sessionOwnerId != _currentUser.UserId)
                     return ApiResponse<UsageSessionDto>.ErrorResponse("Bạn chỉ có quyền nhận phòng cho đơn mượn của chính mình.");
             }
-            else if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            else if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 var deptId = session.BookingDetail?.Room?.RoomType?.DepartmentId;
                 if (deptId != _currentUser.DepartmentId.Value)
@@ -371,7 +371,7 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                 if (policyBooking != null && policyBooking.Status == "Đã hủy")
                     return ApiResponse<UsageSessionDto>.ErrorResponse("Đơn đặt phòng đã bị hủy, không thể nhận phòng.");
 
-                var isStaffForPolicy = _currentUser.IsAdmin || _currentUser.Role == "Employee";
+                var isStaffForPolicy = _currentUser.IsAdmin || (_currentUser.Role == "Employee" || _currentUser.Role == "Manager");
                 if (!isStaffForPolicy && policyBooking != null)
                 {
                     // Không nhận phòng lần hai: đơn đã được nhận (trừ khi chính phiên này đang dùng).
@@ -466,13 +466,13 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                 return ApiResponse<UsageSessionDto>.ErrorResponse("Không tìm thấy phiên sử dụng phòng.");
 
             // Kiểm tra phân quyền:
-            if (!_currentUser.IsAdmin && _currentUser.Role != "Employee")
+            if (!_currentUser.IsAdmin && (_currentUser.Role != "Employee" && _currentUser.Role != "Manager"))
             {
                 var sessionOwnerId = session.UserId != 0 ? session.UserId : (session.BookingDetail?.Booking?.UserId ?? 0);
                 if (sessionOwnerId != _currentUser.UserId)
                     return ApiResponse<UsageSessionDto>.ErrorResponse("Bạn chỉ có quyền xác nhận trả phòng cho đơn mượn của chính mình.");
             }
-            else if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            else if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 var deptId = session.BookingDetail?.Room?.RoomType?.DepartmentId;
                 if (deptId != _currentUser.DepartmentId.Value)
@@ -558,7 +558,7 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             if (session == null)
                 return ApiResponse<bool>.ErrorResponse("Không tìm thấy phiên sử dụng.");
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 var deptId = session.BookingDetail?.Room?.RoomType?.DepartmentId;
                 if (deptId != _currentUser.DepartmentId.Value)

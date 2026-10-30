@@ -23,7 +23,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Hỗ trợ lọc theo trạng thái, phòng, ngày và tìm kiếm từ khóa.
         /// </summary>
         [HttpGet]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetAll([FromQuery] UsageSessionQueryDto query)
         {
             var response = await _usageService.GetAllSessionsAsync(query);
@@ -34,7 +34,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Lấy danh sách các phòng/phiên đang sử dụng thời gian thực (In-Use)
         /// </summary>
         [HttpGet("active")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetActive()
         {
             var response = await _usageService.GetActiveSessionsAsync();
@@ -45,7 +45,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Thống kê nhanh tình hình sử dụng phòng trong ngày hôm nay
         /// </summary>
         [HttpGet("summary")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetSummary()
         {
             var response = await _usageService.GetSummaryTodayAsync();
@@ -117,7 +117,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Giải phóng trạng thái phòng về 'Trống'.
         /// </summary>
         [HttpPatch("{id}/no-show")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> CancelNoShow(int id, [FromQuery] string? reason = null)
         {
             var response = await _usageService.CancelNoShowAsync(id, reason);

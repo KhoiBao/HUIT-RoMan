@@ -9,7 +9,7 @@ namespace HUIT_RoMan.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Admin,Employee")]
+    [Authorize(Roles = "Admin,Manager,Employee")]
     public class ReportsController : ControllerBase
     {
         private readonly IReportService _reportService;

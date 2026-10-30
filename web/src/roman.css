@@ -5014,17 +5014,6 @@
   outline-offset: 2px;
 }
 
-/* Sticky action column so THAO TÁC never scrolls out of reach */
-.usage-data-table th:last-child,
-.usage-data-table td:last-child,
-.admin-custom-table.has-actions th:last-child,
-.admin-custom-table.has-actions td:last-child {
-  position: sticky;
-  right: 0;
-  background: #ffffff;
-  box-shadow: -10px 0 14px -12px rgba(15, 23, 42, 0.35);
-}
-
 /* ── Dark mode for panels that live in index.css ───────────────────────── */
 .admin-workspace-layout.dark-mode .kpi-card,
 .admin-workspace-layout.dark-mode .table-filter-bar,
@@ -5039,11 +5028,26 @@
   border-color: #243047 !important;
   color: #e2e8f0 !important;
 }
-.admin-workspace-layout.dark-mode .usage-data-table th:last-child,
-.admin-workspace-layout.dark-mode .usage-data-table td:last-child,
-.admin-workspace-layout.dark-mode .admin-custom-table.has-actions th:last-child,
-.admin-workspace-layout.dark-mode .admin-custom-table.has-actions td:last-child {
-  background: #182234 !important;
+
+.admin-workspace-layout.dark-mode .table-empty-state h4 {
+  color: #f1f5f9 !important;
+}
+
+.admin-workspace-layout.dark-mode .table-empty-state p,
+.admin-workspace-layout.dark-mode .table-loading-state p {
+  color: #94a3b8 !important;
+}
+
+.admin-workspace-layout.dark-mode .empty-state-icon-box {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #94a3b8 !important;
+}
+
+.admin-workspace-layout.dark-mode .btn-action-violation-sm {
+  background: #362816 !important;
+  border-color: #784c0c !important;
+  color: #fbbf24 !important;
 }
 .admin-workspace-layout.dark-mode .kpi-label,
 .admin-workspace-layout.dark-mode .kpi-subtext,
@@ -5085,6 +5089,18 @@
 .admin-workspace-layout.dark-mode .seg-item-btn.active {
   background: #2563eb !important;
   color: #ffffff !important;
+}
+.admin-workspace-layout.dark-mode .mode-segmented-control {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+}
+.admin-workspace-layout.dark-mode .seg-btn {
+  color: #94a3b8 !important;
+}
+.admin-workspace-layout.dark-mode .seg-btn.active {
+  background: #0f172a !important;
+  color: #38bdf8 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
 }
 .admin-workspace-layout.dark-mode .global-search-input::placeholder,
 .admin-workspace-layout.dark-mode .search-input::placeholder { color: #94a3b8 !important; }
@@ -5206,7 +5222,7 @@
 }
 .admin-custom-table .restricted-badge { white-space: nowrap; }
 .admin-custom-table td:nth-child(3) { min-width: 220px; }
-.usage-data-table td:last-child { min-width: 150px; }
+
 
 /* Dialogs must stay reachable on short screens */
 .admin-modal-content {
@@ -5221,4 +5237,26 @@
   justify-content: center;
   min-width: 32px;
   min-height: 32px;
+}
+
+/* Equipments modal wide size to comfortably fit warehouse form & data table */
+.admin-modal-content.modal-equipments-wide {
+  max-width: 1080px !important;
+  width: 95vw !important;
+}
+
+.admin-modal-content.modal-equipments-wide .modal-body {
+  overflow-x: hidden;
+}
+
+/* Dark mode for warehouse cards */
+.admin-workspace-layout.dark-mode .warehouse-left-card,
+.admin-workspace-layout.dark-mode .warehouse-right-card {
+  background: #182234 !important;
+  border-color: #243047 !important;
+  color: #e2e8f0 !important;
+}
+
+.admin-workspace-layout.dark-mode .warehouse-card-title {
+  color: #f1f5f9 !important;
 }

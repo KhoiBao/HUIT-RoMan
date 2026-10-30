@@ -135,6 +135,10 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                     }
                     roomEquipRepo.Update(re);
                 }
+
+                // Đồng bộ trạng thái phòng bị ảnh hưởng
+                var affectedRoomIds = roomEquips.Select(re => re.RoomId).Distinct().ToList();
+                await SyncRoomsAfterEquipmentStatusChangeAsync(affectedRoomIds, isMaint);
             }
 
             _equipmentRepo.Update(e);
@@ -165,6 +169,10 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 }
                 roomEquipRepo.Update(re);
             }
+
+            // Đồng bộ trạng thái phòng bị ảnh hưởng
+            var affectedRoomIds = roomEquips.Select(re => re.RoomId).Distinct().ToList();
+            await SyncRoomsAfterEquipmentStatusChangeAsync(affectedRoomIds, isMaint);
 
             await _unitOfWork.SaveChangesAsync();
             return ApiResponse<bool>.SuccessResponse(true, $"Đã cập nhật trạng thái thiết bị thành \"{e.Status}\".");
@@ -198,12 +206,68 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var e = await _equipmentRepo.GetByIdAsync(id);
+            var e = await _equipmentRepo.GetByIdAsync(id, eq => eq.RoomEquipments);
             if (e == null) return false;
+
+            var affectedRoomIds = (e.RoomEquipments ?? new List<RoomEquipment>())
+                .Where(re => !re.IsDeleted)
+                .Select(re => re.RoomId)
+                .Distinct()
+                .ToList();
 
             _equipmentRepo.Remove(e);
             await _unitOfWork.SaveChangesAsync();
+
+            if (affectedRoomIds.Count > 0)
+            {
+                await SyncRoomsAfterEquipmentStatusChangeAsync(affectedRoomIds, false);
+                await _unitOfWork.SaveChangesAsync();
+            }
+
             return true;
+        }
+
+        private async Task SyncRoomsAfterEquipmentStatusChangeAsync(List<int> roomIds, bool isMaint)
+        {
+            if (roomIds == null || roomIds.Count == 0) return;
+
+            var roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
+            var roomEquipRepo = _unitOfWork.Repository<RoomEquipment>();
+
+            foreach (var rId in roomIds)
+            {
+                var room = await roomRepo.GetByIdAsync(rId);
+                if (room == null) continue;
+
+                if (isMaint)
+                {
+                    if (!room.Status.Equals("Maintenance", System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        room.Status = "Maintenance";
+                        roomRepo.Update(room);
+                    }
+                }
+                else
+                {
+                    var allEquipsInRoom = await roomEquipRepo.FindAsync(
+                        re => re.RoomId == rId && !re.IsDeleted,
+                        re => re.Equipment);
+
+                    bool stillHasMaint = allEquipsInRoom.Any(re =>
+                        RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
+                        (re.Equipment != null && IsUnderMaintenance(re.Equipment.Status)));
+
+                    if (!stillHasMaint)
+                    {
+                        if (room.Status.Equals("Bảo trì", System.StringComparison.OrdinalIgnoreCase) ||
+                            room.Status.Equals("Maintenance", System.StringComparison.OrdinalIgnoreCase))
+                        {
+                            room.Status = "Available";
+                            roomRepo.Update(room);
+                        }
+                    }
+                }
+            }
         }
     }
 }

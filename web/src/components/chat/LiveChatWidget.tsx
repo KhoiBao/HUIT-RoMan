@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
+import { useConfirm } from "../../context/ConfirmContext";
+import { api } from "../../lib/api";
+import { PlusIcon } from "../Icon";
 import type {
   ChatMessageItem,
   ChatConversationItem,
   OnDutyStaffItem,
 } from "../../lib/chat";
 import {
+  createNewConversation,
   fetchMyActiveConversation,
   fetchOnDutyStaff,
   joinConversationGroup,
@@ -18,6 +22,7 @@ import {
 
 export function LiveChatWidget() {
   const { user } = useAuth();
+  const { alert: confirmAlert } = useConfirm();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [conversation, setConversation] = useState<ChatConversationItem | null>(null);
@@ -29,10 +34,14 @@ export function LiveChatWidget() {
   const [isStaffTyping, setIsStaffTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+  const [rooms, setRooms] = useState<Array<{ id: number; name: string; roomCode: string }>>([]);
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isStaff = user?.role === "Admin" || user?.role === "Employee";
+  const isStaff =
+    user?.role === "Admin" || user?.role === "Employee" || user?.role === "Manager";
   const isOpenRef = useRef(isOpen);
   isOpenRef.current = isOpen;
 
@@ -43,16 +52,34 @@ export function LiveChatWidget() {
     });
   }, []);
 
-  // Lấy danh sách nhân viên trực ban khi đã đăng nhập (chỉ người dùng / sinh viên)
+  // Tải danh sách phòng để người dùng có thể chọn phòng cần hỗ trợ
+  useEffect(() => {
+    if (!user || isStaff) return;
+    api
+      .get("/api/Rooms")
+      .then((res) => {
+        const list = res.data?.data || res.data || [];
+        setRooms(list);
+      })
+      .catch((err) => console.warn("Lỗi tải danh sách phòng:", err));
+
+    const params = new URLSearchParams(window.location.search);
+    const rid = params.get("roomId") || params.get("room_id");
+    if (rid && !isNaN(Number(rid))) {
+      setSelectedRoomId(Number(rid));
+    }
+  }, [user, isStaff]);
+
+  // Lấy nhân viên / quản lý trực ban của đơn vị quản lý phòng đó trong thời gian hiện tại
   useEffect(() => {
     if (!user || isStaff) {
       setOnDutyStaff([]);
       return;
     }
-    fetchOnDutyStaff()
+    fetchOnDutyStaff(selectedRoomId ?? undefined)
       .then((data) => setOnDutyStaff(data))
       .catch((err) => console.warn("Lỗi tải nhân viên trực:", err));
-  }, [user, isStaff]);
+  }, [user, isStaff, selectedRoomId]);
 
   // Kết nối SignalR khi đã đăng nhập
   useEffect(() => {
@@ -110,10 +137,23 @@ export function LiveChatWidget() {
             }
           });
 
-          // Cuộc trò chuyện bị đóng
+          // Cuộc trò chuyện bị đóng bởi cán bộ
           hub.off("ConversationClosed");
           hub.on("ConversationClosed", () => {
             setConversation((prev) => (prev ? { ...prev, status: "Closed" } : null));
+          });
+
+          // Cuộc trò chuyện bị xóa bởi cán bộ quản lý
+          hub.off("ConversationDeleted");
+          hub.on("ConversationDeleted", () => {
+            setConversation(null);
+            setMessages([]);
+          });
+
+          // Tin nhắn bị xóa bởi cán bộ quản lý
+          hub.off("MessageDeleted");
+          hub.on("MessageDeleted", (data: { conversationId: number; messageId: number }) => {
+            setMessages((prev) => prev.filter((m) => m.id !== data.messageId));
           });
         }
 
@@ -136,10 +176,10 @@ export function LiveChatWidget() {
     return () => {
       active = false;
       if (activeConvId) {
-        leaveConversationGroup(activeConvId).catch(() => {});
+        leaveConversationGroup(activeConvId).catch(() => { });
       }
       // Ngắt kết nối để tài khoản kế tiếp không dùng lại phiên chat cũ.
-      stopChatHub().catch(() => {});
+      stopChatHub().catch(() => { });
     };
   }, [user?.id, isStaff, scrollToBottom]);
 
@@ -157,7 +197,22 @@ export function LiveChatWidget() {
     if (!textToSend || isSending) return;
 
     if (!user) {
-      alert("Vui lòng đăng nhập để gửi tin nhắn hỗ trợ.");
+      await confirmAlert({
+        title: "Yêu cầu đăng nhập",
+        message: "Vui lòng đăng nhập để gửi tin nhắn hỗ trợ trực tuyến.",
+        type: "info",
+      });
+      return;
+    }
+
+    // Không cho phép gửi tin nhắn nếu phiên đã đóng
+    if (conversation?.status === "Closed") {
+      await confirmAlert({
+        title: "Phiên hỗ trợ đã kết thúc",
+        message:
+          "Phiên hỗ trợ trước đó đã kết thúc. Vui lòng bấm '+ Bắt đầu phiên mới' để tiếp tục trò chuyện với cán bộ trực ban.",
+        type: "info",
+      });
       return;
     }
 
@@ -169,12 +224,15 @@ export function LiveChatWidget() {
 
       // Dừng báo typing
       if (conversation) {
-        sendHubTyping(conversation.id, false).catch(() => {});
+        sendHubTyping(conversation.id, false).catch(() => { });
       }
 
       let convId = conversation?.id;
       if (!convId) {
-        const newConv = await fetchMyActiveConversation(textToSend);
+        const newConv = await createNewConversation({
+          initialMessage: textToSend,
+          roomId: selectedRoomId ?? undefined,
+        });
         setConversation(newConv);
         setMessages(newConv.messages || []);
         await joinConversationGroup(newConv.id);
@@ -190,19 +248,40 @@ export function LiveChatWidget() {
     }
   };
 
+  // Khởi tạo phiên hỗ trợ mới
+  const handleStartNewConversation = async () => {
+    try {
+      setIsSending(true);
+      if (conversation?.id) {
+        await leaveConversationGroup(conversation.id).catch(() => { });
+      }
+      const newConv = await createNewConversation({
+        roomId: selectedRoomId ?? undefined,
+      });
+      setConversation(newConv);
+      setMessages(newConv.messages || []);
+      await joinConversationGroup(newConv.id);
+      setTimeout(() => scrollToBottom(false), 80);
+    } catch (err) {
+      console.error("Lỗi bắt đầu phiên chat mới:", err);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   // Báo typing khi gõ phím
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputText(e.target.value);
-    if (!conversation) return;
+    if (!conversation || conversation.status === "Closed") return;
 
-    sendHubTyping(conversation.id, true).catch(() => {});
+    sendHubTyping(conversation.id, true).catch(() => { });
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
     typingTimeoutRef.current = setTimeout(() => {
       if (conversation) {
-        sendHubTyping(conversation.id, false).catch(() => {});
+        sendHubTyping(conversation.id, false).catch(() => { });
       }
     }, 1500);
   };
@@ -214,12 +293,13 @@ export function LiveChatWidget() {
     }
   };
 
-  // CHỈ HIỂN THỊ VÀ CHAT KHI ĐÃ ĐĂNG NHẬP (ẨN VỚI KHÁCH VÀ NHÂN VIÊN/ADMIN)
+  // CHỈ HIỂN THỊ VÀ CHAT KHI ĐÃ ĐĂNG NHẬP (ẨN VỚI KHÁCH VÀ NHÂN VIÊN/ADMIN/MANAGER)
   if (!user || isStaff) {
     return null;
   }
 
   const activeStaff = onDutyStaff.find((s) => s.isActiveShift) || onDutyStaff[0];
+  const isClosed = conversation?.status === "Closed";
 
   return (
     <aside
@@ -250,7 +330,8 @@ export function LiveChatWidget() {
             border: "none",
             borderRadius: "50px",
             padding: "12px 20px",
-            boxShadow: "0 10px 25px -5px rgba(37, 99, 235, 0.4), 0 8px 10px -6px rgba(37, 99, 235, 0.3)",
+            boxShadow:
+              "0 10px 25px -5px rgba(37, 99, 235, 0.4), 0 8px 10px -6px rgba(37, 99, 235, 0.3)",
             cursor: "pointer",
             fontWeight: 600,
             fontSize: "14px",
@@ -258,16 +339,27 @@ export function LiveChatWidget() {
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = "translateY(-3px) scale(1.02)";
-            e.currentTarget.style.boxShadow = "0 15px 30px -5px rgba(37, 99, 235, 0.5)";
+            e.currentTarget.style.boxShadow =
+              "0 15px 30px -5px rgba(37, 99, 235, 0.5)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "translateY(0) scale(1)";
-            e.currentTarget.style.boxShadow = "0 10px 25px -5px rgba(37, 99, 235, 0.4)";
+            e.currentTarget.style.boxShadow =
+              "0 10px 25px -5px rgba(37, 99, 235, 0.4)";
           }}
         >
           {/* Biểu tượng chat */}
           <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
             <span
@@ -284,7 +376,7 @@ export function LiveChatWidget() {
             />
           </div>
 
-          <span className="chat-floating-label">Chat nhân viên trực</span>
+          <span className="chat-floating-label">Chat trực ban hỗ trợ</span>
 
           {unreadCount > 0 && (
             <span
@@ -310,11 +402,12 @@ export function LiveChatWidget() {
           style={{
             width: "380px",
             maxWidth: "calc(100vw - 32px)",
-            height: isMinimized ? "60px" : "540px",
+            height: isMinimized ? "60px" : "550px",
             maxHeight: "calc(100vh - 48px)",
             backgroundColor: "#ffffff",
             borderRadius: "16px",
-            boxShadow: "0 20px 40px -10px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0,0,0,0.1)",
+            boxShadow:
+              "0 20px 40px -10px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0,0,0,0.1)",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
@@ -334,8 +427,8 @@ export function LiveChatWidget() {
               userSelect: "none",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <div style={{ position: "relative" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+              <div style={{ position: "relative", flexShrink: 0 }}>
                 <div
                   style={{
                     width: "36px",
@@ -350,7 +443,16 @@ export function LiveChatWidget() {
                     border: "1.5px solid rgba(255, 255, 255, 0.6)",
                   }}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                     <polyline points="9 22 9 12 15 12 15 22" />
                   </svg>
@@ -362,35 +464,57 @@ export function LiveChatWidget() {
                     right: "0",
                     width: "10px",
                     height: "10px",
-                    backgroundColor: "#22c55e",
+                    backgroundColor: activeStaff?.isActiveShift ? "#22c55e" : "#eab308",
                     borderRadius: "50%",
                     border: "2px solid #ffffff",
                   }}
-                  title="Nhân viên đang trực tuyến"
+                  title={
+                    activeStaff?.isActiveShift
+                      ? "Cán bộ đang trong ca trực"
+                      : "Cán bộ thường trực hỗ trợ"
+                  }
                 />
               </div>
 
-              <div>
-                <div style={{ fontWeight: 700, fontSize: "14px", lineHeight: 1.2 }}>
-                  Thư viện HUIT - Trực ban
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: "13px",
+                    lineHeight: 1.2,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {activeStaff?.departmentName
+                    ? `${activeStaff.departmentName} - Trực ban`
+                    : "HUIT - Trực ban hỗ trợ"}
                 </div>
                 <div
                   style={{
                     fontSize: "11px",
-                    color: "rgba(255, 255, 255, 0.85)",
+                    color: "rgba(255, 255, 255, 0.9)",
                     display: "flex",
                     alignItems: "center",
                     gap: "4px",
                     marginTop: "2px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                   }}
                 >
-                  <span>{activeStaff ? `${activeStaff.fullName} (${activeStaff.shiftName})` : "Sẵn sàng hỗ trợ bạn"}</span>
+                  <span>
+                    {activeStaff
+                      ? `${activeStaff.fullName} • ${activeStaff.position || "Cán bộ"} (${activeStaff.shiftTimeRange || activeStaff.shiftName})`
+                      : "Sẵn sàng hỗ trợ bạn"}
+                  </span>
                 </div>
               </div>
             </div>
 
             {/* CÁC NÚT ĐIỀU KHIỂN HEADER */}
-            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
               {/* Nút thu nhỏ / mở rộng */}
               <button
                 type="button"
@@ -408,7 +532,14 @@ export function LiveChatWidget() {
                 }}
                 title={isMinimized ? "Phóng to" : "Thu nhỏ"}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   {isMinimized ? (
                     <path d="M18 15l-6-6-6 6" />
                   ) : (
@@ -434,7 +565,14 @@ export function LiveChatWidget() {
                 }}
                 title="Đóng cửa sổ"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
@@ -448,7 +586,7 @@ export function LiveChatWidget() {
               <div
                 style={{
                   backgroundColor: "#f8fafc",
-                  padding: "6px 14px",
+                  padding: "5px 12px",
                   borderBottom: "1px solid #f1f5f9",
                   fontSize: "11px",
                   color: "#64748b",
@@ -466,12 +604,75 @@ export function LiveChatWidget() {
                       backgroundColor: isConnected ? "#10b981" : "#f59e0b",
                     }}
                   />
-                  {isConnected ? "SignalR & Redis Realtime" : "Đang kết nối Realtime..."}
+                  {isConnected ? "SignalR Realtime" : "Đang kết nối..."}
                 </span>
 
                 <span style={{ color: "#2563eb", fontWeight: 600 }}>
                   {user ? `${user.fullName || user.cardCode}` : "Chưa đăng nhập"}
                 </span>
+              </div>
+
+              {/* THANH CHỌN PHÒNG ĐỂ ĐIỀU HƯỚNG ĐÚNG ĐƠN VỊ & CÁN BỘ CÓ CA TRỰC */}
+              <div
+                style={{
+                  backgroundColor: "#f1f5f9",
+                  padding: "6px 12px",
+                  borderBottom: "1px solid #e2e8f0",
+                  fontSize: "11px",
+                  color: "#334155",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18M9 21V9" />
+                  </svg>
+                  Phòng hỏi:
+                </span>
+                <select
+                  value={selectedRoomId ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value ? Number(e.target.value) : null;
+                    setSelectedRoomId(val);
+                  }}
+                  style={{
+                    flex: 1,
+                    fontSize: "11px",
+                    padding: "3px 6px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    backgroundColor: "#ffffff",
+                    color: "#0f172a",
+                    outline: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="">(Tất cả / Đơn vị quản lý chung)</option>
+                  {rooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.roomCode} - {r.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* KHU VỰC HIỂN THỊ TIN NHẮN */}
@@ -498,26 +699,50 @@ export function LiveChatWidget() {
                     lineHeight: 1.5,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <circle cx="12" cy="12" r="10" />
                       <line x1="12" y1="16" x2="12" y2="12" />
                       <line x1="12" y1="8" x2="12.01" y2="8" />
                     </svg>
-                    <strong>Chào mừng bạn đến với kênh hỗ trợ Thư viện HUIT!</strong>
+                    <strong>Kênh hỗ trợ trực ban HUIT</strong>
                   </div>
-                  <br />
-                  Bạn có thể đặt câu hỏi về mượn phòng, kiểm tra lịch trực hoặc báo cáo sự cố thiết bị tại đây.
+                  Bạn có thể hỏi về thủ tục phòng, sự cố thiết bị hoặc lịch trực. Hệ
+                  thống sẽ tự động kết nối với cán bộ quản lý đang có ca trực trong khung
+                  giờ này.
                 </div>
 
-                {/* Các nút gợi ý nhanh nếu ít tin nhắn */}
-                {messages.length < 3 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", margin: "4px 0" }}>
+                {/* Các nút gợi ý nhanh nếu ít tin nhắn và phiên chưa đóng */}
+                {!isClosed && messages.length < 3 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "6px",
+                      margin: "4px 0",
+                    }}
+                  >
                     {[
                       "Thủ tục mượn phòng nhóm?",
                       "Giờ mở cửa hôm nay?",
                       "Báo hỏng thiết bị phòng",
-                      "Lịch trực thủ thư",
+                      "Lịch trực hôm nay",
                     ].map((prompt) => (
                       <button
                         key={prompt}
@@ -545,7 +770,16 @@ export function LiveChatWidget() {
                           e.currentTarget.style.borderColor = "#cbd5e1";
                         }}
                       >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#64748b"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
                           <circle cx="12" cy="12" r="10" />
                           <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                           <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -593,7 +827,7 @@ export function LiveChatWidget() {
                                 fontSize: "9px",
                               }}
                             >
-                              Thủ thư
+                              Cán bộ trực
                             </span>
                           )}
                           {msg.senderName}
@@ -651,11 +885,35 @@ export function LiveChatWidget() {
                       fontStyle: "italic",
                     }}
                   >
-                    <span>Thủ thư đang soạn tin</span>
+                    <span>Cán bộ trực đang soạn tin</span>
                     <span style={{ display: "inline-flex", gap: "2px" }}>
-                      <span style={{ animation: "pulse 1s infinite", width: "4px", height: "4px", backgroundColor: "#94a3b8", borderRadius: "50%" }} />
-                      <span style={{ animation: "pulse 1s infinite 0.2s", width: "4px", height: "4px", backgroundColor: "#94a3b8", borderRadius: "50%" }} />
-                      <span style={{ animation: "pulse 1s infinite 0.4s", width: "4px", height: "4px", backgroundColor: "#94a3b8", borderRadius: "50%" }} />
+                      <span
+                        style={{
+                          animation: "pulse 1s infinite",
+                          width: "4px",
+                          height: "4px",
+                          backgroundColor: "#94a3b8",
+                          borderRadius: "50%",
+                        }}
+                      />
+                      <span
+                        style={{
+                          animation: "pulse 1s infinite 0.2s",
+                          width: "4px",
+                          height: "4px",
+                          backgroundColor: "#94a3b8",
+                          borderRadius: "50%",
+                        }}
+                      />
+                      <span
+                        style={{
+                          animation: "pulse 1s infinite 0.4s",
+                          width: "4px",
+                          height: "4px",
+                          backgroundColor: "#94a3b8",
+                          borderRadius: "50%",
+                        }}
+                      />
                     </span>
                   </div>
                 )}
@@ -663,67 +921,143 @@ export function LiveChatWidget() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* KHUNG NHẬP LIỆU */}
-              <div
-                style={{
-                  padding: "10px 12px",
-                  backgroundColor: "#ffffff",
-                  borderTop: "1px solid #e2e8f0",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <input
-                  type="text"
-                  placeholder={
-                    user
-                      ? "Nhập tin nhắn hỗ trợ... (Enter để gửi)"
-                      : "Vui lòng đăng nhập để gửi tin..."
-                  }
-                  disabled={!user || isSending}
-                  value={inputText}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
+              {/* KHUNG NHẬP LIỆU HOẶC THÔNG BÁO PHIÊN ĐÃ ĐÓNG */}
+              {isClosed ? (
+                <div
                   style={{
-                    flex: 1,
-                    padding: "9px 12px",
-                    borderRadius: "20px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "13px",
-                    outline: "none",
-                    transition: "border-color 0.2s",
+                    padding: "12px 14px",
+                    backgroundColor: "#fff7ed",
+                    borderTop: "1px solid #fed7aa",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    alignItems: "center",
+                    textAlign: "center",
                   }}
-                  onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
-                  onBlur={(e) => (e.target.style.borderColor = "#cbd5e1")}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage()}
-                  disabled={!user || !inputText.trim() || isSending}
+                >
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#c2410c",
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>Phiên hỗ trợ này đã kết thúc</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: "11px", color: "#7c2d12", lineHeight: 1.4 }}>
+                    Phiên hỗ trợ đã đóng nên bạn không thể gửi thêm tin nhắn. Bấm nút bên
+                    dưới để kết nối với cán bộ trực trong phiên mới.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleStartNewConversation}
+                    disabled={isSending}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "20px",
+                      backgroundColor: "#2563eb",
+                      color: "#ffffff",
+                      border: "none",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      boxShadow: "0 2px 6px rgba(37, 99, 235, 0.35)",
+                    }}
+                  >
+                    <PlusIcon size={14} />
+                    <span>+ Bắt đầu phiên mới</span>
+                  </button>
+                </div>
+              ) : (
+                <div
                   style={{
-                    width: "36px",
-                    height: "36px",
-                    borderRadius: "50%",
-                    backgroundColor: inputText.trim() && user ? "#2563eb" : "#e2e8f0",
-                    color: inputText.trim() && user ? "#ffffff" : "#94a3b8",
-                    border: "none",
-                    cursor: inputText.trim() && user ? "pointer" : "default",
+                    padding: "10px 12px",
+                    backgroundColor: "#ffffff",
+                    borderTop: "1px solid #e2e8f0",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    transition: "all 0.2s",
-                    flexShrink: 0,
+                    gap: "8px",
                   }}
-                  title="Gửi tin nhắn"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13" />
-                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                  </svg>
-                </button>
-              </div>
+                  <input
+                    type="text"
+                    placeholder={
+                      user
+                        ? "Nhập tin nhắn hỗ trợ... (Enter để gửi)"
+                        : "Vui lòng đăng nhập để gửi tin..."
+                    }
+                    disabled={!user || isSending}
+                    value={inputText}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    style={{
+                      flex: 1,
+                      padding: "9px 12px",
+                      borderRadius: "20px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "13px",
+                      outline: "none",
+                      transition: "border-color 0.2s",
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
+                    onBlur={(e) => (e.target.style.borderColor = "#cbd5e1")}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => handleSendMessage()}
+                    disabled={!user || !inputText.trim() || isSending}
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      backgroundColor:
+                        inputText.trim() && user ? "#2563eb" : "#e2e8f0",
+                      color: inputText.trim() && user ? "#ffffff" : "#94a3b8",
+                      border: "none",
+                      cursor: inputText.trim() && user ? "pointer" : "default",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "all 0.2s",
+                      flexShrink: 0,
+                    }}
+                    title="Gửi tin nhắn"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="22" y1="2" x2="11" y2="13" />
+                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

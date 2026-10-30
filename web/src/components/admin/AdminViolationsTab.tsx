@@ -64,7 +64,7 @@ export default function AdminViolationsTab({
 }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
-  const { confirm } = useConfirm();
+  const { confirm, alert } = useConfirm();
   // Navigation Sub-tabs: 'records' | 'restrictions' | 'types'
   const [activeSubTab, setActiveSubTab] = useState<
     "records" | "restrictions" | "types"
@@ -328,15 +328,27 @@ export default function AdminViolationsTab({
   const handleRecordSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!formUserId) {
-      alert("Vui lòng chọn người vi phạm!");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng chọn người vi phạm!",
+        type: "warning",
+      });
       return;
     }
     if (!formViolationTypeId) {
-      alert("Vui lòng chọn loại vi phạm!");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng chọn loại vi phạm!",
+        type: "warning",
+      });
       return;
     }
     if (!formDescription.trim()) {
-      alert("Vui lòng nhập mô tả chi tiết sự việc vi phạm!");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập mô tả chi tiết sự việc vi phạm!",
+        type: "warning",
+      });
       return;
     }
 
@@ -494,11 +506,19 @@ export default function AdminViolationsTab({
   const handleManualRestrictionSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!restrUserId) {
-      alert("Vui lòng chọn người dùng cần áp dụng hạn chế!");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng chọn người dùng cần áp dụng hạn chế!",
+        type: "warning",
+      });
       return;
     }
     if (!restrReason.trim()) {
-      alert("Vui lòng nhập lý do cấm mượn phòng!");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập lý do cấm mượn phòng!",
+        type: "warning",
+      });
       return;
     }
 
@@ -534,7 +554,11 @@ export default function AdminViolationsTab({
   const handleTypeSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!typeFormName.trim()) {
-      alert("Vui lòng nhập tên loại vi phạm!");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập tên loại vi phạm!",
+        type: "warning",
+      });
       return;
     }
 
@@ -550,7 +574,11 @@ export default function AdminViolationsTab({
         onNotify("Cập nhật loại vi phạm thành công!", "success");
       } else {
         if (!typeFormCode.trim()) {
-          alert("Vui lòng nhập mã loại vi phạm (VD: VT07)!");
+          await alert({
+            title: "Thiếu thông tin",
+            message: "Vui lòng nhập mã loại vi phạm (VD: VT07)!",
+            type: "warning",
+          });
           return;
         }
         await createViolationType({
@@ -649,15 +677,15 @@ export default function AdminViolationsTab({
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case "Chờ xử lý":
-        return "status-badge-pending";
+        return "admin-status-pill pill-pending";
       case "Đã xử lý":
-        return "status-badge-approved";
+        return "admin-status-pill pill-approved";
       case "Đã nộp phạt":
-        return "status-badge-completed";
+        return "admin-status-pill pill-completed";
       case "Hủy bỏ":
-        return "status-badge-cancelled";
+        return "admin-status-pill pill-cancelled";
       default:
-        return "status-badge-default";
+        return "admin-status-pill";
     }
   };
 
@@ -880,17 +908,17 @@ export default function AdminViolationsTab({
 
           {/* Table */}
           <div className="table-responsive-wrapper">
-            <table className="admin-custom-table has-actions">
+            <table className="admin-custom-table">
               <thead>
                 <tr>
-                  <th style={{ width: "120px" }}>Mã biên bản</th>
+                  <th style={{ width: "120px", whiteSpace: "nowrap" }}>Mã biên bản</th>
                   <th>Người vi phạm</th>
                   <th>Loại vi phạm</th>
-                  <th>Thời điểm vi phạm</th>
-                  <th style={{ width: "130px" }}>Mức độ</th>
+                  <th style={{ whiteSpace: "nowrap" }}>Thời điểm vi phạm</th>
+                  <th style={{ width: "120px", whiteSpace: "nowrap" }}>Mức độ</th>
                   <th>Hình thức xử lý / Phạt</th>
-                  <th style={{ width: "120px" }}>Trạng thái</th>
-                  <th style={{ width: "140px", textAlign: "right" }}>Thao tác</th>
+                  <th style={{ width: "135px", whiteSpace: "nowrap" }}>Trạng thái</th>
+                  <th style={{ width: "130px", textAlign: "right", whiteSpace: "nowrap" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -987,14 +1015,12 @@ export default function AdminViolationsTab({
                       </td>
                       <td>
                         <span
-                          className={`status-pill ${getStatusBadgeClass(
-                            v.status
-                          )}`}
+                          className={getStatusBadgeClass(v.status)}
                         >
                           {v.status}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <div className="table-actions-inline">
                           <button
                             type="button"
@@ -1068,7 +1094,7 @@ export default function AdminViolationsTab({
                   <th>Ngày bắt đầu</th>
                   <th>Ngày kết thúc</th>
                   <th style={{ width: "140px" }}>Thời hạn còn lại</th>
-                  <th style={{ width: "120px" }}>Trạng thái</th>
+                  <th style={{ width: "135px", whiteSpace: "nowrap" }}>Trạng thái</th>
                   <th style={{ width: "130px", textAlign: "right" }}>Thao tác</th>
                 </tr>
               </thead>
@@ -1129,18 +1155,18 @@ export default function AdminViolationsTab({
                       </td>
                       <td>
                         <span
-                          className={`status-pill ${
+                          className={`admin-status-pill ${
                             r.isActive
-                              ? "status-badge-cancelled"
+                              ? "pill-cancelled"
                               : r.status === "Đã gỡ"
-                              ? "status-badge-approved"
-                              : "status-badge-default"
+                              ? "pill-approved"
+                              : "pill-pending"
                           }`}
                         >
                           {r.isActive ? "Đang hiệu lực" : r.status}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         {r.isActive && (
                           <button
                             type="button"

@@ -38,6 +38,8 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public string RoomTypeName { get; set; }
         /// <summary>true = loại phòng mượn theo tiết học cố định</summary>
         public bool IsBookingByPeriod { get; set; }
+        public int? DepartmentId { get; set; }
+        public string? DepartmentName { get; set; }
     }
 
     /// <summary>Bộ lọc + phân trang danh mục phòng cho trang lịch sử dụng phòng.</summary>

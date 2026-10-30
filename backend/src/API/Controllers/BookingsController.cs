@@ -35,7 +35,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lấy tất cả đơn đặt phòng (Admin/Employee)</summary>
         [HttpGet]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetAll()
         {
             var response = await _bookingService.GetAllBookingsAsync();
@@ -44,7 +44,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Tìm kiếm phiếu mượn phòng đa tiêu chí</summary>
         [HttpGet("search")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Search(
             [FromQuery] string? keyword,
             [FromQuery] string? status,
@@ -104,7 +104,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Duyệt hoặc từ chối toàn bộ đơn</summary>
         [HttpPatch("{id}/approve")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Approve(int id, [FromBody] ApproveBookingDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -115,7 +115,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Duyệt hoặc từ chối từng chi tiết phòng trong đơn</summary>
         [HttpPatch("details/{detailId}/approve")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> ApproveDetail(int detailId, [FromBody] ApproveBookingDetailDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);

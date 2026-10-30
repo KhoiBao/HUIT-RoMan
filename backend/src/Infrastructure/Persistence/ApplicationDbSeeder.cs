@@ -18,7 +18,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             var dbContext = serviceProvider.GetRequiredService<ApplicationDbContext>();
 
             // 1. Khởi tạo các Roles cơ bản
-            string[] roles = { "Admin", "Employee", "Student", "Lecturer" };
+            string[] roles = { "Admin", "Manager", "Employee", "Student", "Lecturer" };
 
             foreach (var role in roles)
             {
@@ -93,21 +93,21 @@ namespace HUIT_RoMan.Infrastructure.Persistence
 
             var librarians = new[]
             {
-                ("TV001", "Thủ thư 01"),
-                ("TV002", "Thủ thư 02"),
-                ("TV003", "Thủ thư 03"),
+                ("TV001", "Trưởng Đơn vị Thư viện", "Manager", "Quản lý Thư viện"),
+                ("TV002", "Thủ thư 02", "Employee", "Thủ thư"),
+                ("TV003", "Thủ thư 03", "Employee", "Thủ thư"),
             };
-            foreach (var (code, name) in librarians)
-                await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code.ToLower()}@huit.edu.vn", name, "Employee", deptThuVien.Id, demoPassword, "Thủ thư");
+            foreach (var (code, name, role, pos) in librarians)
+                await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code.ToLower()}@huit.edu.vn", name, role, deptThuVien.Id, demoPassword, pos);
 
             var managers = new[]
             {
-                ("QLP001", "Quản lý phòng 01"),
-                ("QLP002", "Quản lý phòng 02"),
-                ("QLP003", "Quản lý phòng 03"),
+                ("QLP001", "Trưởng Phòng Đào tạo", "Manager", "Quản lý Phòng Đào tạo"),
+                ("QLP002", "Quản lý phòng 02", "Employee", "Nhân viên phòng đào tạo"),
+                ("QLP003", "Quản lý phòng 03", "Employee", "Nhân viên phòng đào tạo"),
             };
-            foreach (var (code, name) in managers)
-                await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code.ToLower()}@huit.edu.vn", name, "Employee", deptDaoTao.Id, demoPassword, "Quản lý phòng");
+            foreach (var (code, name, role, pos) in managers)
+                await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code.ToLower()}@huit.edu.vn", name, role, deptDaoTao.Id, demoPassword, pos);
 
             await EnsureDemoAccountAsync(userManager, dbContext, "ADMIN002", "admin02@huit.edu.vn", "Quản trị viên 02", "Admin", deptAdmin.Id, demoPassword, null);
             await EnsureDemoAccountAsync(userManager, dbContext, "ADMIN003", "admin03@huit.edu.vn", "Quản trị viên 03", "Admin", deptAdmin.Id, demoPassword, null);
@@ -271,7 +271,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             {
                 await userManager.AddToRoleAsync(user, role);
             }
-            if (role == "Employee")
+            if (role == "Employee" || role == "Manager")
             {
                 var employee = await dbContext.Employees.FirstOrDefaultAsync(e => e.UserId == user.Id);
                 if (employee == null)

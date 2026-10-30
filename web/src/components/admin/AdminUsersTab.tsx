@@ -37,7 +37,7 @@ interface Props {
 }
 
 export default function AdminUsersTab({ onNotify }: Props) {
-  const { confirm } = useConfirm();
+  const { confirm, alert } = useConfirm();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [userType, setUserType] = useState<"students" | "lecturers" | "all">("students");
   const [loading, setLoading] = useState<boolean>(true);
@@ -195,7 +195,11 @@ export default function AdminUsersTab({ onNotify }: Props) {
     e.preventDefault();
     if (!resettingUser) return;
     if (!newPassword || newPassword.trim().length < 6) {
-      alert("Mật khẩu mới phải có tối thiểu 6 ký tự.");
+      await alert({
+        title: "Mật khẩu không hợp lệ",
+        message: "Mật khẩu mới phải có tối thiểu 6 ký tự.",
+        type: "warning",
+      });
       return;
     }
     try {
@@ -461,6 +465,7 @@ export default function AdminUsersTab({ onNotify }: Props) {
                       <option value="Student">Sinh viên</option>
                       <option value="Lecturer">Giảng viên</option>
                       <option value="Employee">Nhân viên</option>
+                      <option value="Manager">Quản lý đơn vị</option>
                       <option value="Admin">Quản trị viên</option>
                     </select>
                   </div>

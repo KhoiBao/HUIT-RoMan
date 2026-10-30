@@ -79,7 +79,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Tạo thông báo (Quản trị viên / Nhân sự)</summary>
         [HttpPost]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Create([FromBody] CreateNotificationDto dto)
         {
             if (!ModelState.IsValid)

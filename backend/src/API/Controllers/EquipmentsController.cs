@@ -33,7 +33,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Create([FromBody] CreateEquipmentDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -42,7 +42,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Update(int id, [FromBody] CreateEquipmentDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -56,7 +56,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpPatch("{id}/status")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateEquipmentStatusDto request)
         {
             if (string.IsNullOrWhiteSpace(request?.Status))
@@ -73,7 +73,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Delete(int id)
         {
             var success = await _equipmentService.DeleteAsync(id);

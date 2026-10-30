@@ -55,7 +55,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lấy tất cả người dùng (Admin, Employee)</summary>
         [HttpGet]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetAll()
         {
             var response = await _userService.GetAllAsync();
@@ -64,7 +64,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Tìm kiếm người dùng / người mượn đa tiêu chí (tên, MSSV/mã cán bộ, email, phone, role, status)</summary>
         [HttpGet("search")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Search(
             [FromQuery] string? keyword,
             [FromQuery] string? role,
@@ -77,7 +77,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lấy thông tin một người dùng theo ID</summary>
         [HttpGet("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetById(int id)
         {
             var response = await _userService.GetByIdAsync(id);
@@ -88,7 +88,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lấy danh sách sinh viên</summary>
         [HttpGet("students")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetStudents()
         {
             var response = await _userService.GetStudentsAsync();
@@ -97,7 +97,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lấy danh sách giảng viên</summary>
         [HttpGet("lecturers")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetLecturers()
         {
             var response = await _userService.GetLecturersAsync();
@@ -110,7 +110,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Cập nhật thông tin người dùng</summary>
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateUserDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -147,7 +147,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Người quản lý đặt lại mật khẩu cho sinh viên / giảng viên (Admin, Employee)
         /// </summary>
         [HttpPost("{id}/reset-password")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> AdminResetPassword(int id, [FromBody] AdminResetPasswordDto? request)
         {
             var response = await _userService.AdminResetPasswordAsync(id, request?.NewPassword);

@@ -7207,11 +7207,12 @@ button.admin-status-pill:disabled {
 /* ── Warehouse Layout ── */
 .warehouse-grid-layout {
   display: grid;
-  grid-template-columns: 1fr 1.3fr;
-  gap: 16px;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+  align-items: start;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 960px) {
   .warehouse-grid-layout {
     grid-template-columns: 1fr;
   }
@@ -7221,8 +7222,16 @@ button.admin-status-pill:disabled {
 .warehouse-right-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 16px;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.warehouse-left-card {
+  min-width: 320px;
+}
+
+.warehouse-right-card {
+  min-width: 0;
 }
 
 .warehouse-card-title {
@@ -7738,12 +7747,74 @@ button.admin-status-pill:disabled {
   overflow: hidden;
 }
 
+/* Empty & Loading States */
+.table-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 56px 24px;
+  min-height: 280px;
+}
+
+.empty-state-icon-box {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.table-empty-state h4 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.table-empty-state p {
+  margin: 0;
+  font-size: 13.5px;
+  color: #64748b;
+  max-width: 440px;
+  line-height: 1.55;
+}
+
+.table-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 56px 24px;
+  color: #64748b;
+  min-height: 280px;
+  gap: 14px;
+}
+
+.table-loading-state svg {
+  color: #0284c7;
+}
+
+.table-loading-state p {
+  margin: 0;
+  font-size: 13.5px;
+  color: #64748b;
+}
+
 .table-responsive-wrapper {
   overflow-x: auto;
 }
 
 .usage-data-table {
   width: 100%;
+  min-width: 1160px;
   border-collapse: collapse;
   text-align: left;
   font-size: 13px;
@@ -7755,15 +7826,66 @@ button.admin-status-pill:disabled {
   font-weight: 700;
   font-size: 11.5px;
   letter-spacing: 0.5px;
-  padding: 14px 16px;
+  padding: 13px 14px;
   border-bottom: 2px solid #e2e8f0;
   white-space: nowrap;
 }
 
 .usage-data-table tbody td {
-  padding: 14px 16px;
+  padding: 13px 14px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
+}
+
+/* Explicit column widths for usage-data-table - Seamless table layout */
+.usage-data-table .cell-code {
+  width: 110px;
+  min-width: 110px;
+  white-space: nowrap;
+}
+
+.usage-data-table .cell-room {
+  min-width: 160px;
+}
+
+.usage-data-table .cell-borrower {
+  min-width: 170px;
+}
+
+.usage-data-table .cell-schedule {
+  width: 145px;
+  min-width: 145px;
+  white-space: nowrap;
+}
+
+.usage-data-table .cell-checkin {
+  width: 125px;
+  min-width: 125px;
+  white-space: nowrap;
+}
+
+.usage-data-table .cell-checkout {
+  width: 110px;
+  min-width: 110px;
+  white-space: nowrap;
+}
+
+.usage-data-table .cell-status {
+  width: 155px;
+  min-width: 155px;
+  white-space: nowrap;
+}
+
+.usage-data-table .cell-actions {
+  width: 190px;
+  min-width: 190px;
+  padding-right: 16px;
+  box-sizing: border-box;
+}
+
+.usage-data-table th.text-right,
+.usage-data-table td.text-right {
+  text-align: right;
 }
 
 .usage-data-table tbody tr:hover {
@@ -7937,21 +8059,45 @@ button.admin-status-pill:disabled {
 .action-button-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   justify-content: flex-end;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: 100%;
 }
 
 .btn-table-action {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 9px;
   border-radius: 6px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  height: 30px;
+}
+
+.btn-action-violation-sm {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #b45309;
+  padding: 5px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+}
+
+.btn-action-violation-sm:hover {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
 }
 
 .btn-checkin {
@@ -7969,7 +8115,10 @@ button.admin-status-pill:disabled {
   background: transparent;
   border: 1px solid #fca5a5;
   color: #dc2626;
-  padding: 6px 8px;
+  padding: 5px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
 }
 
 .btn-noshow:hover {
@@ -9112,6 +9261,7 @@ button.admin-status-pill:disabled {
 }
 
 /* ── 4. Table Layout & Cell Styling ──────────────────────────────────────── */
+
 .table-responsive-wrapper {
   width: 100%;
   overflow-x: auto;

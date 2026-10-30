@@ -72,7 +72,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Create([FromBody] CreateRoomDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -83,7 +83,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateRoomDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -93,7 +93,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Delete(int id)
         {
             var response = await _roomService.DeleteAsync(id);
@@ -111,7 +111,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpPost("{roomId}/equipments")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> AddOrUpdateEquipment(int roomId, [FromBody] AddRoomEquipmentDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -121,7 +121,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpDelete("{roomId}/equipments/{equipmentId}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> RemoveEquipment(int roomId, int equipmentId)
         {
             var response = await _roomEquipmentService.RemoveEquipmentFromRoomAsync(roomId, equipmentId);
@@ -137,7 +137,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Cập nhật trạng thái phòng: Available (Phòng trống) | InUse (Đang sử dụng) | Maintenance (Đang bảo trì)
         /// </summary>
         [HttpPatch("{id}/status")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateRoomStatusDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -246,6 +246,15 @@ namespace HUIT_RoMan.API.Controllers
                 availableRooms = availableRooms
                     .Where(room => room.RoomTypeId == requiredRoomTypeId.Value)
                     .ToList();
+            }
+
+
+
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
+            {
+                var allowedRooms = await _roomService.GetAllAsync();
+                var allowedRoomIds = allowedRooms.Data?.Select(r => r.Id).ToHashSet() ?? new HashSet<int>();
+                availableRooms = availableRooms.Where(room => allowedRoomIds.Contains(room.RoomId)).ToList();
             }
 
             if (isStudent)

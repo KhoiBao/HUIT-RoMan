@@ -75,6 +75,19 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
                 }));
             }
 
+            if ((_currentUser.Role == "Manager" || _currentUser.Role == "Employee") && _currentUser.DepartmentId.HasValue)
+            {
+                var myDeptId = _currentUser.DepartmentId.Value;
+                query = query.Where(s => !s.Employees.Any() || s.Employees.Any(e =>
+                {
+                    if (allEmployees.TryGetValue(e.Id, out var fullEmp))
+                    {
+                        return fullEmp.User?.DepartmentId == myDeptId;
+                    }
+                    return false;
+                }));
+            }
+
             if (!string.IsNullOrWhiteSpace(filter.Search))
             {
                 var term = filter.Search.Trim().ToLower();
@@ -136,7 +149,15 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
 
             if (dto.EmployeeIds != null && dto.EmployeeIds.Any())
             {
-                var emps = (await _employeeRepo.FindAsync(e => dto.EmployeeIds.Contains(e.Id))).ToList();
+                var emps = (await _employeeRepo.FindAsync(e => dto.EmployeeIds.Contains(e.Id), e => e.User)).ToList();
+                if (_currentUser.Role == "Manager" && _currentUser.DepartmentId.HasValue)
+                {
+                    var myDeptId = _currentUser.DepartmentId.Value;
+                    if (emps.Any(e => e.User?.DepartmentId != myDeptId))
+                    {
+                        return ApiResponse<ShiftDto>.ErrorResponse("Bạn chỉ có thể phân công nhân sự thuộc đơn vị do mình quản lý.");
+                    }
+                }
                 foreach (var emp in emps)
                 {
                     shift.Employees.Add(emp);
@@ -177,7 +198,15 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
             shift.Employees.Clear();
             if (dto.EmployeeIds != null && dto.EmployeeIds.Any())
             {
-                var emps = (await _employeeRepo.FindAsync(e => dto.EmployeeIds.Contains(e.Id))).ToList();
+                var emps = (await _employeeRepo.FindAsync(e => dto.EmployeeIds.Contains(e.Id), e => e.User)).ToList();
+                if (_currentUser.Role == "Manager" && _currentUser.DepartmentId.HasValue)
+                {
+                    var myDeptId = _currentUser.DepartmentId.Value;
+                    if (emps.Any(e => e.User?.DepartmentId != myDeptId))
+                    {
+                        return ApiResponse<ShiftDto>.ErrorResponse("Bạn chỉ có thể phân công nhân sự thuộc đơn vị do mình quản lý.");
+                    }
+                }
                 foreach (var emp in emps)
                 {
                     shift.Employees.Add(emp);
@@ -243,7 +272,15 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
             shift.Employees.Clear();
             if (employeeIds != null && employeeIds.Any())
             {
-                var emps = (await _employeeRepo.FindAsync(e => employeeIds.Contains(e.Id))).ToList();
+                var emps = (await _employeeRepo.FindAsync(e => employeeIds.Contains(e.Id), e => e.User)).ToList();
+                if (_currentUser.Role == "Manager" && _currentUser.DepartmentId.HasValue)
+                {
+                    var myDeptId = _currentUser.DepartmentId.Value;
+                    if (emps.Any(e => e.User?.DepartmentId != myDeptId))
+                    {
+                        return ApiResponse<ShiftDto>.ErrorResponse("Bạn chỉ có thể phân công nhân sự thuộc đơn vị do mình quản lý.");
+                    }
+                }
                 foreach (var emp in emps)
                 {
                     shift.Employees.Add(emp);

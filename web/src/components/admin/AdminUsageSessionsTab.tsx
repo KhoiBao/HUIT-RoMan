@@ -528,7 +528,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
           </div>
         ) : filteredSessions.length === 0 ? (
           <div className="table-empty-state">
-            <DoorIcon size={48} />
+            <div className="empty-state-icon-box">
+              <DoorIcon size={32} />
+            </div>
             <h4>Không có phiên sử dụng nào phù hợp</h4>
             <p>
               Hiện chưa có phiên mượn phòng nào theo điều kiện lọc hiện tại.
@@ -539,14 +541,14 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
             <table className="usage-data-table">
               <thead>
                 <tr>
-                  <th>MÃ XÁC NHẬN</th>
-                  <th>PHÒNG HỌC &amp; VỊ TRÍ</th>
-                  <th>NGƯỜI CHỊU TRÁCH NHIỆM</th>
-                  <th>LỊCH ĐĂNG KÝ</th>
-                  <th>CHECK-IN THỰC TẾ</th>
-                  <th>CHECK-OUT THỰC TẾ</th>
-                  <th>TRẠNG THÁI</th>
-                  <th className="text-right">THAO TÁC</th>
+                  <th className="cell-code">MÃ XÁC NHẬN</th>
+                  <th className="cell-room">PHÒNG HỌC &amp; VỊ TRÍ</th>
+                  <th className="cell-borrower">NGƯỜI CHỊU TRÁCH NHIỆM</th>
+                  <th className="cell-schedule">LỊCH ĐĂNG KÝ</th>
+                  <th className="cell-checkin">CHECK-IN THỰC TẾ</th>
+                  <th className="cell-checkout">CHECK-OUT THỰC TẾ</th>
+                  <th className="cell-status">TRẠNG THÁI</th>
+                  <th className="cell-actions text-right">THAO TÁC</th>
                 </tr>
               </thead>
               <tbody>

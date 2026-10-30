@@ -18,6 +18,7 @@ namespace HUIT_RoMan.Application.Common.Interfaces
             string? roomSummary = null,
             DateTime? startAt = null,
             DateTime? endAt = null,
+            string? checkInCode = null,
             CancellationToken cancellationToken = default);
     }
 }

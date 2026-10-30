@@ -10,19 +10,20 @@ Pass chung: `Huit@123`
 - admin02@huit.edu.vn / Huit@123 (ADMIN002)
 - admin03@huit.edu.vn / Huit@123 (ADMIN003)
 
-## Nhân sự (Employee) — 6 acc
+## Quản lý đơn vị (Manager) — Phân công nhân viên & Quản lý phòng đơn vị
 
-Thủ thư (Thư viện):
+- tv001@huit.edu.vn / Huit@123 (TV001 - Trưởng Đơn vị Thư viện, quản lý phân công thủ thư)
+- qlp001@huit.edu.vn / Huit@123 (QLP001 - Trưởng Phòng Đào tạo, quản lý phân công nhân sự phòng)
 
-- tv001@huit.edu.vn / Huit@123
-- tv002@huit.edu.vn / Huit@123
-- tv003@huit.edu.vn / Huit@123
+## Nhân sự (Employee) — 4 acc
 
-Quản lý phòng (Phòng Đào tạo):
+Nhân viên Thư viện:
+- tv002@huit.edu.vn / Huit@123 (TV002 - Thủ thư)
+- tv003@huit.edu.vn / Huit@123 (TV003 - Thủ thư)
 
-- qlp001@huit.edu.vn / Huit@123
-- qlp002@huit.edu.vn / Huit@123
-- qlp003@huit.edu.vn / Huit@123
+Nhân viên Phòng Đào tạo:
+- qlp002@huit.edu.vn / Huit@123 (QLP002 - Quản lý phòng)
+- qlp003@huit.edu.vn / Huit@123 (QLP003 - Quản lý phòng)
 
 ## Người dùng (Student / Lecturer) — 8 acc
 

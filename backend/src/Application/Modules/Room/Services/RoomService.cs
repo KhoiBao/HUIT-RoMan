@@ -28,9 +28,9 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<IEnumerable<RoomDto>>> GetAllAsync()
         {
-            var rooms = await _roomRepo.GetAllAsync(r => r.RoomType);
+            var rooms = await _roomRepo.GetAllAsync(r => r.RoomType, r => r.RoomType.Department, r => r.RoomEquipments);
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 rooms = rooms.Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value).ToList();
             }
@@ -39,6 +39,17 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             {
                 rooms = rooms.Where(r => StudentBookingPolicy.IsBookableRoomType(r.RoomType?.Name)).ToList();
             }
+
+            foreach (var r in rooms)
+            {
+                var resolved = ResolveRoomStatus(r);
+                if (!string.Equals(r.Status, resolved, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    r.Status = resolved;
+                    _roomRepo.Update(r);
+                }
+            }
+            await _unitOfWork.SaveChangesAsync();
 
             var dtos = rooms.Select(r => new RoomDto
             {
@@ -49,11 +60,15 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Floor = r.Floor,
                 RoomNumber = r.RoomNumber,
                 Capacity = r.Capacity,
-                Status = r.Status,
+                Status = ResolveRoomStatus(r),
                 Description = r.Description,
                 RoomTypeId = r.RoomTypeId,
                 RoomTypeName = r.RoomType?.Name,
-                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
+                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+
+                DepartmentId = r.RoomType?.DepartmentId,
+
+                DepartmentName = r.RoomType?.Department?.Name
             }).ToList();
             
             return ApiResponse<IEnumerable<RoomDto>>.SuccessResponse(dtos);
@@ -61,16 +76,24 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<RoomDto>> GetByIdAsync(int id)
         {
-            var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType);
+            var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType, r => r.RoomType.Department, r => r.RoomEquipments);
             
             if (r == null) return ApiResponse<RoomDto>.ErrorResponse("Không tìm thấy phòng");
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 if (r.RoomType?.DepartmentId != _currentUser.DepartmentId.Value)
                 {
                     return ApiResponse<RoomDto>.ErrorResponse("Bạn không có quyền xem phòng của đơn vị khác.");
                 }
+            }
+
+            var resolvedStatus = ResolveRoomStatus(r);
+            if (!string.Equals(r.Status, resolvedStatus, System.StringComparison.OrdinalIgnoreCase))
+            {
+                r.Status = resolvedStatus;
+                _roomRepo.Update(r);
+                await _unitOfWork.SaveChangesAsync();
             }
 
             var dto = new RoomDto
@@ -82,11 +105,15 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Floor = r.Floor,
                 RoomNumber = r.RoomNumber,
                 Capacity = r.Capacity,
-                Status = r.Status,
+                Status = resolvedStatus,
                 Description = r.Description,
                 RoomTypeId = r.RoomTypeId,
                 RoomTypeName = r.RoomType?.Name,
-                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
+                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+
+                DepartmentId = r.RoomType?.DepartmentId,
+
+                DepartmentName = r.RoomType?.Department?.Name
             };
             
             return ApiResponse<RoomDto>.SuccessResponse(dto);
@@ -94,7 +121,7 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<RoomDto>> CreateAsync(CreateRoomDto request)
         {
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 var roomType = await _roomTypeRepo.GetByIdAsync(request.RoomTypeId);
                 if (roomType == null || roomType.DepartmentId != _currentUser.DepartmentId.Value)
@@ -125,10 +152,10 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<bool>> UpdateAsync(int id, UpdateRoomDto request)
         {
-            var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType);
+            var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType, r => r.RoomType.Department);
             if (r == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy phòng");
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 if (r.RoomType?.DepartmentId != _currentUser.DepartmentId.Value)
                 {
@@ -154,10 +181,10 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
         public async Task<ApiResponse<bool>> DeleteAsync(int id)
         {
-            var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType);
+            var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType, r => r.RoomType.Department);
             if (r == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy phòng");
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 if (r.RoomType?.DepartmentId != _currentUser.DepartmentId.Value)
                 {
@@ -179,9 +206,9 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             string? status,
             int? minCapacity)
         {
-            var rooms = await _roomRepo.GetAllAsync(r => r.RoomType);
+            var rooms = await _roomRepo.GetAllAsync(r => r.RoomType, r => r.RoomType.Department);
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 rooms = rooms.Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value).ToList();
             }
@@ -233,7 +260,11 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Description = r.Description,
                 RoomTypeId = r.RoomTypeId,
                 RoomTypeName = r.RoomType?.Name,
-                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
+                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+
+                DepartmentId = r.RoomType?.DepartmentId,
+
+                DepartmentName = r.RoomType?.Department?.Name
             }).ToList();
 
             return ApiResponse<IEnumerable<RoomDto>>.SuccessResponse(dtos);
@@ -249,10 +280,10 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var page = query.Page < 1 ? 1 : query.Page;
             var pageSize = query.PageSize <= 0 ? 10 : System.Math.Min(query.PageSize, 100);
 
-            var rooms = await _roomRepo.GetAllAsync(r => r.RoomType);
+            var rooms = await _roomRepo.GetAllAsync(r => r.RoomType, r => r.RoomType.Department);
             var roomList = rooms.ToList();
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 roomList = roomList
                     .Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value)
@@ -352,11 +383,15 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                     Floor = r.Floor,
                     RoomNumber = r.RoomNumber,
                     Capacity = r.Capacity,
-                    Status = r.Status,
+                    Status = ResolveRoomStatus(r),
                     Description = r.Description,
                     RoomTypeId = r.RoomTypeId,
                     RoomTypeName = r.RoomType?.Name,
-                    IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false
+                    IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+
+                DepartmentId = r.RoomType?.DepartmentId,
+
+                DepartmentName = r.RoomType?.Department?.Name
                 })
                 .ToList();
 
@@ -377,6 +412,12 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         {
             var status = NormalizeRoomStatus(room.Status);
             if (status == "maintenance") return "maintenance";
+            if (room.RoomEquipments != null && room.RoomEquipments.Any(re =>
+                !re.IsDeleted && (EquipmentService.IsUnderMaintenance(re.Status) ||
+                                 (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status)))))
+            {
+                return "maintenance";
+            }
             if (status == "in-use") return "in-use";
             if (details == null || details.Count == 0) return "free";
 
@@ -384,6 +425,31 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 detail.Status == "Đang sử dụng"
                 || (nowUtc >= detail.StartAt && nowUtc < detail.EndAt));
             return inUse ? "in-use" : "booked";
+        }
+
+        public static string ResolveRoomStatus(Domain.Entities.Room room)
+        {
+            var raw = (room.Status ?? string.Empty).Trim();
+            if (raw.Equals("Maintenance", System.StringComparison.OrdinalIgnoreCase) ||
+                raw.Equals("Bảo trì", System.StringComparison.OrdinalIgnoreCase))
+            {
+                return "Maintenance";
+            }
+
+            if (room.RoomEquipments != null && room.RoomEquipments.Any(re =>
+                !re.IsDeleted && (RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
+                                 (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status)))))
+            {
+                return "Maintenance";
+            }
+
+            if (raw.Equals("InUse", System.StringComparison.OrdinalIgnoreCase) ||
+                raw.Equals("Đang sử dụng", System.StringComparison.OrdinalIgnoreCase))
+            {
+                return "InUse";
+            }
+
+            return "Available";
         }
 
         private static string NormalizeRoomStatus(string? status)

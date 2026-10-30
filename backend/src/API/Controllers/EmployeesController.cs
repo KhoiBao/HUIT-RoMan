@@ -8,7 +8,7 @@ namespace HUIT_RoMan.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Admin,Employee")]
+    [Authorize(Roles = "Admin,Manager,Employee")]
     public class EmployeesController : ControllerBase
     {
         private readonly IEmployeeService _employeeService;
@@ -37,7 +37,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Tạo hồ sơ nhân viên cho một User (Admin only)</summary>
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Manager")]
         public async Task<IActionResult> Create([FromBody] CreateEmployeeDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -48,7 +48,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Cập nhật chức vụ, trạng thái, khoa của nhân viên (Admin only)</summary>
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Manager")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateEmployeeDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -59,7 +59,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Xoá hồ sơ nhân viên và thu hồi role Employee (Admin only)</summary>
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Manager")]
         public async Task<IActionResult> Delete(int id)
         {
             var response = await _employeeService.DeleteAsync(id);

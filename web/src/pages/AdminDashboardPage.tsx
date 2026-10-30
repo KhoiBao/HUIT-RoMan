@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, type FormEvent } from "react
 import { api } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { formatRole } from "../lib/auth";
+import { useConfirm } from "../context/ConfirmContext";
 import AdminBookingApprovalTab from "../components/admin/AdminBookingApprovalTab";
 import AdminRoomsManagementTab from "../components/admin/AdminRoomsManagementTab";
 import AdminEquipmentsManagementTab from "../components/admin/AdminEquipmentsManagementTab";
@@ -17,6 +18,16 @@ import AdminChatTab from "../components/admin/AdminChatTab";
 import AdminGlobalSearchModal from "../components/admin/AdminGlobalSearchModal";
 import NotificationCenter from "../components/NotificationCenter";
 import SchedulePage from "./SchedulePage";
+import {
+  fetchPeriodsApi,
+  formatPeriodLabel,
+  type Period,
+} from "../lib/schedule";
+import {
+  fetchAvailableRoomsApi,
+  groupPeriodsByRoomType,
+} from "../lib/booking";
+
 import {
   ClockIcon,
   DoorIcon,
@@ -75,13 +86,20 @@ export interface DbRoomOption {
   name: string;
   capacity: number;
   status: string;
+  roomTypeId?: number;
   roomTypeName?: string;
+  isBookingByPeriod?: boolean;
+  departmentId?: number;
+  departmentName?: string;
   description?: string;
 }
 
 export default function AdminDashboardPage() {
   const { user, logout } = useAuth();
+  const { alert: confirmAlert } = useConfirm();
   const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
+  const normalizedUserRole = (user?.role || "").trim().toLowerCase();
+  const isManager = normalizedUserRole === "manager" || normalizedUserRole === "quan-ly" || normalizedUserRole === "quản lý" || normalizedUserRole === "quản lý đơn vị" || normalizedUserRole === "departmentmanager";
   // Navigation active tab: overview | approvals | rooms | roomTypes | departments | employees | users | timeline
   const [activeTab, setActiveTab] = useState<AdminTabType>("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -208,12 +226,20 @@ export default function AdminDashboardPage() {
   }, []);
 
   // Manual booking form state
+  const [manualBookingMode, setManualBookingMode] = useState<"time" | "period">("time");
+  const [periods, setPeriods] = useState<Period[]>([]);
+  const [startPeriodId, setStartPeriodId] = useState<number | null>(null);
+  const [endPeriodId, setEndPeriodId] = useState<number | null>(null);
+  const [periodRoomTypeId, setPeriodRoomTypeId] = useState<number | null>(null);
+  const [availableRoomIds, setAvailableRoomIds] = useState<Set<number> | null>(null);
+  const [isLoadingAvailableRooms, setIsLoadingAvailableRooms] = useState<boolean>(false);
+
   const [manualForm, setManualForm] = useState({
     roomId: 0,
-    roomCode: "TV01",
+    roomCode: "",
     borrowerName: "",
     studentId: "",
-    unit: "Khoa Công nghệ Thông tin",
+    unit: "",
     email: "",
     phone: "",
     bookingDate: new Date().toISOString().split("T")[0],
@@ -230,7 +256,27 @@ export default function AdminDashboardPage() {
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [submittingManual, setSubmittingManual] = useState<boolean>(false);
 
-  // Fetch users & rooms from system
+  // Group periods by room type (Phòng lý thuyết / thực hành...)
+  const periodGroups = useMemo(() => groupPeriodsByRoomType(periods), [periods]);
+  const activePeriodGroup = useMemo(() => {
+    const explicit = periodGroups.find((g) => g.roomTypeId === periodRoomTypeId);
+    return explicit ?? periodGroups[0] ?? null;
+  }, [periodGroups, periodRoomTypeId]);
+  const activePeriods = activePeriodGroup?.periods ?? periods;
+
+  // Initialize period selection
+  useEffect(() => {
+    if (manualBookingMode === "period" && activePeriods.length > 0) {
+      const startValid = activePeriods.some((p) => p.id === startPeriodId);
+      const endValid = activePeriods.some((p) => p.id === endPeriodId);
+      if (!startValid || !endValid) {
+        setStartPeriodId(activePeriods[0].id);
+        setEndPeriodId(activePeriods[1]?.id ?? activePeriods[0].id);
+      }
+    }
+  }, [manualBookingMode, activePeriods, startPeriodId, endPeriodId]);
+
+  // Fetch users, rooms & periods from system
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -260,20 +306,163 @@ export default function AdminDashboardPage() {
         const list = res.data?.data || res.data || [];
         if (Array.isArray(list) && list.length > 0) {
           setAvailableDbRooms(list);
-          setManualForm((prev) => ({
-            ...prev,
-            roomId: list[0].id,
-            roomCode: list[0].roomCode,
-          }));
         }
       } catch (err) {
         console.warn("Could not load rooms for manual booking:", err);
       }
     };
 
+    const fetchPeriods = async () => {
+      try {
+        const list = await fetchPeriodsApi();
+        setPeriods(list);
+      } catch (err) {
+        console.warn("Could not load periods:", err);
+      }
+    };
+
     fetchUsers();
     fetchRooms();
+    fetchPeriods();
   }, []);
+
+  // Filter available rooms for the selected date & time / periods to hide booked ones
+  const fetchAvailableRoomsForSlot = useCallback(async () => {
+    if (!manualForm.bookingDate) return;
+
+    setIsLoadingAvailableRooms(true);
+    try {
+      const params: {
+        date: string;
+        startTime?: string;
+        endTime?: string;
+        startPeriodId?: number;
+        endPeriodId?: number;
+      } = { date: manualForm.bookingDate };
+
+      if (manualBookingMode === "period") {
+        if (!startPeriodId || !endPeriodId) {
+          setIsLoadingAvailableRooms(false);
+          return;
+        }
+        params.startPeriodId = startPeriodId;
+        params.endPeriodId = endPeriodId;
+      } else {
+        if (!manualForm.startTime || !manualForm.endTime) {
+          setIsLoadingAvailableRooms(false);
+          return;
+        }
+        const s =
+          manualForm.startTime.length === 5
+            ? `${manualForm.startTime}:00`
+            : manualForm.startTime;
+        const e =
+          manualForm.endTime.length === 5
+            ? `${manualForm.endTime}:00`
+            : manualForm.endTime;
+        if (s >= e) {
+          setIsLoadingAvailableRooms(false);
+          return;
+        }
+        params.startTime = s;
+        params.endTime = e;
+      }
+
+      const availableList = await fetchAvailableRoomsApi(params);
+      const idSet = new Set<number>(availableList.map((r) => r.roomId));
+      setAvailableRoomIds(idSet);
+    } catch (err) {
+      console.warn("Could not fetch available rooms for slot:", err);
+      setAvailableRoomIds(new Set());
+    } finally {
+      setIsLoadingAvailableRooms(false);
+    }
+  }, [
+    manualForm.bookingDate,
+    manualForm.startTime,
+    manualForm.endTime,
+    manualBookingMode,
+    startPeriodId,
+    endPeriodId,
+  ]);
+
+  useEffect(() => {
+    if (showManualModal) {
+      const timer = setTimeout(() => {
+        fetchAvailableRoomsForSlot();
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [showManualModal, fetchAvailableRoomsForSlot]);
+
+  // Danh sách phòng khả dụng theo hình thức mượn và đã ẩn các phòng trùng lịch / bảo trì
+  const filteredRoomsForBooking = useMemo(() => {
+    return availableDbRooms.filter((r) => {
+      // 0. Quản lý đơn vị nào chỉ đặt được phòng đơn vị đó (Admin được đặt tất cả)
+      if (!isAdmin && user?.departmentId) {
+        if (r.departmentId && r.departmentId !== user.departmentId) {
+          return false;
+        }
+      }
+
+      // 1. Phân loại theo hình thức mượn (tiết vs giờ)
+      if (manualBookingMode === "period") {
+        if (!r.isBookingByPeriod) return false;
+        const targetTypeId = periodRoomTypeId ?? activePeriodGroup?.roomTypeId;
+        if (targetTypeId && r.roomTypeId && r.roomTypeId !== targetTypeId) {
+          return false;
+        }
+      } else {
+        if (r.isBookingByPeriod) return false;
+      }
+
+      // 2. Ẩn phòng đã có lịch đặt trùng hoặc bảo trì trong khung giờ đã chọn
+      if (availableRoomIds !== null) {
+        if (!availableRoomIds.has(r.id)) return false;
+      }
+
+      return true;
+    });
+  }, [
+    availableDbRooms,
+    isAdmin,
+    user?.departmentId,
+    manualBookingMode,
+    periodRoomTypeId,
+    activePeriodGroup?.roomTypeId,
+    availableRoomIds,
+  ]);
+
+  // Tự động gán phòng hợp lệ đầu tiên khi danh sách phòng khả dụng thay đổi
+  useEffect(() => {
+    if (showManualModal && filteredRoomsForBooking.length > 0) {
+      const isCurrentValid = filteredRoomsForBooking.some(
+        (r) => r.id === manualForm.roomId
+      );
+      if (!isCurrentValid) {
+        setManualForm((prev) => ({
+          ...prev,
+          roomId: filteredRoomsForBooking[0].id,
+          roomCode: filteredRoomsForBooking[0].roomCode,
+        }));
+      }
+    } else if (showManualModal && filteredRoomsForBooking.length === 0) {
+      setManualForm((prev) => ({
+        ...prev,
+        roomId: 0,
+        roomCode: "",
+      }));
+    }
+  }, [showManualModal, filteredRoomsForBooking]);
+
+  const handleManualModeChange = (mode: "time" | "period") => {
+    setManualBookingMode(mode);
+    setAvailableRoomIds(null);
+    if (mode === "period" && activePeriods.length > 0) {
+      setStartPeriodId(activePeriods[0].id);
+      setEndPeriodId(activePeriods[1]?.id ?? activePeriods[0].id);
+    }
+  };
 
   const filteredSystemUsers = useMemo(() => {
     if (!userSearchQuery.trim()) return systemUsers;
@@ -311,39 +500,159 @@ export default function AdminDashboardPage() {
         ...prev,
         borrowerName: found.fullName || "",
         studentId: found.cardCode || found.userName || "",
-        unit: found.departmentName || "Khoa Công nghệ Thông tin",
+        unit: found.departmentName || "",
         email: found.email || "",
-        phone: found.phoneNumber || "0900 000 000",
+        phone: found.phoneNumber || "",
       }));
     }
+  };
+
+  // Xác định thẩm quyền hình thức đặt phòng theo đơn vị quản lý
+  const isLibraryStaff = useMemo(() => {
+    if (isAdmin) return false;
+    const deptName = (user?.departmentName || "").toLowerCase();
+    return (
+      deptName.includes("thư viện") ||
+      deptName.includes("thu vien") ||
+      deptName.includes("library") ||
+      !user?.departmentName
+    );
+  }, [isAdmin, user?.departmentName]);
+
+  const isDaoTaoStaff = useMemo(() => {
+    if (isAdmin) return false;
+    const deptName = (user?.departmentName || "").toLowerCase();
+    return deptName.includes("đào tạo") || deptName.includes("dao tao");
+  }, [isAdmin, user?.departmentName]);
+
+  const departmentRoomsForMode = useMemo(() => {
+    if (isAdmin || !user?.departmentId) return availableDbRooms;
+    return availableDbRooms.filter((r) => r.departmentId === user.departmentId);
+  }, [isAdmin, user?.departmentId, availableDbRooms]);
+
+  const canBookByTime = useMemo(() => {
+    if (isAdmin) return true;
+    if (isLibraryStaff) return true;
+    if (isDaoTaoStaff) return false;
+    if (departmentRoomsForMode.length === 0) return true;
+    return departmentRoomsForMode.some((r) => !r.isBookingByPeriod);
+  }, [isAdmin, isLibraryStaff, isDaoTaoStaff, departmentRoomsForMode]);
+
+  const canBookByPeriod = useMemo(() => {
+    if (isAdmin) return true;
+    if (isLibraryStaff) return false; // Thủ thư quản lý thư viện chỉ đặt phòng theo khung giờ, ẩn đặt theo tiết
+    if (isDaoTaoStaff) return true;
+    if (departmentRoomsForMode.length === 0) return false;
+    return departmentRoomsForMode.some((r) => r.isBookingByPeriod);
+  }, [isAdmin, isLibraryStaff, isDaoTaoStaff, departmentRoomsForMode]);
+
+  // Tự động đồng bộ chế độ nếu chế độ hiện tại không hợp lệ với đơn vị
+  useEffect(() => {
+    if (!canBookByPeriod && manualBookingMode === "period") {
+      setManualBookingMode("time");
+    } else if (!canBookByTime && manualBookingMode === "time") {
+      setManualBookingMode("period");
+    }
+  }, [canBookByPeriod, canBookByTime, manualBookingMode]);
+
+  const handleOpenManualModal = () => {
+    if (!canBookByPeriod) {
+      setManualBookingMode("time");
+    } else if (!canBookByTime) {
+      setManualBookingMode("period");
+    } else {
+      const isDaoTao = Boolean(user?.departmentName?.toLowerCase().includes("đào tạo"));
+      setManualBookingMode(isDaoTao ? "period" : "time");
+    }
+    setShowManualModal(true);
   };
 
   const handleCloseManualModal = () => {
     setShowManualModal(false);
     setSelectedUserId("");
     setUserSearchQuery("");
+    setAvailableRoomIds(null);
   };
 
   // Submit manual booking to API and update system
   const handleManualBookingSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!manualForm.borrowerName || !manualForm.studentId) {
-      alert("Vui lòng điền họ tên và MSSV/Mã cán bộ!");
+      await confirmAlert({
+        title: "Thiếu thông tin người mượn",
+        message: "Vui lòng điền họ tên và MSSV/Mã cán bộ của người đại diện mượn phòng.",
+        type: "warning",
+      });
       return;
     }
 
-    setSubmittingManual(true);
-    try {
-      // Find roomId from database rooms
-      let targetRoomId = manualForm.roomId;
-      if (availableDbRooms.length > 0) {
-        const found = availableDbRooms.find(
-          (r) => r.id === manualForm.roomId || r.roomCode === manualForm.roomCode
-        );
-        targetRoomId = found ? found.id : availableDbRooms[0].id;
+    if (!manualForm.roomId) {
+      await confirmAlert({
+        title: "Chưa chọn phòng",
+        message: "Vui lòng chọn phòng tiếp nhận còn trống trong danh sách.",
+        type: "warning",
+      });
+      return;
+    }
+
+    const selectedRoom = availableDbRooms.find((r) => r.id === manualForm.roomId);
+    if (!selectedRoom) {
+      await confirmAlert({
+        title: "Phòng không tồn tại",
+        message: "Không tìm thấy thông tin phòng đã chọn.",
+        type: "warning",
+      });
+      return;
+    }
+
+    if (!isAdmin && user?.departmentId && selectedRoom.departmentId && selectedRoom.departmentId !== user.departmentId) {
+      await confirmAlert({
+        title: "Không có quyền đặt phòng",
+        message: "Bạn chỉ có quyền đặt phòng thuộc đơn vị/khoa do mình quản lý.",
+        type: "warning",
+      });
+      return;
+    }
+
+    let startLocal: Date;
+    let endLocal: Date;
+    let detailStartPeriodId: number | undefined;
+    let detailEndPeriodId: number | undefined;
+
+    if (manualBookingMode === "period") {
+      if (!startPeriodId || !endPeriodId) {
+        await confirmAlert({
+          title: "Chưa chọn tiết học",
+          message: "Vui lòng chọn tiết bắt đầu và tiết kết thúc.",
+          type: "warning",
+        });
+        return;
+      }
+      const startP = periods.find((p) => p.id === startPeriodId);
+      const endP = periods.find((p) => p.id === endPeriodId);
+      if (!startP || !endP) {
+        await confirmAlert({
+          title: "Tiết học không hợp lệ",
+          message: "Không tìm thấy thông tin tiết học đã chọn.",
+          type: "warning",
+        });
+        return;
       }
 
-      // Convert local date/time in Vietnam UTC+7
+      startLocal = new Date(`${manualForm.bookingDate}T${startP.startTime}`);
+      endLocal = new Date(`${manualForm.bookingDate}T${endP.endTime}`);
+      if (endLocal <= startLocal) {
+        await confirmAlert({
+          title: "Khung tiết không hợp lệ",
+          message: "Tiết kết thúc phải sau hoặc cùng tiết bắt đầu.",
+          type: "warning",
+        });
+        return;
+      }
+
+      detailStartPeriodId = Number(startPeriodId);
+      detailEndPeriodId = Number(endPeriodId);
+    } else {
       const startTime =
         manualForm.startTime.length === 5
           ? `${manualForm.startTime}:00`
@@ -352,66 +661,87 @@ export default function AdminDashboardPage() {
         manualForm.endTime.length === 5
           ? `${manualForm.endTime}:00`
           : manualForm.endTime;
-      const startLocal = new Date(`${manualForm.bookingDate}T${startTime}`);
-      const endLocal = new Date(`${manualForm.bookingDate}T${endTime}`);
+      startLocal = new Date(`${manualForm.bookingDate}T${startTime}`);
+      endLocal = new Date(`${manualForm.bookingDate}T${endTime}`);
 
       if (endLocal <= startLocal) {
-        alert("Giờ kết thúc phải sau giờ bắt đầu!");
-        setSubmittingManual(false);
+        await confirmAlert({
+          title: "Khung giờ không hợp lệ",
+          message: "Giờ kết thúc mượn phòng phải sau giờ bắt đầu.",
+          type: "warning",
+        });
         return;
       }
+    }
 
-      if (targetRoomId) {
-        const payload = {
-          activityName:
-            manualForm.purpose ||
-            `Đặt phòng trực tiếp (${manualForm.borrowerName})`,
-          purpose: manualForm.purpose || "Sử dụng phòng học nhóm / nghiên cứu",
-          guestCount: Number(manualForm.guestCount) || 1,
-          note: `Đăng ký thủ công tại quầy cho ${manualForm.borrowerName} (${manualForm.studentId} - ${manualForm.unit})`,
-          userId: selectedUserId ? Number(selectedUserId) : undefined,
-          autoApprove: true,
-          details: [
-            {
-              roomId: targetRoomId,
-              startAt: startLocal.toISOString(),
-              endAt: endLocal.toISOString(),
-              guestCount: Number(manualForm.guestCount) || 1,
-              purpose:
-                manualForm.purpose || "Sử dụng phòng học nhóm / nghiên cứu",
-            },
-          ],
-        };
+    setSubmittingManual(true);
+    try {
+      const payload = {
+        activityName:
+          manualForm.purpose ||
+          `Đặt phòng trực tiếp (${manualForm.borrowerName})`,
+        purpose:
+          manualForm.purpose ||
+          (manualBookingMode === "period"
+            ? "Giảng dạy / Học tập theo tiết"
+            : "Sử dụng phòng học nhóm / nghiên cứu"),
+        guestCount: Number(manualForm.guestCount) || 1,
+        note: `Đăng ký thủ công tại quầy cho ${manualForm.borrowerName} (${manualForm.studentId}${manualForm.unit ? ` - ${manualForm.unit}` : ""})`,
+        userId: selectedUserId ? Number(selectedUserId) : undefined,
+        autoApprove: true,
+        details: [
+          {
+            roomId: selectedRoom.id,
+            startAt: startLocal.toISOString(),
+            endAt: endLocal.toISOString(),
+            startPeriodId: detailStartPeriodId,
+            endPeriodId: detailEndPeriodId,
+            guestCount: Number(manualForm.guestCount) || 1,
+            purpose:
+              manualForm.purpose ||
+              (manualBookingMode === "period"
+                ? "Giảng dạy / Học tập theo tiết"
+                : "Sử dụng phòng học nhóm / nghiên cứu"),
+          },
+        ],
+      };
 
-        const res = await api.post("/api/Bookings", payload);
-        const createdBooking = res.data?.data;
+      const res = await api.post("/api/Bookings", payload);
+      const createdBooking = res.data?.data;
 
-        // If server created as "Chờ duyệt", approve immediately
-        if (createdBooking?.id && createdBooking?.status === "Chờ duyệt") {
-          try {
-            await api.patch(`/api/Bookings/${createdBooking.id}/approve`, {
-              decision: "Đã duyệt",
-              rejectionReason: "",
-            });
-          } catch {
-            // ignore
-          }
+      // If server created as "Chờ duyệt", approve immediately
+      if (createdBooking?.id && createdBooking?.status === "Chờ duyệt") {
+        try {
+          await api.patch(`/api/Bookings/${createdBooking.id}/approve`, {
+            decision: "Đã duyệt",
+            rejectionReason: "",
+          });
+        } catch {
+          // ignore
         }
       }
 
       handleCloseManualModal();
       setApprovalRefreshKey((k) => k + 1);
       showToast(
-        `Khởi tạo thành công đơn đặt phòng thủ công cho ${manualForm.borrowerName} (${manualForm.roomCode})! Đã duyệt vào hệ thống.`,
+        `Khởi tạo thành công đơn đặt phòng thủ công cho ${manualForm.borrowerName} (${selectedRoom.roomCode})! Đã duyệt vào hệ thống.`,
         "success"
       );
     } catch (err: any) {
       console.error("Manual booking error:", err);
       const errMsg =
         err.response?.data?.message ||
+        (err.response?.data?.errors
+          ? Object.values(err.response.data.errors).flat().join(", ")
+          : null) ||
         err.message ||
         "Không thể lưu đơn đặt phòng vào cơ sở dữ liệu.";
-      alert(`Khởi tạo đặt phòng thất bại: ${errMsg}`);
+
+      await confirmAlert({
+        title: "Khởi tạo đặt phòng thất bại",
+        message: errMsg,
+        type: "warning",
+      });
     } finally {
       setSubmittingManual(false);
     }
@@ -517,18 +847,25 @@ export default function AdminDashboardPage() {
     ];
 
     if (!isAdmin) {
-      const adminOnlyTabs = new Set(["roomTypes", "departments", "employees", "users"]);
+      const adminOnlyTabs = new Set(
+        isManager
+          ? ["roomTypes", "departments", "users"]
+          : ["roomTypes", "departments", "employees", "users"]
+      );
       return list.filter((t) => !adminOnlyTabs.has(t.id));
     }
 
     return list;
-  }, [pendingCount, pendingViolationsCount, isAdmin]);
+  }, [pendingCount, pendingViolationsCount, isAdmin, isManager]);
 
   useEffect(() => {
-    if (!isAdmin && ["roomTypes", "departments", "employees", "users"].includes(activeTab)) {
+    const forbiddenTabs = isManager
+      ? ["roomTypes", "departments", "users"]
+      : ["roomTypes", "departments", "employees", "users"];
+    if (!isAdmin && forbiddenTabs.includes(activeTab)) {
       setActiveTab("overview");
     }
-  }, [isAdmin, activeTab]);
+  }, [isAdmin, isManager, activeTab]);
 
   const activeTabConfig = useMemo(() => {
     return tabConfigList.find((t) => t.id === activeTab) || tabConfigList[0];
@@ -671,7 +1008,7 @@ export default function AdminDashboardPage() {
                   {user?.fullName || user?.cardCode || "Quản trị viên"}
                 </span>
                 <span className="admin-user-sub" title={user?.departmentName || formatRole(user?.role || "Admin")}>
-                  {isAdmin ? "Quản lý đơn vị" : `Nhân viên • ${user?.departmentName || "Thư viện"}`}
+                  {isAdmin ? "Quản trị viên toàn trường" : isManager ? `Quản lý đơn vị • ${user?.departmentName || "Thư viện"}` : `Nhân viên • ${user?.departmentName || "Thư viện"}`}
                 </span>
               </div>
               <button
@@ -788,7 +1125,7 @@ export default function AdminDashboardPage() {
                       <button
                         type="button"
                         className="btn-admin-pill-primary"
-                        onClick={() => setShowManualModal(true)}
+                        onClick={handleOpenManualModal}
                       >
                         <PlusIcon size={15} />
                         <span>Đặt phòng nhanh</span>
@@ -854,7 +1191,7 @@ export default function AdminDashboardPage() {
           <AdminDepartmentsTab onNotify={showToast} />
         )}
 
-        {activeTab === "employees" && isAdmin && (
+        {activeTab === "employees" && (isAdmin || isManager) && (
           <AdminEmployeesTab onNotify={showToast} />
         )}
 
@@ -897,7 +1234,10 @@ export default function AdminDashboardPage() {
         <div className="admin-modal-overlay">
           <div className="admin-modal-box" style={{ maxWidth: "660px" }}>
             <div className="modal-header">
-              <h3 className="modal-title">+ Khởi tạo đặt phòng thủ công</h3>
+              <h3 className="modal-title" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <PlusIcon size={18} />
+                <span>Khởi tạo đặt phòng thủ công</span>
+              </h3>
               <button
                 type="button"
                 className="modal-close-btn"
@@ -909,6 +1249,30 @@ export default function AdminDashboardPage() {
             </div>
 
             <form onSubmit={handleManualBookingSubmit} className="modal-form">
+              {/* Segmented control: Chỉ hiển thị khi có cả 2 hình thức (dành cho Admin) */}
+              {canBookByTime && canBookByPeriod && (
+                <div className="mode-segmented-control" style={{ marginBottom: "16px" }}>
+                  <button
+                    type="button"
+                    className={`seg-btn ${manualBookingMode === "time" ? "active" : ""}`}
+                    onClick={() => handleManualModeChange("time")}
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                  >
+                    <ClockIcon size={14} />
+                    <span>Đặt theo Khung giờ (Thư viện, Hội trường)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`seg-btn ${manualBookingMode === "period" ? "active" : ""}`}
+                    onClick={() => handleManualModeChange("period")}
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+                  >
+                    <GraduationCapIcon size={14} />
+                    <span>Đặt theo Tiết học (Phòng Đào tạo, Giảng đường)</span>
+                  </button>
+                </div>
+              )}
+
               <div className="form-group-grid">
                 {/* Chọn người đại diện từ hệ thống */}
                 <div className="form-field col-full">
@@ -948,38 +1312,6 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className="form-field">
-                  <label>Chọn phòng tiếp nhận:</label>
-                  <select
-                    value={manualForm.roomId || manualForm.roomCode}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const found = availableDbRooms.find(
-                        (r) => String(r.id) === val || r.roomCode === val
-                      );
-                      if (found) {
-                        setManualForm({
-                          ...manualForm,
-                          roomId: found.id,
-                          roomCode: found.roomCode,
-                        });
-                      } else {
-                        setManualForm({ ...manualForm, roomCode: val });
-                      }
-                    }}
-                  >
-                    {availableDbRooms.length > 0 ? (
-                      availableDbRooms.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} ({r.roomCode} - {r.capacity} chỗ)
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">Đang tải danh sách phòng...</option>
-                    )}
-                  </select>
-                </div>
-
-                <div className="form-field">
                   <label>Họ và tên người đại diện:</label>
                   <input
                     type="text"
@@ -1012,28 +1344,13 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className="form-field">
-                  <label>Đơn vị / Chi đoàn:</label>
+                  <label>Đơn vị / Chi đoàn / Khoa:</label>
                   <input
                     type="text"
-                    placeholder="VD: 11DHTH01 - Khoa CNTT"
+                    placeholder="Tự động theo tài khoản hoặc nhập..."
                     value={manualForm.unit}
                     onChange={(e) =>
                       setManualForm({ ...manualForm, unit: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label>Ngày đặt:</label>
-                  <input
-                    type="date"
-                    required
-                    value={manualForm.bookingDate}
-                    onChange={(e) =>
-                      setManualForm({
-                        ...manualForm,
-                        bookingDate: e.target.value,
-                      })
                     }
                   />
                 </div>
@@ -1054,31 +1371,184 @@ export default function AdminDashboardPage() {
                   />
                 </div>
 
-                <div className="form-field">
-                  <label>Giờ bắt đầu:</label>
+                <div className="form-field col-full">
+                  <label>Ngày đặt phòng (*):</label>
                   <input
-                    type="time"
+                    type="date"
                     required
-                    value={manualForm.startTime}
+                    value={manualForm.bookingDate}
                     onChange={(e) =>
                       setManualForm({
                         ...manualForm,
-                        startTime: e.target.value,
+                        bookingDate: e.target.value,
                       })
                     }
                   />
                 </div>
 
-                <div className="form-field">
-                  <label>Giờ kết thúc:</label>
-                  <input
-                    type="time"
-                    required
-                    value={manualForm.endTime}
-                    onChange={(e) =>
-                      setManualForm({ ...manualForm, endTime: e.target.value })
-                    }
-                  />
+                {/* Chọn khung giờ (Theo Giờ) hoặc Tiết học (Theo Tiết) */}
+                {manualBookingMode === "period" ? (
+                  <>
+                    {periodGroups.length > 1 && (
+                      <div className="form-field col-full">
+                        <label>Lịch tiết học (Loại phòng):</label>
+                        <select
+                          value={periodRoomTypeId ?? activePeriodGroup?.roomTypeId ?? ""}
+                          onChange={(e) => {
+                            const nextTypeId = Number(e.target.value);
+                            setPeriodRoomTypeId(nextTypeId);
+                            const group = periodGroups.find((g) => g.roomTypeId === nextTypeId);
+                            if (group && group.periods.length > 0) {
+                              setStartPeriodId(group.periods[0].id);
+                              setEndPeriodId(group.periods[1]?.id ?? group.periods[0].id);
+                            }
+                          }}
+                        >
+                          {periodGroups.map((g) => (
+                            <option key={g.roomTypeId} value={g.roomTypeId}>
+                              {g.roomTypeName} ({g.periods.length} tiết)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="form-field">
+                      <label>Tiết bắt đầu (*):</label>
+                      <select
+                        value={startPeriodId ?? ""}
+                        onChange={(e) => {
+                          const nextStartId = Number(e.target.value);
+                          const nextStartIdx = activePeriods.findIndex((p) => p.id === nextStartId);
+                          setStartPeriodId(nextStartId);
+                          const currentEndIdx = activePeriods.findIndex((p) => p.id === endPeriodId);
+                          if (currentEndIdx < nextStartIdx) {
+                            setEndPeriodId(activePeriods[nextStartIdx + 1]?.id ?? nextStartId);
+                          }
+                        }}
+                      >
+                        {activePeriods.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {formatPeriodLabel(p)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-field">
+                      <label>Tiết kết thúc (*):</label>
+                      <select
+                        value={endPeriodId ?? ""}
+                        onChange={(e) => {
+                          const nextEndId = Number(e.target.value);
+                          setEndPeriodId(nextEndId);
+                        }}
+                      >
+                        {activePeriods.map((p, idx) => {
+                          const startIdx = activePeriods.findIndex((item) => item.id === startPeriodId);
+                          const isBeforeStart = startIdx !== -1 && idx < startIdx;
+                          return (
+                            <option key={p.id} value={p.id} disabled={isBeforeStart}>
+                              {formatPeriodLabel(p)}{isBeforeStart ? " (trước tiết bắt đầu)" : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="form-field">
+                      <label>Giờ bắt đầu (*):</label>
+                      <input
+                        type="time"
+                        required
+                        value={manualForm.startTime}
+                        onChange={(e) =>
+                          setManualForm({
+                            ...manualForm,
+                            startTime: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className="form-field">
+                      <label>Giờ kết thúc (*):</label>
+                      <input
+                        type="time"
+                        required
+                        value={manualForm.endTime}
+                        onChange={(e) =>
+                          setManualForm({ ...manualForm, endTime: e.target.value })
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Chọn phòng tiếp nhận - Tự động ẩn các phòng đã có lịch đặt trùng */}
+                <div className="form-field col-full">
+                  <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <span>Chọn phòng tiếp nhận (*):</span>
+                      {!isAdmin && user?.departmentName && (
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color: "#1d4ed8",
+                            background: "#eff6ff",
+                            border: "1px solid #bfdbfe",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {user.departmentName}
+                        </span>
+                      )}
+                    </span>
+                    <span style={{ fontSize: "11px", fontWeight: "normal", color: "#64748b" }}>
+                      {isLoadingAvailableRooms
+                        ? "Đang kiểm tra phòng trống..."
+                        : filteredRoomsForBooking.length > 0
+                        ? `(${filteredRoomsForBooking.length} phòng trống khả dụng - Đã ẩn phòng đã đặt)`
+                        : "(Hết phòng trống trong khung giờ này)"}
+                    </span>
+                  </label>
+                  <select
+                    value={manualForm.roomId || ""}
+                    disabled={filteredRoomsForBooking.length === 0}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      const found = filteredRoomsForBooking.find((r) => r.id === val);
+                      if (found) {
+                        setManualForm({
+                          ...manualForm,
+                          roomId: found.id,
+                          roomCode: found.roomCode,
+                        });
+                      }
+                    }}
+                  >
+                    {filteredRoomsForBooking.length > 0 ? (
+                      filteredRoomsForBooking.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} ({r.roomCode} - Sức chứa: {r.capacity} chỗ {r.roomTypeName ? `• ${r.roomTypeName}` : ""})
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">
+                        -- Không có phòng trống phù hợp trong khung giờ đã chọn --
+                      </option>
+                    )}
+                  </select>
+                  {filteredRoomsForBooking.length === 0 && !isLoadingAvailableRooms && (
+                    <div style={{ marginTop: "6px", fontSize: "12px", color: "#dc2626", fontWeight: 500, display: "flex", alignItems: "center", gap: "6px" }}>
+                      <AlertTriangleIcon size={14} />
+                      <span>Tất cả phòng trong khung giờ này đã có lịch đặt hoặc đang bảo trì. Vui lòng chọn khung giờ hoặc ngày khác.</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-field col-full">
@@ -1105,7 +1575,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="submit"
                   className="btn-modal-submit"
-                  disabled={submittingManual}
+                  disabled={submittingManual || filteredRoomsForBooking.length === 0 || !manualForm.roomId}
                 >
                   {submittingManual
                     ? "Đang lưu & Duyệt..."

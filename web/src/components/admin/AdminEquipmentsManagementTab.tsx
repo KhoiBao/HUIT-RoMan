@@ -65,6 +65,7 @@ export interface RoomOption {
   id: number;
   roomCode: string;
   name: string;
+  status?: string;
 }
 
 export interface RoomEquipmentItem {
@@ -446,12 +447,20 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
   const handleCreateEquip = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formCatId) {
-      alert("Vui lòng nhập tên thiết bị và chọn danh mục.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập tên thiết bị và chọn danh mục.",
+        type: "warning",
+      });
       return;
     }
     const totalQty = Number(formTotalQty);
     if (!totalQty || totalQty < 1) {
-      alert("Số lượng tổng nhập kho phải lớn hơn hoặc bằng 1.");
+      await alert({
+        title: "Số lượng không hợp lệ",
+        message: "Số lượng tổng nhập kho phải lớn hơn hoặc bằng 1.",
+        type: "warning",
+      });
       return;
     }
     try {
@@ -496,18 +505,28 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
     e.preventDefault();
     if (!editingEquip) return;
     if (!editName.trim() || !editCatId) {
-      alert("Vui lòng nhập tên thiết bị và chọn danh mục.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập tên thiết bị và chọn danh mục.",
+        type: "warning",
+      });
       return;
     }
     const totalQty = Number(editTotalQty);
     if (!totalQty || totalQty < 1) {
-      alert("Số lượng tổng nhập kho phải lớn hơn hoặc bằng 1.");
+      await alert({
+        title: "Số lượng không hợp lệ",
+        message: "Số lượng tổng nhập kho phải lớn hơn hoặc bằng 1.",
+        type: "warning",
+      });
       return;
     }
     if (totalQty < (editingEquip.allocatedQuantity || 0)) {
-      alert(
-        `Tổng số lượng (${totalQty}) không thể nhỏ hơn số lượng đang phân bổ trong các phòng (${editingEquip.allocatedQuantity || 0} chiếc).`
-      );
+      await alert({
+        title: "Số lượng không hợp lệ",
+        message: `Tổng số lượng (${totalQty}) không thể nhỏ hơn số lượng đang phân bổ trong các phòng (${editingEquip.allocatedQuantity || 0} chiếc).`,
+        type: "warning",
+      });
       return;
     }
     try {
@@ -540,12 +559,20 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
   const handleAssignToRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRoomId || !assignEquipId) {
-      alert("Vui lòng chọn phòng và thiết bị cần gán.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng chọn phòng và thiết bị cần gán.",
+        type: "warning",
+      });
       return;
     }
     const selectedEquip = equipments.find((eq) => eq.id === Number(assignEquipId));
     if (selectedEquip && isUnderMaintenance(selectedEquip.status)) {
-      alert("Thiết bị này đang trong trạng thái bảo trì, không được phép phân bổ vào phòng hoặc sử dụng!");
+      await alert({
+        title: "Thiết bị đang bảo trì",
+        message: "Thiết bị này đang trong trạng thái bảo trì, không được phép phân bổ vào phòng hoặc sử dụng!",
+        type: "warning",
+      });
       return;
     }
 
@@ -553,9 +580,11 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
     const maxAllowed = (selectedEquip?.availableQuantity ?? 0) + currentInRoom;
 
     if (selectedEquip && assignQuantity > maxAllowed) {
-      alert(
-        `Số lượng phân bổ (${assignQuantity}) vượt quá số lượng khả dụng trong kho (kho hiện còn ${selectedEquip.availableQuantity} chiếc khả dụng).`
-      );
+      await alert({
+        title: "Vượt quá số lượng",
+        message: `Số lượng phân bổ (${assignQuantity}) vượt quá số lượng khả dụng trong kho (kho hiện còn ${selectedEquip.availableQuantity} chiếc khả dụng).`,
+        type: "warning",
+      });
       return;
     }
 
@@ -699,7 +728,11 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!catName.trim()) {
-      alert("Vui lòng nhập tên danh mục.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập tên danh mục.",
+        type: "warning",
+      });
       return;
     }
     try {
@@ -836,7 +869,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
         )}
 
         {subView === "byRoom" && (
-          <div className="flex-gap-10 align-center">
+          <div className="flex-gap-10 align-center flex-wrap">
             <span className="text-sm font-semibold text-slate-700">Chọn phòng kiểm tra:</span>
             <select
               className="admin-select-filter font-bold text-highlight"
@@ -845,10 +878,29 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
             >
               {rooms.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.roomCode} — {r.name}
+                  {r.roomCode} — {r.name} {r.status === "Bảo trì" || r.status === "Maintenance" ? "⚠️ (Đang bảo trì)" : ""}
                 </option>
               ))}
             </select>
+            {selectedRoomId && (() => {
+              const selRoom = rooms.find((r) => r.id === Number(selectedRoomId));
+              const isRoomMaint = selRoom && (selRoom.status === "Bảo trì" || selRoom.status === "Maintenance");
+              const hasBroken = roomEquipments.some((req) => isUnderMaintenance(req.status));
+              if (isRoomMaint || hasBroken) {
+                return (
+                  <span className="admin-status-pill pill-maintenance flex items-center gap-1 font-semibold">
+                    <WrenchIcon size={13} />
+                    <span>Trạng thái phòng: Đang bảo trì</span>
+                  </span>
+                );
+              }
+              return (
+                <span className="admin-status-pill pill-approved flex items-center gap-1 font-semibold">
+                  <CheckCircleIcon size={13} />
+                  <span>Trạng thái phòng: Sẵn sàng</span>
+                </span>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -949,6 +1001,33 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
 
       {subView === "byRoom" && (
         <div>
+          {(() => {
+            const selRoom = rooms.find((r) => r.id === Number(selectedRoomId));
+            const isRoomMaint = selRoom && (selRoom.status === "Bảo trì" || selRoom.status === "Maintenance");
+            const hasBroken = roomEquipments.some((req) => isUnderMaintenance(req.status));
+            if (isRoomMaint || hasBroken) {
+              return (
+                <div style={{
+                  backgroundColor: "#fff7ed",
+                  border: "1px solid #fdba74",
+                  color: "#9a3412",
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  marginBottom: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  fontSize: "13.5px"
+                }}>
+                  <WrenchIcon size={18} className="text-amber-600 flex-shrink-0" />
+                  <div>
+                    <strong>Cảnh báo bảo trì phòng:</strong> Phòng học này đang ở trạng thái <strong>Bảo trì</strong> do có thiết bị gặp sự cố hoặc đang bảo trì. Hệ thống sẽ tự động khóa đặt phòng đối với phòng này cho đến khi thiết bị được sửa chữa hoặc thu hồi.
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
           {roomEquipments.length === 0 ? (
             <div className="admin-empty-state">
               <AlertTriangleIcon size={36} className="text-muted" />

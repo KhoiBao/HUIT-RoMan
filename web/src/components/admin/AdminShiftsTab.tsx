@@ -44,12 +44,15 @@ interface EmployeeItem {
   fullName: string;
   email: string;
   position: string;
+  departmentId?: number;
   departmentName?: string;
 }
 
 export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
+  const isManager = user?.role === "Manager" || user?.role === "quan-ly" || user?.role === "Quản lý" || user?.role === "DepartmentManager";
+  const canManageShifts = isAdmin || isManager;
   const { confirm } = useConfirm();
 
   // Data states
@@ -57,6 +60,11 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
   const [logs, setLogs] = useState<ShiftLogItem[]>([]);
   const [stats, setStats] = useState<ShiftStats | null>(null);
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
+  // Danh sách nhân sự có thể phân công (nếu là Quản lý đơn vị thì chỉ phân công nhân sự thuộc đơn vị mình)
+  const assignableEmployees = useMemo(() => {
+    if (isAdmin || !user?.departmentId) return employees;
+    return employees.filter((e) => e.departmentId === user.departmentId);
+  }, [isAdmin, user?.departmentId, employees]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // View state: "calendar" | "table"
@@ -500,7 +508,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
             <span>Ghi nhật ký trực</span>
           </button>
 
-          {isAdmin && (
+          {canManageShifts && (
             <button
               type="button"
               className="btn-toolbar-primary"
@@ -791,7 +799,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                                 <span>Hoàn tất</span>
                               </button>
                             )}
-                            {isAdmin && (
+                            {canManageShifts && (
                               <>
                                 <button
                                   type="button"
@@ -958,7 +966,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                             <span>Hoàn tất</span>
                           </button>
                         )}
-                        {isAdmin && (
+                        {canManageShifts && (
                           <>
                             <button
                               type="button"
@@ -1176,7 +1184,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                     background: "#f8fafc",
                   }}
                 >
-                  {employees.map((emp) => {
+                  {assignableEmployees.map((emp) => {
                     const isChecked = shiftForm.selectedEmployeeIds.includes(emp.id);
                     return (
                       <label

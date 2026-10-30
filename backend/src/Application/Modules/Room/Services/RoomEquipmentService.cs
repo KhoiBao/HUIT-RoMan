@@ -126,6 +126,11 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             }
 
             await _unitOfWork.SaveChangesAsync();
+
+            // Đồng bộ trạng thái phòng: Nếu có thiết bị bảo trì thì phòng chuyển sang Bảo trì, ngược lại hoàn trả về Trống
+            await SyncRoomMaintenanceStatusAsync(roomId);
+            await _unitOfWork.SaveChangesAsync();
+
             return ApiResponse<bool>.SuccessResponse(true, "Phân bổ thiết bị vào phòng thành công.");
         }
 
@@ -147,7 +152,53 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
             _roomEquipmentRepo.HardRemove(existing);
             await _unitOfWork.SaveChangesAsync();
+
+            // Đồng bộ trạng thái phòng sau khi thu hồi thiết bị
+            await SyncRoomMaintenanceStatusAsync(roomId);
+            await _unitOfWork.SaveChangesAsync();
+
             return ApiResponse<bool>.SuccessResponse(true, "Đã thu hồi thiết bị khỏi phòng và hoàn trả về kho.");
+        }
+
+        public static bool IsEquipmentUnderMaintenance(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status)) return false;
+            var s = status.Trim().ToLowerInvariant();
+            return s.Contains("bảo trì") || s.Contains("maintenance") || s.Contains("hỏng") || s.Contains("broken");
+        }
+
+        private async Task SyncRoomMaintenanceStatusAsync(int roomId)
+        {
+            var room = await _roomRepo.GetByIdAsync(roomId);
+            if (room == null) return;
+
+            var roomEquips = await _roomEquipmentRepo.FindAsync(
+                re => re.RoomId == roomId && !re.IsDeleted,
+                re => re.Equipment
+            );
+
+            bool hasMaintenanceEquip = roomEquips.Any(re =>
+                IsEquipmentUnderMaintenance(re.Status) ||
+                (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status))
+            );
+
+            if (hasMaintenanceEquip)
+            {
+                if (!room.Status.Equals("Maintenance", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    room.Status = "Maintenance";
+                    _roomRepo.Update(room);
+                }
+            }
+            else
+            {
+                if (room.Status.Equals("Bảo trì", System.StringComparison.OrdinalIgnoreCase) ||
+                    room.Status.Equals("Maintenance", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    room.Status = "Available";
+                    _roomRepo.Update(room);
+                }
+            }
         }
     }
 }

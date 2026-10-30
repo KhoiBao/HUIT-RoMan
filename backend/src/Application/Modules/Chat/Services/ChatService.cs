@@ -17,6 +17,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         private readonly IRepository<ChatMessage> _messageRepo;
         private readonly IRepository<Domain.Entities.Shift> _shiftRepo;
         private readonly IRepository<Employee> _employeeRepo;
+        private readonly IRepository<Domain.Entities.Room> _roomRepo;
         private readonly UserManager<User> _userManager;
 
         public ChatService(
@@ -28,6 +29,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
             _messageRepo = _unitOfWork.Repository<ChatMessage>();
             _shiftRepo = _unitOfWork.Repository<Domain.Entities.Shift>();
             _employeeRepo = _unitOfWork.Repository<Employee>();
+            _roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
             _userManager = userManager;
         }
 
@@ -91,9 +93,68 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         }
 
         // ─────────────────────────────────────────────────────────────────
-        // 2. GET CONVERSATIONS FOR STAFF / LIBRARIAN
+        // 1b. CREATE NEW CONVERSATION (KHI PHIÊN CŨ ĐÃ ĐÓNG)
         // ─────────────────────────────────────────────────────────────────
-        public async Task<ApiResponse<List<ChatConversationDto>>> GetConversationsForStaffAsync(string? status = null, string? search = null)
+        public async Task<ApiResponse<ChatConversationDto>> CreateNewConversationAsync(int userId, string? initialMessage = null)
+        {
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+            {
+                return ApiResponse<ChatConversationDto>.ErrorResponse("Người dùng không tồn tại.");
+            }
+
+            // Đóng tất cả phiên chat đang mở cũ của user nếu có
+            var openConversations = await _conversationRepo.FindAsync(c => c.UserId == userId && c.Status == "Open");
+            foreach (var conv in openConversations)
+            {
+                conv.Status = "Closed";
+                conv.EndTime = DateTime.UtcNow;
+                _conversationRepo.Update(conv);
+            }
+
+            var newConversation = new ChatConversation
+            {
+                UserId = userId,
+                StartTime = DateTime.UtcNow,
+                Status = "Open"
+            };
+
+            await _conversationRepo.AddAsync(newConversation);
+            await _unitOfWork.SaveChangesAsync();
+
+            if (!string.IsNullOrWhiteSpace(initialMessage))
+            {
+                var msg = new ChatMessage
+                {
+                    ChatConversationId = newConversation.Id,
+                    UserId = userId,
+                    Content = initialMessage.Trim(),
+                    SentAt = DateTime.UtcNow,
+                    IsRead = false
+                };
+                await _messageRepo.AddAsync(msg);
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            var fetched = (await _conversationRepo.FindAsync(
+                c => c.Id == newConversation.Id,
+                c => c.User,
+                c => c.User.Department,
+                c => c.ChatMessages
+            )).FirstOrDefault();
+
+            var dto = await MapConversationDtoAsync(fetched ?? newConversation);
+            return ApiResponse<ChatConversationDto>.SuccessResponse(dto, "Đã khởi tạo phiên hỗ trợ mới.");
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // 2. GET CONVERSATIONS FOR STAFF / LIBRARIAN / MANAGER
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<List<ChatConversationDto>>> GetConversationsForStaffAsync(
+            string? status = null,
+            string? search = null,
+            int? departmentId = null,
+            string? role = null)
         {
             var conversations = await _conversationRepo.GetAllAsync(
                 c => c.User,
@@ -102,6 +163,12 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
             );
 
             var query = conversations.AsEnumerable();
+
+            // Nếu người xem là Manager hoặc Employee có DepartmentId, lọc theo đơn vị phụ trách
+            if ((role == "Manager" || role == "Employee") && departmentId.HasValue)
+            {
+                query = query.Where(c => c.User?.DepartmentId == departmentId.Value);
+            }
 
             if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
             {
@@ -162,7 +229,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         }
 
         // ─────────────────────────────────────────────────────────────────
-        // 4. SEND MESSAGE
+        // 4. SEND MESSAGE (CHẶN NẾU PHIÊN CHAT ĐÃ KẾT THÚC)
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<ChatMessageDto>> SendMessageAsync(int conversationId, int senderUserId, string content)
         {
@@ -181,12 +248,12 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                 return ApiResponse<ChatMessageDto>.ErrorResponse("Không tìm thấy cuộc hội thoại.");
             }
 
-            // Nếu cuộc trò chuyện đang đóng thì tự động mở lại khi có tin nhắn mới
-            if (conv.Status == "Closed")
+            // Chặn gửi tin nhắn nếu phiên hỗ trợ đã kết thúc
+            if (string.Equals(conv.Status, "Closed", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(conv.Status, "Ended", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(conv.Status, "Đã đóng", StringComparison.OrdinalIgnoreCase))
             {
-                conv.Status = "Open";
-                conv.EndTime = null;
-                _conversationRepo.Update(conv);
+                return ApiResponse<ChatMessageDto>.ErrorResponse("Cuộc trò chuyện này đã kết thúc. Vui lòng mở cuộc trò chuyện mới để tiếp tục trao đổi.");
             }
 
             var message = new ChatMessage
@@ -204,6 +271,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
             var senderUser = await _userManager.FindByIdAsync(senderUserId.ToString());
             var roles = senderUser != null ? await _userManager.GetRolesAsync(senderUser) : new List<string>();
             var isStaff = roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
+                                         r.Equals("Manager", StringComparison.OrdinalIgnoreCase) ||
                                          r.Equals("Employee", StringComparison.OrdinalIgnoreCase));
 
             var dto = new ChatMessageDto
@@ -248,6 +316,144 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         }
 
         // ─────────────────────────────────────────────────────────────────
+        // 5b. REOPEN CONVERSATION
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<bool>> ReopenConversationAsync(int conversationId, int currentUserId, bool isStaff)
+        {
+            return ApiResponse<bool>.ErrorResponse("Hệ thống không cho phép mở lại phiên đã kết thúc. Vui lòng tạo phiên hỗ trợ mới.");
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // 5d. DELETE ENTIRE CONVERSATION (CHO PHÉP QUẢN LÝ / ADMIN / NHÂN VIÊN XÓA HỘI THOẠI)
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<bool>> DeleteConversationAsync(int conversationId, int currentUserId, string currentUserRole)
+        {
+            try
+            {
+                var normRole = (currentUserRole ?? "").Trim().ToLower();
+                bool isAuthorized = normRole == "admin" ||
+                                    normRole == "quan-tri" ||
+                                    normRole == "quản trị viên" ||
+                                    normRole == "manager" ||
+                                    normRole == "quan-ly" ||
+                                    normRole == "quản lý" ||
+                                    normRole == "departmentmanager" ||
+                                    normRole == "employee" ||
+                                    normRole == "nhan-vien" ||
+                                    normRole == "nhân viên" ||
+                                    normRole == "thủ thư";
+
+                if (!isAuthorized && currentUserId > 0)
+                {
+                    var u = await _userManager.FindByIdAsync(currentUserId.ToString());
+                    if (u != null)
+                    {
+                        var r = await _userManager.GetRolesAsync(u);
+                        isAuthorized = r.Any(x => x.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
+                                                  x.Equals("Manager", StringComparison.OrdinalIgnoreCase) ||
+                                                  x.Equals("Employee", StringComparison.OrdinalIgnoreCase));
+                    }
+                }
+
+                if (!isAuthorized)
+                {
+                    return ApiResponse<bool>.ErrorResponse("Bạn không có quyền xóa cuộc hội thoại. Quyền này dành cho Cán bộ trực ban hoặc Quản trị viên.");
+                }
+
+                var conv = await _conversationRepo.GetByIdAsync(conversationId, c => c.ChatMessages);
+                if (conv == null)
+                {
+                    return ApiResponse<bool>.ErrorResponse("Không tìm thấy cuộc trò chuyện.");
+                }
+
+                // Xóa mềm tất cả tin nhắn liên quan đến cuộc hội thoại này
+                var messages = await _messageRepo.FindAsync(m => m.ChatConversationId == conversationId);
+                foreach (var msg in messages)
+                {
+                    _messageRepo.Remove(msg);
+                }
+
+                if (conv.ChatMessages != null && conv.ChatMessages.Count > 0)
+                {
+                    foreach (var msg in conv.ChatMessages)
+                    {
+                        _messageRepo.Remove(msg);
+                    }
+                }
+
+                conv.Status = "Closed";
+                conv.EndTime = DateTime.UtcNow;
+                _conversationRepo.Remove(conv);
+                await _unitOfWork.SaveChangesAsync();
+
+                return ApiResponse<bool>.SuccessResponse(true, "Đã xóa toàn bộ cuộc trò chuyện.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<bool>.ErrorResponse($"Lỗi khi xóa cuộc trò chuyện: {ex.Message}");
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // 5c. DELETE MESSAGE (CHO PHÉP QUẢN LÝ / ADMIN / NHÂN VIÊN XÓA TIN NHẮN)
+        // ─────────────────────────────────────────────────────────────────
+        public async Task<ApiResponse<DeleteMessageResult>> DeleteMessageAsync(int messageId, int currentUserId, string currentUserRole)
+        {
+            try
+            {
+                var normRole = (currentUserRole ?? "").Trim().ToLower();
+                bool isAuthorized = normRole == "admin" ||
+                                    normRole == "quan-tri" ||
+                                    normRole == "quản trị viên" ||
+                                    normRole == "manager" ||
+                                    normRole == "quan-ly" ||
+                                    normRole == "quản lý" ||
+                                    normRole == "departmentmanager" ||
+                                    normRole == "employee" ||
+                                    normRole == "nhan-vien" ||
+                                    normRole == "nhân viên" ||
+                                    normRole == "thủ thư";
+
+                if (!isAuthorized && currentUserId > 0)
+                {
+                    var u = await _userManager.FindByIdAsync(currentUserId.ToString());
+                    if (u != null)
+                    {
+                        var r = await _userManager.GetRolesAsync(u);
+                        isAuthorized = r.Any(x => x.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
+                                                  x.Equals("Manager", StringComparison.OrdinalIgnoreCase) ||
+                                                  x.Equals("Employee", StringComparison.OrdinalIgnoreCase));
+                    }
+                }
+
+                if (!isAuthorized)
+                {
+                    return ApiResponse<DeleteMessageResult>.ErrorResponse("Bạn không có quyền xóa tin nhắn. Quyền này dành cho Cán bộ trực ban hoặc Quản trị viên.");
+                }
+
+                var message = await _messageRepo.GetByIdAsync(messageId);
+                if (message == null)
+                {
+                    return ApiResponse<DeleteMessageResult>.ErrorResponse("Không tìm thấy tin nhắn.");
+                }
+
+                int conversationId = message.ChatConversationId;
+                _messageRepo.Remove(message); // Kích hoạt xóa mềm (soft-delete) của BaseEntity
+                await _unitOfWork.SaveChangesAsync();
+
+                return ApiResponse<DeleteMessageResult>.SuccessResponse(new DeleteMessageResult
+                {
+                    MessageId = messageId,
+                    ConversationId = conversationId
+                }, "Đã xóa tin nhắn thành công.");
+            }
+            catch (Exception ex)
+            {
+                return ApiResponse<DeleteMessageResult>.ErrorResponse($"Lỗi khi xóa tin nhắn: {ex.Message}");
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
         // 6. MARK MESSAGES AS READ
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<bool>> MarkMessagesAsReadAsync(int conversationId, int currentUserId)
@@ -273,27 +479,40 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         }
 
         // ─────────────────────────────────────────────────────────────────
-        // 7. GET ON-DUTY STAFF
+        // 7. GET ON-DUTY STAFF (ƯU TIÊN CÁN BỘ/QUẢN LÝ ĐƠN VỊ CỦA PHÒNG CÓ CA TRỰC)
         // ─────────────────────────────────────────────────────────────────
-        public async Task<ApiResponse<List<OnDutyStaffDto>>> GetOnDutyStaffAsync()
+        public async Task<ApiResponse<List<OnDutyStaffDto>>> GetOnDutyStaffAsync(int? roomId = null, int? departmentId = null)
         {
             var nowUtc = DateTime.UtcNow;
             var vnTime = nowUtc.AddHours(7); // Giờ Việt Nam (UTC+7)
             var today = vnTime.Date;
             var currentTime = vnTime.TimeOfDay;
 
+            int? targetDepartmentId = departmentId;
+            string? roomName = null;
+
+            if (roomId.HasValue && roomId.Value > 0)
+            {
+                var room = await _roomRepo.GetByIdAsync(roomId.Value, r => r.RoomType);
+                if (room != null)
+                {
+                    targetDepartmentId = room.RoomType?.DepartmentId;
+                    roomName = $"{room.RoomCode} ({room.Name})";
+                }
+            }
+
             var shifts = await _shiftRepo.GetAllAsync(s => s.Employees);
             var todayShifts = shifts
                 .Where(s => s.Date.Date == today && s.Status != "Hủy")
                 .ToList();
-
-            var result = new List<OnDutyStaffDto>();
 
             var allEmployees = await _employeeRepo.GetAllAsync(
                 e => e.User,
                 e => e.User.Department
             );
             var employeeDict = allEmployees.ToDictionary(e => e.Id);
+
+            var result = new List<OnDutyStaffDto>();
 
             foreach (var shift in todayShifts)
             {
@@ -303,15 +522,26 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                 {
                     if (employeeDict.TryGetValue(empSummary.Id, out var emp) && emp.User != null)
                     {
+                        // Nếu người dùng chọn phòng cụ thể, chỉ chọn nhân sự thuộc đơn vị của phòng đó
+                        if (targetDepartmentId.HasValue && emp.User.DepartmentId != targetDepartmentId.Value)
+                        {
+                            continue;
+                        }
+
+                        var roles = await _userManager.GetRolesAsync(emp.User);
+                        var primaryRole = roles.FirstOrDefault() ?? "Employee";
+
                         result.Add(new OnDutyStaffDto
                         {
                             EmployeeId = emp.Id,
                             UserId = emp.UserId,
                             Code = emp.Code,
                             FullName = emp.User.FullName,
-                            Position = emp.Position ?? "Thủ thư trực ban",
-                            DepartmentName = emp.User.Department?.Name ?? "Thư viện HUIT",
-                            ShiftName = shift.Name ?? "Ca trực thư viện",
+                            Position = emp.Position ?? (primaryRole == "Manager" ? "Quản lý đơn vị" : "Nhân viên trực ban"),
+                            DepartmentId = emp.User.DepartmentId,
+                            DepartmentName = emp.User.Department?.Name ?? (targetDepartmentId.HasValue ? "Đơn vị quản lý phòng" : "Thư viện HUIT"),
+                            Role = primaryRole,
+                            ShiftName = shift.Name ?? $"Ca trực {emp.User.Department?.Name ?? "đơn vị"}",
                             ShiftTimeRange = $"{shift.StartTime:hh\\:mm} - {shift.EndTime:hh\\:mm}",
                             IsActiveShift = isActive,
                             IsOnline = true
@@ -320,24 +550,39 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                 }
             }
 
-            // Nếu hôm nay chưa có ca trực nào được tạo, hiển thị danh sách thủ thư/nhân sự chung
+            // Ưu tiên:
+            // 1. Đang trong ca trực hiện tại (IsActiveShift == true)
+            // 2. Vai trò Quản lý đơn vị (Manager)
+            // 3. Nhân viên trực ban
+            result = result
+                .OrderByDescending(s => s.IsActiveShift)
+                .ThenByDescending(s => s.Role == "Manager")
+                .ToList();
+
+            // Nếu hôm nay đơn vị chưa có ca trực cụ thể, tự động lấy Cán bộ / Quản lý thuộc đơn vị đó
             if (!result.Any())
             {
-                var libraryStaff = allEmployees
+                var departmentStaff = allEmployees
                     .Where(e => e.User != null && e.Status != "Nghỉ việc")
+                    .Where(e => !targetDepartmentId.HasValue || e.User.DepartmentId == targetDepartmentId.Value)
                     .Take(4)
                     .ToList();
 
-                foreach (var emp in libraryStaff)
+                foreach (var emp in departmentStaff)
                 {
+                    var roles = await _userManager.GetRolesAsync(emp.User);
+                    var primaryRole = roles.FirstOrDefault() ?? "Employee";
+
                     result.Add(new OnDutyStaffDto
                     {
                         EmployeeId = emp.Id,
                         UserId = emp.UserId,
                         Code = emp.Code,
                         FullName = emp.User.FullName,
-                        Position = emp.Position ?? "Nhân viên trực thư viện",
-                        DepartmentName = emp.User.Department?.Name ?? "Thư viện HUIT",
+                        Position = emp.Position ?? (primaryRole == "Manager" ? "Quản lý đơn vị" : "Nhân viên"),
+                        DepartmentId = emp.User.DepartmentId,
+                        DepartmentName = emp.User.Department?.Name ?? "Đơn vị quản lý",
+                        Role = primaryRole,
                         ShiftName = "Hỗ trợ thường trực",
                         ShiftTimeRange = "07:00 - 21:00",
                         IsActiveShift = true,
@@ -356,8 +601,10 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         {
             var userRoles = conv.User != null ? await _userManager.GetRolesAsync(conv.User) : new List<string>();
 
-            // Lấy toàn bộ tin nhắn đã sắp xếp
-            var rawMessages = conv.ChatMessages ?? new List<ChatMessage>();
+            // Lấy toàn bộ tin nhắn chưa bị xóa mềm, đã sắp xếp
+            var rawMessages = (conv.ChatMessages ?? new List<ChatMessage>())
+                .Where(m => !m.IsDeleted)
+                .ToList();
             var orderedMessages = rawMessages.OrderBy(m => m.SentAt).ToList();
 
             // Lấy danh sách Users liên quan trong tin nhắn để map tên người gửi
@@ -371,6 +618,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                 {
                     var r = await _userManager.GetRolesAsync(u);
                     bool isStaff = r.Any(x => x.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
+                                              x.Equals("Manager", StringComparison.OrdinalIgnoreCase) ||
                                               x.Equals("Employee", StringComparison.OrdinalIgnoreCase));
                     userMap[uid] = (u.FullName, u.CardCode, r.FirstOrDefault() ?? "User", isStaff);
                 }

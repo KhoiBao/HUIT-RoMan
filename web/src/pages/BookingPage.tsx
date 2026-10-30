@@ -2397,7 +2397,11 @@ export default function BookingPage() {
                                         title="Sao chép mã"
                                         onClick={() => {
                                           navigator.clipboard.writeText(item.session!.confirmationCode);
-                                          alert(`Đã sao chép mã nhận phòng: ${item.session!.confirmationCode}`);
+                                          setUsageToast({
+                                            type: "success",
+                                            text: `Đã sao chép mã nhận phòng: ${item.session!.confirmationCode}`,
+                                          });
+                                          setTimeout(() => setUsageToast(null), 3000);
                                         }}
                                       >
                                         <CopyIcon size={12} />

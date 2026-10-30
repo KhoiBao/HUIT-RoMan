@@ -30,7 +30,7 @@ namespace HUIT_RoMan.Tests
 
             Assert.True(res.Success);
 
-            // Kiểm tra IEmailService được gọi đúng tham số
+            // Kiểm tra IEmailService được gọi đúng tham số kèm mã nhận phòng (ConfirmationCode)
             h.EmailMock.Verify(m => m.SendBookingApprovalEmailAsync(
                 "svA@huit.edu.vn",
                 It.Is<string>(name => name.Contains("Sinh viên A")),
@@ -41,6 +41,7 @@ namespace HUIT_RoMan.Tests
                 It.IsAny<string?>(),
                 It.IsAny<DateTime?>(),
                 It.IsAny<DateTime?>(),
+                It.Is<string?>(code => code != null && code.StartsWith("HUIT-")),
                 It.IsAny<CancellationToken>()), Times.Once);
         }
 
@@ -74,6 +75,7 @@ namespace HUIT_RoMan.Tests
                 It.IsAny<string?>(),
                 It.IsAny<DateTime?>(),
                 It.IsAny<DateTime?>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()), Times.Once);
         }
 
@@ -107,6 +109,7 @@ namespace HUIT_RoMan.Tests
                 It.IsAny<string?>(),
                 It.IsAny<DateTime?>(),
                 It.IsAny<DateTime?>(),
+                It.IsAny<string?>(),
                 It.IsAny<CancellationToken>()), Times.Once);
         }
 

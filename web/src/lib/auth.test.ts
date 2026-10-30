@@ -7,13 +7,17 @@ import {
 } from "./auth";
 
 describe("auth helpers and role-based access control", () => {
-  test("isStaffRole correctly identifies staff and admin roles", () => {
+  test("isStaffRole correctly identifies staff, manager, and admin roles", () => {
     // Permitted roles
     expect(isStaffRole("Admin")).toBe(true);
     expect(isStaffRole("admin")).toBe(true);
+    expect(isStaffRole("Manager")).toBe(true);
+    expect(isStaffRole("manager")).toBe(true);
+    expect(isStaffRole("Quản lý đơn vị")).toBe(true);
     expect(isStaffRole("Employee")).toBe(true);
     expect(isStaffRole("employee")).toBe(true);
     expect(isStaffRole("quan-tri")).toBe(true);
+    expect(isStaffRole("quan-ly")).toBe(true);
     expect(isStaffRole("nhan-su")).toBe(true);
     expect(isStaffRole("Thủ thư")).toBe(true);
     expect(isStaffRole("Quản lý phòng")).toBe(true);
@@ -35,6 +39,9 @@ describe("auth helpers and role-based access control", () => {
   test("mapRoleToGroup maps roles into correct role groups", () => {
     expect(mapRoleToGroup("Admin")).toBe("quan-tri");
     expect(mapRoleToGroup("admin")).toBe("quan-tri");
+    expect(mapRoleToGroup("Manager")).toBe("quan-tri");
+    expect(mapRoleToGroup("manager")).toBe("quan-tri");
+    expect(mapRoleToGroup("Quản lý đơn vị")).toBe("quan-tri");
     expect(mapRoleToGroup("Quản trị viên")).toBe("quan-tri");
     expect(mapRoleToGroup("Employee")).toBe("nhan-su");
     expect(mapRoleToGroup("employee")).toBe("nhan-su");
@@ -44,8 +51,10 @@ describe("auth helpers and role-based access control", () => {
     expect(mapRoleToGroup(null)).toBe("nguoi-dung");
   });
 
-  test("getHomePathForRole routes admin/staff to /admin or /staff", () => {
+  test("getHomePathForRole routes admin/manager/staff to /admin or /staff", () => {
     expect(getHomePathForRole("Admin")).toBe("/admin");
+    expect(getHomePathForRole("Manager")).toBe("/admin");
+    expect(getHomePathForRole("Quản lý đơn vị")).toBe("/admin");
     expect(getHomePathForRole("Employee")).toBe("/staff");
     expect(getHomePathForRole("Student")).toBe("/home");
     expect(getHomePathForRole("Lecturer")).toBe("/home");
@@ -54,6 +63,8 @@ describe("auth helpers and role-based access control", () => {
   test("formatRole translates system roles into Vietnamese", () => {
     expect(formatRole("Admin")).toBe("Quản trị viên");
     expect(formatRole("admin")).toBe("Quản trị viên");
+    expect(formatRole("Manager")).toBe("Quản lý đơn vị");
+    expect(formatRole("manager")).toBe("Quản lý đơn vị");
     expect(formatRole("Employee")).toBe("Nhân viên");
     expect(formatRole("employee")).toBe("Nhân viên");
     expect(formatRole("Lecturer")).toBe("Giảng viên");
@@ -65,4 +76,3 @@ describe("auth helpers and role-based access control", () => {
     expect(formatRole("")).toBe("Người dùng");
   });
 });
-

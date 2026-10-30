@@ -24,6 +24,7 @@ export interface EmployeeItem {
   cardCode: string;
   fullName: string;
   email: string;
+  role?: string;
   departmentId?: number;
   departmentName?: string;
 }
@@ -49,6 +50,10 @@ interface Props {
 export default function AdminEmployeesTab({ onNotify }: Props) {
   const { user } = useAuth();
   const { confirm, alert } = useConfirm();
+  const normalizedRole = (user?.role || "").trim().toLowerCase();
+  const isAdmin = normalizedRole === "admin" || normalizedRole === "quan-tri" || normalizedRole === "quản trị viên";
+  const isManager = normalizedRole === "manager" || normalizedRole === "quan-ly" || normalizedRole === "quản lý" || normalizedRole === "quản lý đơn vị" || normalizedRole === "departmentmanager";
+
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [allUsers, setAllUsers] = useState<UserOption[]>([]);
@@ -59,11 +64,13 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [createUserId, setCreateUserId] = useState<number | "">("");
   const [createPosition, setCreatePosition] = useState<string>("Thủ thư");
+  const [createRole, setCreateRole] = useState<string>("Employee");
   const [createDeptId, setCreateDeptId] = useState<number | "">("");
 
   // Modal edit
   const [editingEmp, setEditingEmp] = useState<EmployeeItem | null>(null);
   const [editPosition, setEditPosition] = useState<string>("");
+  const [editRole, setEditRole] = useState<string>("Employee");
   const [editStatus, setEditStatus] = useState<string>("Hoạt động");
   const [editDeptId, setEditDeptId] = useState<number | "">("");
 
@@ -100,6 +107,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
       (e.fullName || "").toLowerCase().includes(q) ||
       (e.email || "").toLowerCase().includes(q) ||
       (e.position || "").toLowerCase().includes(q) ||
+      (formatRole(e.role) || "").toLowerCase().includes(q) ||
       (e.departmentName || "").toLowerCase().includes(q)
     );
   });
@@ -108,7 +116,8 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
   const openCreate = () => {
     setCreateUserId("");
     setCreatePosition("Thủ thư");
-    setCreateDeptId(user?.role === "Employee" && user?.departmentId ? user.departmentId : "");
+    setCreateRole("Employee");
+    setCreateDeptId((user?.role === "Employee" || user?.role === "Manager") && user?.departmentId ? user.departmentId : "");
     setShowCreateModal(true);
   };
 
@@ -128,6 +137,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
       const res = await api.post("/api/Employees", {
         userId: Number(createUserId),
         position: createPosition.trim(),
+        role: createRole,
         departmentId: createDeptId ? Number(createDeptId) : null,
       });
       if (res.data?.success) {
@@ -151,6 +161,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
   const openEdit = (emp: EmployeeItem) => {
     setEditingEmp(emp);
     setEditPosition(emp.position || "Thủ thư");
+    setEditRole(emp.role || "Employee");
     setEditStatus(emp.status === "Active" ? "Hoạt động" : emp.status || "Hoạt động");
     setEditDeptId(emp.departmentId || "");
   };
@@ -163,6 +174,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
       setSubmitting(true);
       const res = await api.put(`/api/Employees/${editingEmp.id}`, {
         position: editPosition.trim(),
+        role: editRole,
         status: editStatus,
         departmentId: editDeptId ? Number(editDeptId) : null,
       });
@@ -186,11 +198,12 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
     const isConfirmed = await confirm({
       title: "Xác nhận xóa hồ sơ nhân sự",
       message: `Bạn có chắc chắn muốn xóa hồ sơ nhân sự của "${emp.fullName || emp.userName}" (${emp.code || `#${emp.id}`})?`,
-      subMessage: "Vai trò Nhân sự (Employee) của tài khoản này sẽ được thu hồi. Tài khoản sẽ quay về quyền người dùng thông thường.",
+      subMessage: "Vai trò Nhân sự / Quản lý của tài khoản này sẽ được thu hồi. Tài khoản sẽ quay về quyền người dùng thông thường.",
       itemDetails: [
         { label: "Mã nhân sự", value: emp.code || `#${emp.id}` },
         { label: "Họ và tên", value: emp.fullName || emp.userName },
         { label: "Chức vụ", value: emp.position || "Thủ thư", badge: emp.departmentName || "Thư viện HUIT" },
+        { label: "Vai trò", value: formatRole(emp.role) },
         { label: "Email liên hệ", value: emp.email },
       ],
       confirmText: "Xác nhận xóa",
@@ -251,14 +264,14 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
           <SearchIcon size={18} className="search-icon-muted" />
           <input
             type="text"
-            placeholder="Tìm theo Mã nhân viên, Họ tên, Email, Chức vụ..."
+            placeholder="Tìm theo Mã nhân viên, Họ tên, Email, Chức vụ, Vai trò..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
 
-      {user?.role === "Employee" && (
+      {(user?.role === "Employee" || user?.role === "Manager") && (
         <div style={{
           backgroundColor: "#eff6ff",
           border: "1px solid #bfdbfe",
@@ -304,6 +317,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                 <th>Mã NV</th>
                 <th>Họ và tên</th>
                 <th>Chức vụ / Vị trí</th>
+                <th>Vai trò phân quyền</th>
                 <th>Email liên hệ</th>
                 <th>Đơn vị công tác</th>
                 <th>Trạng thái</th>
@@ -319,6 +333,39 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                   <td className="font-semibold text-highlight">{e.fullName || e.userName}</td>
                   <td>
                     <span className="badge-position">{e.position || "Thủ thư"}</span>
+                  </td>
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        backgroundColor:
+                          e.role === "Admin"
+                            ? "#f3e8ff"
+                            : e.role === "Manager"
+                            ? "#fef3c7"
+                            : "#eff6ff",
+                        color:
+                          e.role === "Admin"
+                            ? "#6b21a8"
+                            : e.role === "Manager"
+                            ? "#92400e"
+                            : "#1e40af",
+                        border: `1px solid ${
+                          e.role === "Admin"
+                            ? "#d8b4fe"
+                            : e.role === "Manager"
+                            ? "#fde68a"
+                            : "#bfdbfe"
+                        }`,
+                      }}
+                    >
+                      {formatRole(e.role || "Employee")}
+                    </span>
                   </td>
                   <td className="text-xs text-muted">{e.email}</td>
                   <td>{e.departmentName || "Thư viện HUIT"}</td>
@@ -409,8 +456,23 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                   >
                     <option value="Thủ thư">Thủ thư</option>
                     <option value="Quản lý phòng">Quản lý phòng</option>
+                    <option value="Quản lý đơn vị">Quản lý đơn vị</option>
                     <option value="Chuyên viên">Chuyên viên</option>
                     <option value="Kỹ thuật viên">Kỹ thuật viên</option>
+                  </select>
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Vai trò hệ thống / Quyền hạn (*):</label>
+                  <select
+                    className="admin-input"
+                    value={createRole}
+                    onChange={(e) => setCreateRole(e.target.value)}
+                    required
+                  >
+                    <option value="Employee">Nhân viên (Thủ thư / Nhân viên trực)</option>
+                    <option value="Manager">Quản lý đơn vị (Phân công ca trực, duyệt phòng)</option>
+                    {isAdmin && <option value="Admin">Quản trị viên toàn trường</option>}
                   </select>
                 </div>
 
@@ -420,7 +482,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                     className="admin-input"
                     value={createDeptId}
                     onChange={(e) => setCreateDeptId(e.target.value ? Number(e.target.value) : "")}
-                    disabled={user?.role === "Employee" && !!user?.departmentId}
+                    disabled={(user?.role === "Employee" || user?.role === "Manager") && !!user?.departmentId}
                     required
                   >
                     <option value="">-- Chọn đơn vị tương ứng --</option>
@@ -430,7 +492,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                       </option>
                     ))}
                   </select>
-                  {user?.role === "Employee" && user?.departmentId && (
+                  {(user?.role === "Employee" || user?.role === "Manager") && user?.departmentId && (
                     <small style={{ color: "#64748b", fontSize: "12px", display: "block", marginTop: "4px" }}>
                       Tự động gán theo đơn vị của bạn: {user.departmentName || "Đơn vị hiện tại"}
                     </small>
@@ -486,14 +548,35 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
             <form onSubmit={handleUpdate}>
               <div className="modal-body">
                 <div className="form-group-admin">
-                  <label>Chức vụ:</label>
-                  <input
-                    type="text"
+                  <label>Chức vụ / Vị trí (*):</label>
+                  <select
                     className="admin-input"
                     value={editPosition}
                     onChange={(e) => setEditPosition(e.target.value)}
-                    required
-                  />
+                  >
+                    <option value="Thủ thư">Thủ thư</option>
+                    <option value="Quản lý phòng">Quản lý phòng</option>
+                    <option value="Quản lý đơn vị">Quản lý đơn vị</option>
+                    <option value="Chuyên viên">Chuyên viên</option>
+                    <option value="Kỹ thuật viên">Kỹ thuật viên</option>
+                    {!["Thủ thư", "Quản lý phòng", "Quản lý đơn vị", "Chuyên viên", "Kỹ thuật viên"].includes(editPosition) && editPosition && (
+                      <option value={editPosition}>{editPosition}</option>
+                    )}
+                  </select>
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Vai trò hệ thống / Quyền hạn (*):</label>
+                  <select
+                    className="admin-input"
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value)}
+                    disabled={!isAdmin && !isManager}
+                  >
+                    <option value="Employee">Nhân viên (Thủ thư / Nhân viên trực)</option>
+                    <option value="Manager">Quản lý đơn vị (Phân công ca trực, duyệt phòng)</option>
+                    {isAdmin && <option value="Admin">Quản trị viên toàn trường</option>}
+                  </select>
                 </div>
 
                 <div className="form-group-admin">
@@ -502,6 +585,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                     className="admin-input"
                     value={editDeptId}
                     onChange={(e) => setEditDeptId(Number(e.target.value))}
+                    disabled={!isAdmin && isManager}
                   >
                     <option value="">-- Mặc định --</option>
                     {departments.map((d) => (
@@ -510,6 +594,11 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                       </option>
                     ))}
                   </select>
+                  {!isAdmin && isManager && (
+                    <small style={{ color: "#64748b", fontSize: "12px", display: "block", marginTop: "4px" }}>
+                      Quản lý đơn vị chỉ quản lý nhân sự thuộc đơn vị của mình.
+                    </small>
+                  )}
                 </div>
 
                 <div className="form-group-admin">

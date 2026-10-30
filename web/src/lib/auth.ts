@@ -92,10 +92,16 @@ export function isStaffRole(role?: string | null): boolean {
   const normalized = role.trim().toLowerCase();
   return (
     normalized === "admin" ||
+    normalized === "manager" ||
+    normalized === "departmentmanager" ||
+    normalized === "department_manager" ||
     normalized === "employee" ||
     normalized === "quan-tri" ||
+    normalized === "quan-ly" ||
     normalized === "nhan-su" ||
     normalized === "thủ thư" ||
+    normalized === "quản lý" ||
+    normalized === "quản lý đơn vị" ||
     normalized === "quản lý phòng" ||
     normalized === "quản trị viên" ||
     normalized === "nhân viên"
@@ -107,7 +113,13 @@ export function mapRoleToGroup(role?: string | null): RoleGroup {
   const normalized = role.trim().toLowerCase();
   if (
     normalized === "admin" ||
+    normalized === "manager" ||
+    normalized === "departmentmanager" ||
+    normalized === "department_manager" ||
     normalized === "quan-tri" ||
+    normalized === "quan-ly" ||
+    normalized === "quản lý" ||
+    normalized === "quản lý đơn vị" ||
     normalized === "quản trị viên"
   ) {
     return "quan-tri";
@@ -145,6 +157,16 @@ export function formatRole(role?: string | null): string {
     return "Quản trị viên";
   }
   if (
+    normalized === "manager" ||
+    normalized === "departmentmanager" ||
+    normalized === "department_manager" ||
+    normalized === "quan-ly" ||
+    normalized === "quản lý" ||
+    normalized === "quản lý đơn vị"
+  ) {
+    return "Quản lý đơn vị";
+  }
+  if (
     normalized === "employee" ||
     normalized === "nhan-su" ||
     normalized === "nhân viên" ||
@@ -164,4 +186,3 @@ export function formatRole(role?: string | null): string {
   }
   return role;
 }
-

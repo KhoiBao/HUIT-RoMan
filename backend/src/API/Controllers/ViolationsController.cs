@@ -44,7 +44,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Thêm mới loại vi phạm</summary>
         [HttpPost("types")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> CreateType([FromBody] CreateViolationTypeDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -55,7 +55,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Cập nhật loại vi phạm</summary>
         [HttpPut("types/{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> UpdateType(int id, [FromBody] UpdateViolationTypeDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -80,7 +80,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lấy danh sách biên bản vi phạm kèm bộ lọc đa tiêu chí</summary>
         [HttpGet]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetAll([FromQuery] ViolationFilterDto filter)
         {
             var res = await _violationService.GetViolationRecordsAsync(filter);
@@ -89,7 +89,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lấy chi tiết biên bản vi phạm theo ID</summary>
         [HttpGet("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetById(int id)
         {
             var res = await _violationService.GetViolationRecordByIdAsync(id);
@@ -99,7 +99,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lập và ghi nhận biên bản vi phạm mới (kèm áp dụng hình phạt / cấm mượn)</summary>
         [HttpPost]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> RecordViolation([FromBody] RecordViolationDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -110,7 +110,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Cập nhật biên bản vi phạm và trạng thái xử lý (Chờ xử lý / Đã xử lý / Đã nộp phạt / Hủy)</summary>
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> UpdateViolation(int id, [FromBody] UpdateViolationRecordDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -135,7 +135,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lấy danh sách người dùng đang bị hạn chế/cấm mượn phòng</summary>
         [HttpGet("restrictions")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetRestrictions([FromQuery] string? status, [FromQuery] string? search)
         {
             var res = await _violationService.GetRestrictionsAsync(status, search);
@@ -144,7 +144,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Tạo lệnh cấm mượn phòng thủ công</summary>
         [HttpPost("restrictions")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> CreateRestriction([FromBody] CreateUserRestrictionDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -155,7 +155,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Gỡ bỏ lệnh cấm mượn phòng sớm</summary>
         [HttpPatch("restrictions/{id}/lift")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> LiftRestriction(int id, [FromBody] LiftRestrictionDto? request)
         {
             var res = await _violationService.LiftRestrictionAsync(id, request?.Reason);
@@ -188,7 +188,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Thống kê số lượng vi phạm và lệnh cấm</summary>
         [HttpGet("stats")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetStats()
         {
             var res = await _violationService.GetStatsAsync();
@@ -199,7 +199,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Tìm kiếm tổng hợp đồng thời: Phòng, Người mượn, Phiếu mượn, Biên bản vi phạm
         /// </summary>
         [HttpGet("global-search")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GlobalSearch([FromQuery] string query)
         {
             var res = await _violationService.GlobalSearchAsync(query);

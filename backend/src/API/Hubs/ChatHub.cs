@@ -31,11 +31,11 @@ namespace HUIT_RoMan.API.Hubs
             // Nhóm riêng của từng User
             await Groups.AddToGroupAsync(Context.ConnectionId, $"User_{userId}");
 
-            // Nếu là Nhân sự (Employee) hoặc Quản trị viên (Admin), thêm vào nhóm trực ban StaffGroup
+            // Nếu là Nhân sự (Employee) hoặc Quản lý (Manager) hoặc Quản trị viên (Admin), thêm vào nhóm trực ban StaffGroup
             if (IsStaffUser())
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, StaffGroupName);
-                _logger.LogInformation("Nhân viên trực Id={UserId} ({Role}) đã kết nối SignalR", userId, role);
+                _logger.LogInformation("Cán bộ/nhân viên trực Id={UserId} ({Role}) đã kết nối SignalR", userId, role);
             }
             else
             {
@@ -169,6 +169,7 @@ namespace HUIT_RoMan.API.Hubs
         {
             var role = GetUserRole();
             return role.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
+                   role.Equals("Manager", StringComparison.OrdinalIgnoreCase) ||
                    role.Equals("Employee", StringComparison.OrdinalIgnoreCase);
         }
     }

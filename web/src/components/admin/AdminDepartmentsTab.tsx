@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../../lib/api";
 import { useAuth } from "../../auth/AuthContext";
+import { useConfirm } from "../../context/ConfirmContext";
 import {
   BankIcon,
   PlusIcon,
@@ -45,6 +46,7 @@ const normalizeStatus = (status?: string): string => {
 
 export default function AdminDepartmentsTab({ onNotify }: Props) {
   const { user } = useAuth();
+  const { alert } = useConfirm();
   const isAdmin = user?.role === "Admin";
 
   const [departments, setDepartments] = useState<DepartmentItem[]>([]);
@@ -136,7 +138,11 @@ export default function AdminDepartmentsTab({ onNotify }: Props) {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createName.trim()) {
-      alert("Vui lòng nhập tên đơn vị.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập tên đơn vị.",
+        type: "warning",
+      });
       return;
     }
 
@@ -179,7 +185,11 @@ export default function AdminDepartmentsTab({ onNotify }: Props) {
     e.preventDefault();
     if (!editingDept) return;
     if (!editName.trim()) {
-      alert("Tên đơn vị không được để trống.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Tên đơn vị không được để trống.",
+        type: "warning",
+      });
       return;
     }
 

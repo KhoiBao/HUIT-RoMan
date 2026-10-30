@@ -12,6 +12,15 @@ function roleLabel(role?: string | null): string {
     return "Quản trị viên";
   }
   if (
+    value === "manager" ||
+    value === "quan-ly" ||
+    value === "quản lý" ||
+    value === "quản lý đơn vị" ||
+    value === "departmentmanager"
+  ) {
+    return "Quản lý đơn vị";
+  }
+  if (
     value === "employee" ||
     value === "nhan-su" ||
     value === "nhân viên" ||

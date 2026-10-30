@@ -68,7 +68,7 @@ function buildPageItems(current: number, total: number): Array<number | "gap"> {
 export default function AdminRoomsManagementTab({ onNotify }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
-  const { confirm } = useConfirm();
+  const { confirm, alert } = useConfirm();
   const [rooms, setRooms] = useState<RoomItem[]>([]);
   const [roomTypes, setRoomTypes] = useState<RoomTypeOption[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -127,7 +127,12 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
   // Filtered rooms
   const filteredRooms = useMemo(() => {
     return rooms.filter((r) => {
-      if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
+      if (statusFilter !== "ALL") {
+        const s = (r.status || "").trim().toLowerCase();
+        if (statusFilter === "Maintenance" && s !== "maintenance" && s !== "bảo trì" && s !== "đang bảo trì") return false;
+        if (statusFilter === "Available" && s !== "available" && s !== "trống" && s !== "sẵn sàng") return false;
+        if (statusFilter === "InUse" && s !== "inuse" && s !== "đang sử dụng") return false;
+      }
       if (typeFilter !== "ALL" && String(r.roomTypeId) !== typeFilter)
         return false;
       if (searchTerm.trim()) {
@@ -190,11 +195,19 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
   const handleSubmitRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.roomCode.trim()) {
-      alert("Vui lòng điền tên phòng và mã phòng.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng điền tên phòng và mã phòng.",
+        type: "warning",
+      });
       return;
     }
     if (!formData.roomTypeId) {
-      alert("Vui lòng chọn loại phòng.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng chọn loại phòng.",
+        type: "warning",
+      });
       return;
     }
 
@@ -246,7 +259,8 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
 
   // Toggle Room Status: Available <=> Maintenance
   const handleToggleStatus = async (r: RoomItem) => {
-    const nextStatus = r.status === "Maintenance" ? "Available" : "Maintenance";
+    const isMaintenance = r.status === "Maintenance" || r.status === "Bảo trì";
+    const nextStatus = isMaintenance ? "Available" : "Maintenance";
     const statusLabel = nextStatus === "Maintenance" ? "Bảo trì" : "Sẵn sàng";
     
     const isConfirmed = await confirm({
@@ -268,14 +282,17 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
     if (!isConfirmed) return;
 
     try {
-      await api.patch(`/api/Rooms/${r.id}/status`, { status: nextStatus });
+      await api.patch(`/api/Rooms/${r.id}/status`, { 
+        status: nextStatus,
+        reason: nextStatus === "Maintenance" ? "Chuyển sang bảo trì" : "Phòng sẵn sàng hoạt động"
+      });
       onNotify(`Đã cập nhật phòng ${r.roomCode} sang "${statusLabel}"!`, "success");
       await fetchData();
     } catch (err: any) {
-      onNotify(
-        err.response?.data?.message || "Lỗi khi cập nhật trạng thái phòng.",
-        "warning"
-      );
+      const msg = err.response?.data?.message 
+        || (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(", ") : null)
+        || "Lỗi khi cập nhật trạng thái phòng.";
+      onNotify(msg, "warning");
     }
   };
 
@@ -312,28 +329,29 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Available":
-        return (
-          <span className="admin-status-pill pill-approved">
-            <CheckIcon size={12} className="mr-1 inline-block" /> Sẵn sàng
-          </span>
-        );
-      case "InUse":
-        return (
-          <span className="admin-status-pill pill-inuse">
-            <ClockIcon size={12} className="mr-1 inline-block" /> Đang sử dụng
-          </span>
-        );
-      case "Maintenance":
-        return (
-          <span className="admin-status-pill pill-maintenance">
-            <WrenchIcon size={12} className="mr-1 inline-block" /> Đang bảo trì
-          </span>
-        );
-      default:
-        return <span className="admin-status-pill">{status}</span>;
+    const s = (status || "").trim().toLowerCase();
+    if (s === "maintenance" || s === "bảo trì" || s === "đang bảo trì") {
+      return (
+        <span className="admin-status-pill pill-maintenance">
+          <WrenchIcon size={12} className="mr-1 inline-block" /> Đang bảo trì
+        </span>
+      );
     }
+    if (s === "inuse" || s === "đang sử dụng") {
+      return (
+        <span className="admin-status-pill pill-inuse">
+          <ClockIcon size={12} className="mr-1 inline-block" /> Đang sử dụng
+        </span>
+      );
+    }
+    if (s === "available" || s === "trống" || s === "sẵn sàng") {
+      return (
+        <span className="admin-status-pill pill-approved">
+          <CheckIcon size={12} className="mr-1 inline-block" /> Sẵn sàng
+        </span>
+      );
+    }
+    return <span className="admin-status-pill">{status}</span>;
   };
 
   return (
@@ -495,19 +513,19 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                       <button
                         type="button"
                         className={`btn-action-icon ${
-                          r.status === "Maintenance"
+                          r.status === "Maintenance" || r.status === "Bảo trì"
                             ? "btn-status-restore"
                             : "btn-status-wrench"
                         }`}
                         title={
-                          r.status === "Maintenance"
+                          r.status === "Maintenance" || r.status === "Bảo trì"
                             ? "Mở lại phòng (Sẵn sàng)"
                             : "Chuyển sang Bảo trì"
                         }
                         onClick={() => handleToggleStatus(r)}
                       >
                         <WrenchIcon size={14} />
-                        {r.status === "Maintenance" ? "Mở phòng" : "Bảo trì"}
+                        {r.status === "Maintenance" || r.status === "Bảo trì" ? "Mở phòng" : "Bảo trì"}
                       </button>
 
                       {/* Edit (Admin only) */}
@@ -625,8 +643,12 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
       {equipmentTarget && (
         <AdminEquipmentsModal
           room={equipmentTarget}
-          onClose={() => setEquipmentTarget(null)}
+          onClose={() => {
+            setEquipmentTarget(null);
+            fetchData();
+          }}
           onNotify={onNotify}
+          onRoomStatusChanged={fetchData}
         />
       )}
 

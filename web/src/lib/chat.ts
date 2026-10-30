@@ -95,6 +95,8 @@ export function getChatHubConnection(): HubConnection {
     "ReceiveMessage", "receivemessage",
     "UserTyping", "usertyping",
     "ConversationClosed", "conversationclosed",
+    "ConversationReopened", "conversationreopened",
+    "MessageDeleted", "messagedeleted",
     "ErrorMessage", "errormessage",
   ];
   events.forEach((evt) => hubConnection?.on(evt, noop));
@@ -197,7 +199,38 @@ export async function markConversationAsRead(id: number): Promise<boolean> {
   return res.data?.success ?? true;
 }
 
-export async function fetchOnDutyStaff(): Promise<OnDutyStaffItem[]> {
-  const res = await api.get("/api/Chat/on-duty-staff");
+export async function createNewConversation(params?: {
+  initialMessage?: string;
+  roomId?: number;
+}): Promise<ChatConversationItem> {
+  const res = await api.post("/api/Chat/start-new", params ?? {});
+  return res.data?.data || res.data;
+}
+
+export async function reopenConversation(id: number): Promise<boolean> {
+  const res = await api.post(`/api/Chat/conversations/${id}/reopen`);
+  return res.data?.success ?? true;
+}
+
+export async function deleteChatMessage(messageId: number): Promise<boolean> {
+  const res = await api.delete(`/api/Chat/messages/${messageId}`);
+  return res.data?.success ?? true;
+}
+
+export async function deleteConversation(conversationId: number): Promise<boolean> {
+  const res = await api.delete(`/api/Chat/conversations/${conversationId}`);
+  return res.data?.success ?? true;
+}
+
+export async function fetchOnDutyStaff(
+  roomId?: number,
+  departmentId?: number
+): Promise<OnDutyStaffItem[]> {
+  const res = await api.get("/api/Chat/on-duty-staff", {
+    params: {
+      ...(roomId ? { roomId } : {}),
+      ...(departmentId ? { departmentId } : {}),
+    },
+  });
   return res.data?.data || res.data || [];
 }

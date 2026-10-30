@@ -41,6 +41,8 @@ namespace HUIT_RoMan.API.Services
             }
         }
 
-        public bool IsAdmin => Role == "Admin";
+        public bool IsAdmin => Role == "Admin" || Role == "quan-tri" || Role == "Quản trị viên";
+        public bool IsManager => Role == "Manager" || Role == "quan-ly" || Role == "Quản lý" || Role == "DepartmentManager";
+        public bool IsStaff => IsAdmin || IsManager || Role == "Employee" || Role == "nhan-su" || Role == "Nhân viên";
     }
 }

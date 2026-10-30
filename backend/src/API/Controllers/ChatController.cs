@@ -30,6 +30,15 @@ namespace HUIT_RoMan.API.Controllers
             _hubContext = hubContext;
         }
 
+        private bool IsStaffRole()
+        {
+            if (_currentUser.IsAdmin || _currentUser.IsManager || _currentUser.IsStaff) return true;
+            var role = (_currentUser.Role ?? "").Trim().ToLower();
+            return role == "admin" || role == "quan-tri" || role == "quản trị viên" ||
+                   role == "manager" || role == "quan-ly" || role == "quản lý" || role == "departmentmanager" ||
+                   role == "employee" || role == "nhan-vien" || role == "nhân viên" || role == "thủ thư";
+        }
+
         /// <summary>
         /// Lấy hoặc khởi tạo cuộc hội thoại hỗ trợ đang hoạt động của người dùng hiện tại
         /// </summary>
@@ -45,13 +54,27 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         /// <summary>
-        /// Dành cho Nhân viên trực / Admin: Danh sách các cuộc hội thoại hỗ trợ
+        /// Khởi tạo một phiên trò chuyện mới (đóng phiên cũ nếu có)
+        /// </summary>
+        [HttpPost("new-conversation")]
+        [Authorize]
+        public async Task<IActionResult> StartNewConversation([FromBody] StartChatRequest? request)
+        {
+            if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0) return Unauthorized();
+            int userId = _currentUser.UserId.Value;
+
+            var res = await _chatService.CreateNewConversationAsync(userId, request?.InitialMessage);
+            return res.Success ? Ok(res) : BadRequest(res);
+        }
+
+        /// <summary>
+        /// Dành cho Nhân viên trực / Quản lý / Admin: Danh sách các cuộc hội thoại hỗ trợ
         /// </summary>
         [HttpGet("staff/conversations")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetStaffConversations([FromQuery] string? status, [FromQuery] string? search)
         {
-            var res = await _chatService.GetConversationsForStaffAsync(status, search);
+            var res = await _chatService.GetConversationsForStaffAsync(status, search, _currentUser.DepartmentId, _currentUser.Role);
             return res.Success ? Ok(res) : BadRequest(res);
         }
 
@@ -64,7 +87,7 @@ namespace HUIT_RoMan.API.Controllers
         {
             if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0) return Unauthorized();
             int userId = _currentUser.UserId.Value;
-            var isStaff = _currentUser.Role == "Admin" || _currentUser.Role == "Employee";
+            var isStaff = IsStaffRole();
 
             var res = await _chatService.GetConversationByIdAsync(id, userId, isStaff);
             return res.Success ? Ok(res) : BadRequest(res);
@@ -79,7 +102,7 @@ namespace HUIT_RoMan.API.Controllers
         {
             if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0) return Unauthorized();
             int userId = _currentUser.UserId.Value;
-            var isStaff = _currentUser.Role == "Admin" || _currentUser.Role == "Employee";
+            var isStaff = IsStaffRole();
 
             var res = await _chatService.SendMessageAsync(request.ConversationId, userId, request.Content);
             if (!res.Success)
@@ -124,7 +147,7 @@ namespace HUIT_RoMan.API.Controllers
         {
             if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0) return Unauthorized();
             int userId = _currentUser.UserId.Value;
-            var isStaff = _currentUser.Role == "Admin" || _currentUser.Role == "Employee";
+            var isStaff = IsStaffRole();
 
             var res = await _chatService.CloseConversationAsync(id, userId, isStaff);
             if (res.Success)
@@ -133,6 +156,86 @@ namespace HUIT_RoMan.API.Controllers
                 await _hubContext.Clients.Group(groupName).SendAsync("ConversationClosed", new { ConversationId = id, ClosedBy = userId });
             }
             return res.Success ? Ok(res) : BadRequest(res);
+        }
+
+        /// <summary>
+        /// Mở lại cuộc trò chuyện đã đóng (Dành cho Cán bộ trực / Quản lý / Admin)
+        /// </summary>
+        [HttpPost("conversations/{id}/reopen")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        public async Task<IActionResult> ReopenConversation(int id)
+        {
+            if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0) return Unauthorized();
+            int userId = _currentUser.UserId.Value;
+            var isStaff = IsStaffRole();
+
+            var res = await _chatService.ReopenConversationAsync(id, userId, isStaff);
+            if (res.Success)
+            {
+                var groupName = $"Conversation_{id}";
+                await _hubContext.Clients.Group(groupName).SendAsync("ConversationReopened", new { ConversationId = id, ReopenedBy = userId });
+            }
+            return res.Success ? Ok(res) : BadRequest(res);
+        }
+
+        /// <summary>
+        /// Xoá toàn bộ cuộc trò chuyện (Dành cho Quản trị viên, Quản lý đơn vị hoặc Nhân viên phụ trách)
+        /// </summary>
+        [HttpDelete("conversations/{id}")]
+        [Authorize]
+        public async Task<IActionResult> DeleteConversation(int id)
+        {
+            if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0) return Unauthorized();
+            if (!IsStaffRole())
+            {
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    ApiResponse<bool>.ErrorResponse("Bạn không có quyền xóa cuộc hội thoại. Quyền này dành cho Cán bộ / Quản trị viên."));
+            }
+
+            int userId = _currentUser.UserId.Value;
+            string role = _currentUser.Role ?? "User";
+
+            var res = await _chatService.DeleteConversationAsync(id, userId, role);
+            if (!res.Success)
+            {
+                return BadRequest(res);
+            }
+
+            var groupName = $"Conversation_{id}";
+            await _hubContext.Clients.Group(groupName).SendAsync("ConversationDeleted", new { ConversationId = id });
+            await _hubContext.Clients.Group(ChatHub.StaffGroupName).SendAsync("ConversationDeleted", new { ConversationId = id });
+
+            return Ok(res);
+        }
+
+        /// <summary>
+        /// Xoá tin nhắn (Dành cho Quản trị viên, Quản lý đơn vị hoặc Nhân viên phụ trách)
+        /// </summary>
+        [HttpDelete("messages/{messageId}")]
+        [Authorize]
+        public async Task<IActionResult> DeleteMessage(int messageId)
+        {
+            if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0) return Unauthorized();
+            if (!IsStaffRole())
+            {
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    ApiResponse<DeleteMessageResult>.ErrorResponse("Bạn không có quyền xóa tin nhắn."));
+            }
+
+            int userId = _currentUser.UserId.Value;
+            string role = _currentUser.Role ?? "User";
+
+            var res = await _chatService.DeleteMessageAsync(messageId, userId, role);
+            if (!res.Success)
+            {
+                return BadRequest(res);
+            }
+
+            var groupName = $"Conversation_{res.Data.ConversationId}";
+            await _hubContext.Clients.Group(groupName).SendAsync("MessageDeleted", new { MessageId = messageId, ConversationId = res.Data.ConversationId });
+            await _hubContext.Clients.Group(ChatHub.StaffGroupName).SendAsync("MessageDeleted", new { MessageId = messageId, ConversationId = res.Data.ConversationId });
+
+            return Ok(res);
         }
 
         /// <summary>
@@ -155,12 +258,12 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         /// <summary>
-        /// Lấy danh sách nhân viên đang trực ca hôm nay
+        /// Lấy danh sách cán bộ / quản lý đang trong ca trực hôm nay (có thể lọc theo phòng hoặc đơn vị)
         /// </summary>
         [HttpGet("on-duty-staff")]
-        public async Task<IActionResult> GetOnDutyStaff()
+        public async Task<IActionResult> GetOnDutyStaff([FromQuery] int? roomId, [FromQuery] int? departmentId)
         {
-            var res = await _chatService.GetOnDutyStaffAsync();
+            var res = await _chatService.GetOnDutyStaffAsync(roomId, departmentId);
             return res.Success ? Ok(res) : BadRequest(res);
         }
     }

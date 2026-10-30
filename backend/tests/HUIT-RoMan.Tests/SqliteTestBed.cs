@@ -52,5 +52,7 @@ namespace HUIT_RoMan.Tests
         public string? Role { get; set; }
         public int? DepartmentId { get; set; }
         public bool IsAdmin { get; set; }
+        public bool IsManager => Role == "Manager";
+        public bool IsStaff => IsAdmin || IsManager || Role == "Employee";
     }
 }

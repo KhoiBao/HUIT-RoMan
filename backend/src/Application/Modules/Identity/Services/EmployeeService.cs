@@ -32,13 +32,17 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         {
             var employees = await _employeeRepo.GetAllAsync(e => e.User, e => e.User.Department);
             
-            // Nếu người gọi là Employee, chỉ thấy danh sách nhân sự thuộc đơn vị của mình
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            // Nếu người gọi là Employee hoặc Manager, chỉ thấy danh sách nhân sự thuộc đơn vị của mình
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 employees = employees.Where(e => e.User?.DepartmentId == _currentUser.DepartmentId.Value).ToList();
             }
 
-            var dtos = employees.Select(MapDto).ToList();
+            var dtos = new List<EmployeeDto>();
+            foreach (var e in employees)
+            {
+                dtos.Add(await MapDtoAsync(e));
+            }
             return ApiResponse<IEnumerable<EmployeeDto>>.SuccessResponse(dtos);
         }
 
@@ -51,13 +55,13 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             if (e == null)
                 return ApiResponse<EmployeeDto>.ErrorResponse("Không tìm thấy nhân viên.");
 
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 if (e.User?.DepartmentId != _currentUser.DepartmentId.Value)
                     return ApiResponse<EmployeeDto>.ErrorResponse("Bạn không có quyền xem thông tin nhân sự thuộc đơn vị khác.");
             }
 
-            return ApiResponse<EmployeeDto>.SuccessResponse(MapDto(e));
+            return ApiResponse<EmployeeDto>.SuccessResponse(await MapDtoAsync(e));
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -74,13 +78,28 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             if (existing != null)
                 return ApiResponse<EmployeeDto>.ErrorResponse("Người dùng này đã có hồ sơ nhân viên.");
 
-            // Gán role Employee nếu chưa có
-            if (!await _userManager.IsInRoleAsync(user, "Employee"))
+            // Gán role được chọn hoặc mặc định Employee
+            var targetRole = !string.IsNullOrWhiteSpace(request.Role) ? request.Role : "Employee";
+            if (_currentUser.Role == "Manager" && targetRole == "Admin")
             {
-                var currentRoles = await _userManager.GetRolesAsync(user);
+                return ApiResponse<EmployeeDto>.ErrorResponse("Bạn không có quyền chỉ định vai trò Quản trị viên.");
+            }
+
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            if (!currentRoles.Contains(targetRole))
+            {
                 if (currentRoles.Any())
                     await _userManager.RemoveFromRolesAsync(user, currentRoles);
-                await _userManager.AddToRoleAsync(user, "Employee");
+                await _userManager.AddToRoleAsync(user, targetRole);
+            }
+
+            if (_currentUser.Role == "Manager" && _currentUser.DepartmentId.HasValue)
+            {
+                if (request.DepartmentId.HasValue && request.DepartmentId.Value != _currentUser.DepartmentId.Value)
+                {
+                    return ApiResponse<EmployeeDto>.ErrorResponse("Bạn chỉ có quyền quản lý nhân sự thuộc đơn vị của mình.");
+                }
+                request.DepartmentId = _currentUser.DepartmentId.Value;
             }
 
             // Gán đơn vị cho user nếu được chỉ định
@@ -116,6 +135,12 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             if (e == null)
                 return ApiResponse<bool>.ErrorResponse("Không tìm thấy nhân viên.");
 
+            if (_currentUser.Role == "Manager" && _currentUser.DepartmentId.HasValue)
+            {
+                if (e.User?.DepartmentId != _currentUser.DepartmentId.Value)
+                    return ApiResponse<bool>.ErrorResponse("Bạn không có quyền cập nhật nhân sự thuộc đơn vị khác.");
+            }
+
             if (!string.IsNullOrWhiteSpace(request.Position))
                 e.Position = request.Position;
 
@@ -127,10 +152,33 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
                 e.Status = st;
             }
 
-            if (e.User != null && request.DepartmentId.HasValue)
+            if (e.User != null)
             {
-                e.User.DepartmentId = request.DepartmentId;
-                await _userManager.UpdateAsync(e.User);
+                if (request.DepartmentId.HasValue)
+                {
+                    if (_currentUser.Role == "Manager" && _currentUser.DepartmentId.HasValue && request.DepartmentId.Value != _currentUser.DepartmentId.Value)
+                    {
+                        return ApiResponse<bool>.ErrorResponse("Bạn không thể chuyển nhân sự sang đơn vị khác.");
+                    }
+                    e.User.DepartmentId = request.DepartmentId;
+                    await _userManager.UpdateAsync(e.User);
+                }
+
+                if (!string.IsNullOrWhiteSpace(request.Role))
+                {
+                    if (_currentUser.Role == "Manager" && request.Role == "Admin")
+                    {
+                        return ApiResponse<bool>.ErrorResponse("Bạn không có quyền chỉ định vai trò Quản trị viên.");
+                    }
+
+                    var userRoles = await _userManager.GetRolesAsync(e.User);
+                    if (!userRoles.Contains(request.Role))
+                    {
+                        if (userRoles.Any())
+                            await _userManager.RemoveFromRolesAsync(e.User, userRoles);
+                        await _userManager.AddToRoleAsync(e.User, request.Role);
+                    }
+                }
             }
 
             _employeeRepo.Update(e);
@@ -148,13 +196,14 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             if (e == null)
                 return ApiResponse<bool>.ErrorResponse("Không tìm thấy nhân viên.");
 
-            // Thu hồi role Employee, chuyển về Lecturer hoặc Student tuỳ trường hợp
+            // Thu hồi role Employee hoặc Manager, chuyển về Lecturer hoặc Student tuỳ trường hợp
             if (e.User != null)
             {
                 var roles = await _userManager.GetRolesAsync(e.User);
-                if (roles.Contains("Employee"))
+                var staffRoles = roles.Where(r => r == "Employee" || r == "Manager").ToList();
+                if (staffRoles.Any())
                 {
-                    await _userManager.RemoveFromRoleAsync(e.User, "Employee");
+                    await _userManager.RemoveFromRolesAsync(e.User, staffRoles);
                     // Mặc định trả về role Lecturer sau khi xoá nhân viên
                     await _userManager.AddToRoleAsync(e.User, "Lecturer");
                 }
@@ -169,20 +218,35 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         // ─────────────────────────────────────────────────────────────────
         // HELPERS
         // ─────────────────────────────────────────────────────────────────
-        private static EmployeeDto MapDto(Employee e) => new EmployeeDto
+        private async Task<EmployeeDto> MapDtoAsync(Employee e)
         {
-            Id = e.Id,
-            Code = e.Code,
-            Position = e.Position,
-            HireDate = e.HireDate,
-            Status = e.Status,
-            UserId = e.UserId,
-            UserName = e.User?.UserName,
-            CardCode = e.User?.CardCode,
-            FullName = e.User?.FullName,
-            Email = e.User?.Email,
-            DepartmentId = e.User?.DepartmentId,
-            DepartmentName = e.User?.Department?.Name
-        };
+            var dto = new EmployeeDto
+            {
+                Id = e.Id,
+                Code = e.Code,
+                Position = e.Position,
+                HireDate = e.HireDate,
+                Status = e.Status,
+                UserId = e.UserId,
+                UserName = e.User?.UserName,
+                CardCode = e.User?.CardCode,
+                FullName = e.User?.FullName,
+                Email = e.User?.Email,
+                DepartmentId = e.User?.DepartmentId,
+                DepartmentName = e.User?.Department?.Name
+            };
+
+            if (e.User != null)
+            {
+                var roles = await _userManager.GetRolesAsync(e.User);
+                dto.Role = roles.FirstOrDefault() ?? "Employee";
+            }
+            else
+            {
+                dto.Role = "Employee";
+            }
+
+            return dto;
+        }
     }
 }

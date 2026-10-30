@@ -87,6 +87,7 @@ namespace HUIT_RoMan.Infrastructure.Services
             string? roomSummary = null,
             DateTime? startAt = null,
             DateTime? endAt = null,
+            string? checkInCode = null,
             CancellationToken cancellationToken = default)
         {
             var isApproved = decision == "Đã duyệt";
@@ -154,8 +155,25 @@ namespace HUIT_RoMan.Infrastructure.Services
 
       <div class=""status-banner"">
         <h2 class=""status-banner-title"">KẾT QUẢ: {statusHeading}</h2>
-      </div>
+      </div>");
 
+            if ((isApproved || isPartial) && !string.IsNullOrWhiteSpace(checkInCode))
+            {
+                sb.Append($@"
+      <div style=""background: #f0fdf4; border: 2px solid #86efac; border-radius: 10px; padding: 18px 20px; margin: 20px 0; text-align: center;"">
+        <p style=""margin: 0 0 6px; font-size: 13px; color: #166534; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;"">
+          🔑 MÃ NHẬN PHÒNG (CHECK-IN CODE) CỦA BẠN
+        </p>
+        <div style=""font-family: 'Courier New', Courier, monospace; font-size: 26px; font-weight: 900; color: #15803d; letter-spacing: 2px; margin: 8px 0; background: #ffffff; padding: 10px 16px; border-radius: 8px; border: 1.5px dashed #22c55e; display: inline-block;"">
+          {checkInCode}
+        </div>
+        <p style=""margin: 8px 0 0; font-size: 12.5px; color: #166534;"">
+          Vui lòng nhập mã này trên hệ thống hoặc xuất trình cho cán bộ trực khi đến nhận phòng.
+        </p>
+      </div>");
+            }
+
+            sb.Append($@"
       <table class=""info-table"">
         <tr>
           <td class=""info-label"">Mã đơn đặt:</td>
@@ -173,6 +191,15 @@ namespace HUIT_RoMan.Infrastructure.Services
           <td class=""info-label"">Khung giờ mượn:</td>
           <td class=""info-val"">{timeStr}</td>
         </tr>");
+
+            if (!string.IsNullOrWhiteSpace(checkInCode))
+            {
+                sb.Append($@"
+        <tr>
+          <td class=""info-label"">Mã nhận phòng:</td>
+          <td class=""info-val""><strong style=""font-family: 'Courier New', Courier, monospace; font-size: 15px; color: #15803d; background: #dcfce7; padding: 2px 8px; border-radius: 4px; border: 1px solid #86efac; letter-spacing: 1px;"">{checkInCode}</strong></td>
+        </tr>");
+            }
 
             if (!string.IsNullOrWhiteSpace(reason))
             {

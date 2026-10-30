@@ -27,7 +27,7 @@ interface Props {
 }
 
 export default function AdminRoomTypesTab({ onNotify }: Props) {
-  const { confirm } = useConfirm();
+  const { confirm, alert } = useConfirm();
   const [types, setTypes] = useState<RoomTypeItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -94,7 +94,11 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      alert("Vui lòng nhập tên loại phòng.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập tên loại phòng.",
+        type: "warning",
+      });
       return;
     }
     try {

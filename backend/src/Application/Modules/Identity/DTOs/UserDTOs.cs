@@ -62,6 +62,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
         public string Email { get; set; }
         public int? DepartmentId { get; set; }
         public string DepartmentName { get; set; }
+        public string? Role { get; set; }
     }
 
     public class CreateEmployeeDto
@@ -69,6 +70,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
         public int UserId { get; set; }
         public string Position { get; set; }
         public int? DepartmentId { get; set; }
+        public string? Role { get; set; }
     }
 
     public class UpdateEmployeeDto
@@ -76,5 +78,6 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
         public string Position { get; set; }
         public string Status { get; set; }
         public int? DepartmentId { get; set; }
+        public string? Role { get; set; }
     }
 }

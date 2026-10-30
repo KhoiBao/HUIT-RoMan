@@ -9,5 +9,6 @@ namespace HUIT_RoMan.Application.Modules.Chat.DTOs
     public class StartChatRequest
     {
         public string? InitialMessage { get; set; }
+        public int? RoomId { get; set; }
     }
 }

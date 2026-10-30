@@ -6,5 +6,7 @@ namespace HUIT_RoMan.Application.Common.Interfaces
         string? Role { get; }
         int? DepartmentId { get; }
         bool IsAdmin { get; }
+        bool IsManager { get; }
+        bool IsStaff { get; }
     }
 }

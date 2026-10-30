@@ -174,7 +174,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
             var query = records.AsEnumerable();
 
             // Employee department filter if needed
-            if (_currentUser.Role == "Employee" && _currentUser.DepartmentId.HasValue)
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
             {
                 query = query.Where(vr =>
                     vr.User?.DepartmentId == _currentUser.DepartmentId.Value ||

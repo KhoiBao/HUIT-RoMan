@@ -7,6 +7,7 @@ import type {
 } from "../../lib/chat";
 import {
   closeConversation,
+  deleteConversation,
   fetchConversationById,
   fetchOnDutyStaff,
   fetchStaffConversations,
@@ -21,6 +22,8 @@ import {
   SearchIcon,
   RefreshCwIcon,
   ClockIcon,
+  TrashIcon,
+  BanIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
 
@@ -137,7 +140,7 @@ export default function AdminChatTab({ onNotify }: Props) {
                   return [...prev, data.message];
                 });
                 scrollToBottom();
-                markConversationAsRead(data.conversation.id).catch(() => {});
+                markConversationAsRead(data.conversation.id).catch(() => { });
               } else {
                 onNotifyRef.current(
                   `Tin nhắn mới từ ${data.conversation.userName || "Sinh viên"}: "${data.message.content.slice(0, 30)}..."`,
@@ -157,6 +160,28 @@ export default function AdminChatTab({ onNotify }: Props) {
                 return [...prev, msg];
               });
               scrollToBottom();
+            }
+          });
+
+          // Nhận sự kiện đóng cuộc hội thoại
+          hub.off("ConversationClosed");
+          hub.on("ConversationClosed", ({ conversationId }: { conversationId: number }) => {
+            setConversations((prev) =>
+              prev.map((c) => (c.id === conversationId ? { ...c, status: "Closed" } : c))
+            );
+            if (selectedConvIdRef.current === conversationId) {
+              setActiveConv((prev) => (prev ? { ...prev, status: "Closed" } : null));
+            }
+          });
+
+          // Nhận sự kiện xóa cuộc hội thoại
+          hub.off("ConversationDeleted");
+          hub.on("ConversationDeleted", ({ conversationId }: { conversationId: number }) => {
+            setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+            if (selectedConvIdRef.current === conversationId) {
+              setSelectedConvId(null);
+              setActiveConv(null);
+              setMessages([]);
             }
           });
 
@@ -189,7 +214,7 @@ export default function AdminChatTab({ onNotify }: Props) {
   const handleSelectConversation = async (convId: number) => {
     try {
       if (selectedConvId) {
-        await leaveConversationGroup(selectedConvId).catch(() => {});
+        await leaveConversationGroup(selectedConvId).catch(() => { });
       }
 
       setSelectedConvId(convId);
@@ -221,6 +246,10 @@ export default function AdminChatTab({ onNotify }: Props) {
   const handleSendMessage = async (customText?: string) => {
     const textToSend = (customText ?? inputText).trim();
     if (!textToSend || !selectedConvId || isSending) return;
+    if (activeConv?.status === "Closed") {
+      onNotify("Phiên hỗ trợ này đã kết thúc, không thể gửi tin nhắn.", "warning");
+      return;
+    }
 
     try {
       setIsSending(true);
@@ -228,7 +257,7 @@ export default function AdminChatTab({ onNotify }: Props) {
         setInputText("");
       }
 
-      sendHubTyping(selectedConvId, false).catch(() => {});
+      sendHubTyping(selectedConvId, false).catch(() => { });
 
       await sendHubMessage(selectedConvId, textToSend);
 
@@ -237,10 +266,10 @@ export default function AdminChatTab({ onNotify }: Props) {
         prev.map((c) =>
           c.id === selectedConvId
             ? {
-                ...c,
-                lastMessageContent: textToSend,
-                lastMessageTime: new Date().toISOString(),
-              }
+              ...c,
+              lastMessageContent: textToSend,
+              lastMessageTime: new Date().toISOString(),
+            }
             : c
         )
       );
@@ -281,15 +310,47 @@ export default function AdminChatTab({ onNotify }: Props) {
     }
   };
 
+  // Xóa toàn bộ cuộc hội thoại (Dành cho Quản lý đơn vị hoặc Quản trị viên)
+  const handleDeleteConversation = async (convId: number) => {
+    const isConfirmed = await confirm({
+      title: "Xác nhận xóa cuộc hội thoại",
+      message: "Bạn có chắc chắn muốn xóa toàn bộ cuộc hội thoại này cùng tất cả tin nhắn liên quan?",
+      subMessage: "Dữ liệu cuộc hội thoại sẽ bị xóa hoàn toàn khỏi hệ thống và không thể khôi phục.",
+      confirmText: "Xác nhận xóa",
+      cancelText: "Hủy bỏ",
+      type: "danger",
+    });
+    if (!isConfirmed) return;
+
+    try {
+      await deleteConversation(convId);
+      setConversations((prev) => prev.filter((c) => c.id !== convId));
+      if (selectedConvId === convId) {
+        setSelectedConvId(null);
+        setActiveConv(null);
+        setMessages([]);
+      }
+      onNotify("Đã xóa toàn bộ cuộc hội thoại thành công.", "info");
+    } catch (err: any) {
+      console.error("Lỗi xóa cuộc hội thoại:", err);
+      const errorMsg =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        err.message ||
+        "Không thể xóa cuộc hội thoại.";
+      onNotify(errorMsg, "warning");
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputText(e.target.value);
     if (!selectedConvId) return;
 
-    sendHubTyping(selectedConvId, true).catch(() => {});
+    sendHubTyping(selectedConvId, true).catch(() => { });
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       if (selectedConvId) {
-        sendHubTyping(selectedConvId, false).catch(() => {});
+        sendHubTyping(selectedConvId, false).catch(() => { });
       }
     }, 1500);
   };
@@ -301,6 +362,11 @@ export default function AdminChatTab({ onNotify }: Props) {
     }
   };
 
+  const normalizedRole = (user?.role || "").trim().toLowerCase();
+  const isAdmin = normalizedRole === "admin" || normalizedRole === "quan-tri" || normalizedRole === "quản trị viên";
+  const isManager = normalizedRole === "manager" || normalizedRole === "quan-ly" || normalizedRole === "quản lý" || normalizedRole === "quản lý đơn vị" || normalizedRole === "departmentmanager";
+  const isEmployee = normalizedRole === "employee" || normalizedRole === "nhan-vien" || normalizedRole === "nhân viên" || normalizedRole === "thủ thư";
+  const canDeleteConversation = isAdmin || isManager || isEmployee;
   const totalUnread = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
   const activeStaff = onDutyStaff.find((s) => s.isActiveShift) || onDutyStaff[0];
 
@@ -540,8 +606,8 @@ export default function AdminChatTab({ onNotify }: Props) {
                       backgroundColor: isSelected
                         ? "#ffffff"
                         : hasUnread
-                        ? "#eff6ff"
-                        : "transparent",
+                          ? "#eff6ff"
+                          : "transparent",
                       borderLeft: isSelected ? "4px solid #2563eb" : "4px solid transparent",
                       transition: "all 0.15s ease",
                     }}
@@ -561,9 +627,9 @@ export default function AdminChatTab({ onNotify }: Props) {
                       <span style={{ fontSize: "11px", color: "#94a3b8" }}>
                         {c.lastMessageTime
                           ? new Date(c.lastMessageTime).toLocaleTimeString("vi-VN", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                           : ""}
                       </span>
                     </div>
@@ -604,20 +670,46 @@ export default function AdminChatTab({ onNotify }: Props) {
                         {c.lastMessageContent || "Bắt đầu cuộc trò chuyện..."}
                       </p>
 
-                      {hasUnread && (
-                        <span
-                          style={{
-                            backgroundColor: "#ef4444",
-                            color: "#ffffff",
-                            borderRadius: "10px",
-                            padding: "1px 6px",
-                            fontSize: "10px",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {c.unreadCount}
-                        </span>
-                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {hasUnread && (
+                          <span
+                            style={{
+                              backgroundColor: "#ef4444",
+                              color: "#ffffff",
+                              borderRadius: "10px",
+                              padding: "1px 6px",
+                              fontSize: "10px",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {c.unreadCount}
+                          </span>
+                        )}
+                        {canDeleteConversation && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteConversation(c.id);
+                            }}
+                            title="Xóa cuộc hội thoại này"
+                            style={{
+                              border: "none",
+                              background: "transparent",
+                              color: "#94a3b8",
+                              cursor: "pointer",
+                              padding: "3px",
+                              borderRadius: "4px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                            }}
+                            onMouseEnter={(ev) => (ev.currentTarget.style.color = "#dc2626")}
+                            onMouseLeave={(ev) => (ev.currentTarget.style.color = "#94a3b8")}
+                          >
+                            <TrashIcon size={12} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -755,6 +847,30 @@ export default function AdminChatTab({ onNotify }: Props) {
                       <span>Kết thúc hỗ trợ</span>
                     </button>
                   )}
+
+                  {canDeleteConversation && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteConversation(activeConv.id)}
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: "8px",
+                        backgroundColor: "#fff1f2",
+                        color: "#be123c",
+                        border: "1px solid #fecdd3",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                      title="Xóa toàn bộ cuộc hội thoại này (Dành cho Cán bộ trực / Quản trị viên)"
+                    >
+                      <TrashIcon size={13} />
+                      <span>Xóa cuộc hội thoại</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -836,12 +952,21 @@ export default function AdminChatTab({ onNotify }: Props) {
                           {m.content}
                         </div>
 
-                        <span style={{ fontSize: "10px", color: "#94a3b8", margin: "0 4px" }}>
-                          {new Date(m.sentAt).toLocaleTimeString("vi-VN", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            margin: "0 4px",
+                          }}
+                        >
+                          <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                            {new Date(m.sentAt).toLocaleTimeString("vi-VN", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
                       </div>
                     );
                   })
@@ -857,107 +982,130 @@ export default function AdminChatTab({ onNotify }: Props) {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* KHAY GỢI Ý TRẢ LỜI NHANH (CANNED RESPONSES) */}
-              <div
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#ffffff",
-                  borderTop: "1px solid #f1f5f9",
-                  display: "flex",
-                  gap: "8px",
-                  overflowX: "auto",
-                }}
-              >
-                {[
-                  "Chào bạn! Mình có thể hỗ trợ gì cho bạn?",
-                  "Yêu cầu mượn phòng đã được kiểm tra và duyệt thành công.",
-                  "Thiết bị phòng đã được nhân viên kiểm tra đầy đủ.",
-                  "Cảm ơn bạn đã liên hệ thư viện HUIT!",
-                ].map((quickText) => (
-                    <button
-                      key={quickText}
-                      type="button"
-                      onClick={() => handleSendMessage(quickText)}
-                      style={{
-                        backgroundColor: "#f8fafc",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "14px",
-                        padding: "4px 10px",
-                        fontSize: "11px",
-                        color: "#334155",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "5px",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#e2e8f0")}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                      </svg>
-                      <span>{quickText}</span>
-                    </button>
-                ))}
-              </div>
-
-              {/* THANH NHẬP LIỆU PHẢN HỒI */}
-              <div
-                style={{
-                  padding: "12px 16px",
-                  backgroundColor: "#ffffff",
-                  borderTop: "1px solid #e2e8f0",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
-                <input
-                  type="text"
-                  placeholder="Nhập nội dung phản hồi... (Nhấn Enter để gửi qua SignalR)"
-                  value={inputText}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  disabled={isSending}
+              {/* PHIÊN HỖ TRỢ ĐÃ KẾT THÚC: KHÓA CHAT HOÀN TOÀN */}
+              {activeConv.status === "Closed" ? (
+                <div
                   style={{
-                    flex: 1,
-                    padding: "10px 14px",
-                    borderRadius: "20px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "13px",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
-                  onBlur={(e) => (e.target.style.borderColor = "#cbd5e1")}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage()}
-                  disabled={!inputText.trim() || isSending}
-                  style={{
-                    padding: "10px 18px",
-                    borderRadius: "20px",
-                    backgroundColor: inputText.trim() ? "#2563eb" : "#e2e8f0",
-                    color: inputText.trim() ? "#ffffff" : "#94a3b8",
-                    border: "none",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    cursor: inputText.trim() ? "pointer" : "default",
+                    padding: "16px 20px",
+                    backgroundColor: "#f8fafc",
+                    borderTop: "1px solid #e2e8f0",
                     display: "flex",
                     alignItems: "center",
-                    gap: "6px",
-                    transition: "all 0.15s ease",
+                    justifyContent: "center",
+                    gap: "8px",
+                    color: "#64748b",
+                    fontSize: "13px",
+                    fontWeight: 500,
                   }}
                 >
-                  <span>Gửi</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13" />
-                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                  </svg>
-                </button>
-              </div>
+                  <BanIcon size={16} className="text-slate-400" />
+                  <span>Phiên hỗ trợ này đã kết thúc. Không thể gửi thêm tin nhắn.</span>
+                </div>
+              ) : (
+                <>
+                  {/* KHAY GỢI Ý TRẢ LỜI NHANH (CANNED RESPONSES) */}
+                  <div
+                    style={{
+                      padding: "8px 16px",
+                      backgroundColor: "#ffffff",
+                      borderTop: "1px solid #f1f5f9",
+                      display: "flex",
+                      gap: "8px",
+                      overflowX: "auto",
+                    }}
+                  >
+                    {[
+                      "Chào bạn! Mình có thể hỗ trợ gì cho bạn?",
+                      "Yêu cầu mượn phòng đã được kiểm tra và duyệt thành công.",
+                      "Thiết bị phòng đã được nhân viên kiểm tra đầy đủ.",
+                      "Cảm ơn bạn đã liên hệ thư viện HUIT!",
+                    ].map((quickText) => (
+                      <button
+                        key={quickText}
+                        type="button"
+                        onClick={() => handleSendMessage(quickText)}
+                        style={{
+                          backgroundColor: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "14px",
+                          padding: "4px 10px",
+                          fontSize: "11px",
+                          color: "#334155",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#e2e8f0")}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span>{quickText}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* THANH NHẬP LIỆU PHẢN HỒI */}
+                  <div
+                    style={{
+                      padding: "12px 16px",
+                      backgroundColor: "#ffffff",
+                      borderTop: "1px solid #e2e8f0",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      placeholder="Nhập nội dung phản hồi... (Nhấn Enter để gửi qua SignalR)"
+                      value={inputText}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      disabled={isSending}
+                      style={{
+                        flex: 1,
+                        padding: "10px 14px",
+                        borderRadius: "20px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "13px",
+                        outline: "none",
+                      }}
+                      onFocus={(e) => (e.target.style.borderColor = "#2563eb")}
+                      onBlur={(e) => (e.target.style.borderColor = "#cbd5e1")}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => handleSendMessage()}
+                      disabled={!inputText.trim() || isSending}
+                      style={{
+                        padding: "10px 18px",
+                        borderRadius: "20px",
+                        backgroundColor: inputText.trim() ? "#2563eb" : "#e2e8f0",
+                        color: inputText.trim() ? "#ffffff" : "#94a3b8",
+                        border: "none",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: inputText.trim() ? "pointer" : "default",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <span>Gửi</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13" />
+                        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                      </svg>
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

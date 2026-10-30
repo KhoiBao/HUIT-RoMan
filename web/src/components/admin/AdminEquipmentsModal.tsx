@@ -62,10 +62,16 @@ interface Props {
   };
   onClose: () => void;
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
+  onRoomStatusChanged?: () => void;
 }
 
-export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props) {
-  const { confirm } = useConfirm();
+export default function AdminEquipmentsModal({
+  room,
+  onClose,
+  onNotify,
+  onRoomStatusChanged,
+}: Props) {
+  const { confirm, alert } = useConfirm();
   const [activeSubTab, setActiveSubTab] = useState<"room" | "warehouse">("room");
   const [roomEquipments, setRoomEquipments] = useState<RoomEquipmentItem[]>([]);
   const [warehouseEquipments, setWarehouseEquipments] = useState<WarehouseEquipment[]>([]);
@@ -78,6 +84,25 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
   const [quantity, setQuantity] = useState<number>(1);
   const [equipStatus, setEquipStatus] = useState<string>("Hoạt động tốt");
   const [submitting, setSubmitting] = useState<boolean>(false);
+
+  // Update existing equipment status in room
+  const handleUpdateEquipmentStatus = async (item: RoomEquipmentItem, newStatus: string) => {
+    try {
+      await api.post(`/api/Rooms/${room.id}/equipments`, {
+        equipmentId: item.equipmentId,
+        quantity: item.quantity,
+        status: newStatus,
+      });
+      onNotify(`Đã cập nhật tình trạng thiết bị "${item.equipmentName}" thành "${newStatus}".`, "success");
+      await fetchRoomEquipments();
+      onRoomStatusChanged?.();
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || "Lỗi khi cập nhật tình trạng thiết bị.",
+        "warning"
+      );
+    }
+  };
 
   // Add new equipment to warehouse form
   const [newEquipCode, setNewEquipCode] = useState<string>("");
@@ -127,17 +152,29 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
   const handleAssignEquipment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEquipId) {
-      alert("Vui lòng chọn thiết bị từ danh mục kho.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng chọn thiết bị từ danh mục kho.",
+        type: "warning",
+      });
       return;
     }
     if (quantity < 1) {
-      alert("Số lượng phải lớn hơn hoặc bằng 1.");
+      await alert({
+        title: "Số lượng không hợp lệ",
+        message: "Số lượng phải lớn hơn hoặc bằng 1.",
+        type: "warning",
+      });
       return;
     }
 
     const selectedEquip = warehouseEquipments.find((w) => w.id === Number(selectedEquipId));
     if (selectedEquip && isUnderMaintenance(selectedEquip.status)) {
-      alert("Thiết bị này đang trong trạng thái bảo trì, không được phép phân bổ vào phòng hoặc sử dụng!");
+      await alert({
+        title: "Thiết bị đang bảo trì",
+        message: "Thiết bị này đang trong trạng thái bảo trì, không được phép phân bổ vào phòng hoặc sử dụng!",
+        type: "warning",
+      });
       return;
     }
 
@@ -145,9 +182,11 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
     const maxAllowed = (selectedEquip?.availableQuantity ?? 0) + currentInRoom;
 
     if (selectedEquip && quantity > maxAllowed) {
-      alert(
-        `Số lượng phân bổ (${quantity}) vượt quá số lượng khả dụng trong kho (kho hiện còn ${selectedEquip.availableQuantity} chiếc khả dụng).`
-      );
+      await alert({
+        title: "Vượt quá số lượng",
+        message: `Số lượng phân bổ (${quantity}) vượt quá số lượng khả dụng trong kho (kho hiện còn ${selectedEquip.availableQuantity} chiếc khả dụng).`,
+        type: "warning",
+      });
       return;
     }
 
@@ -164,6 +203,7 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
       setSelectedEquipId("");
       setQuantity(1);
       await Promise.all([fetchRoomEquipments(), fetchWarehouseData()]);
+      onRoomStatusChanged?.();
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || err.response?.data || "Lỗi khi gán thiết bị vào phòng.",
@@ -196,6 +236,7 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
       const msg = res.data?.message || `Đã thu hồi thiết bị "${equipmentName}" và hoàn trả về kho thành công!`;
       onNotify(msg, "success");
       await Promise.all([fetchRoomEquipments(), fetchWarehouseData()]);
+      onRoomStatusChanged?.();
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || "Lỗi khi thu hồi thiết bị.",
@@ -208,16 +249,28 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
   const handleCreateWarehouseEquip = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEquipName.trim()) {
-      alert("Vui lòng nhập tên thiết bị.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập tên thiết bị.",
+        type: "warning",
+      });
       return;
     }
     if (!newEquipCatId) {
-      alert("Vui lòng chọn danh mục thiết bị.");
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng chọn danh mục thiết bị.",
+        type: "warning",
+      });
       return;
     }
     const totalQty = Number(newEquipTotalQty);
     if (!totalQty || totalQty < 1) {
-      alert("Số lượng tổng nhập kho phải lớn hơn hoặc bằng 1.");
+      await alert({
+        title: "Số lượng không hợp lệ",
+        message: "Số lượng tổng nhập kho phải lớn hơn hoặc bằng 1.",
+        type: "warning",
+      });
       return;
     }
     try {
@@ -247,7 +300,7 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
 
   return (
     <div className="admin-modal-overlay">
-      <div className="admin-modal-content modal-large">
+      <div className="admin-modal-content modal-large modal-equipments-wide">
         <div className="modal-header">
           <div>
             <h3 className="modal-title">
@@ -382,6 +435,7 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                         <option value="Hoạt động tốt">Hoạt động tốt</option>
                         <option value="Đang sử dụng ổn định">Đang sử dụng ổn định</option>
                         <option value="Cần bảo trì nhẹ">Cần bảo trì nhẹ</option>
+                        <option value="Đang bảo trì">Đang bảo trì</option>
                         <option value="Hỏng chờ thay thế">Hỏng chờ thay thế</option>
                       </select>
                     </div>
@@ -450,20 +504,28 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                             </span>
                           </td>
                           <td>
-                            <span
-                              className={`admin-status-pill flex items-center gap-1 ${
-                                eq.status.includes("Hỏng") || eq.status.includes("bảo trì")
-                                  ? "pill-rejected"
-                                  : "pill-approved"
-                              }`}
+                            <select
+                              className="admin-input text-xs"
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: "6px",
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                width: "auto",
+                                backgroundColor: isUnderMaintenance(eq.status) ? "#fff7ed" : "#f0fdf4",
+                                borderColor: isUnderMaintenance(eq.status) ? "#fdba74" : "#bbf7d0",
+                                color: isUnderMaintenance(eq.status) ? "#c2410c" : "#15803d",
+                              }}
+                              value={eq.status}
+                              onChange={(e) => handleUpdateEquipmentStatus(eq, e.target.value)}
+                              title="Thay đổi tình trạng thiết bị (Khi chuyển sang bảo trì, phòng cũng sẽ tự động chuyển sang bảo trì)"
                             >
-                              {eq.status.includes("Hỏng") || eq.status.includes("bảo trì") ? (
-                                <WrenchIcon size={12} />
-                              ) : (
-                                <CheckIcon size={12} />
-                              )}
-                              <span>{formatEquipStatus(eq.status)}</span>
-                            </span>
+                              <option value="Hoạt động tốt">Hoạt động tốt</option>
+                              <option value="Đang sử dụng ổn định">Đang sử dụng ổn định</option>
+                              <option value="Cần bảo trì nhẹ">Cần bảo trì nhẹ (Bảo trì phòng)</option>
+                              <option value="Đang bảo trì">Đang bảo trì (Bảo trì phòng)</option>
+                              <option value="Hỏng chờ thay thế">Hỏng chờ thay thế (Bảo trì phòng)</option>
+                            </select>
                           </td>
                           <td>
                             <button
@@ -582,12 +644,12 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                     <table className="admin-data-table">
                       <thead>
                         <tr>
-                          <th>Mã</th>
+                          <th style={{ width: "110px", whiteSpace: "nowrap" }}>Mã</th>
                           <th>Tên thiết bị</th>
-                          <th>Tổng SL</th>
-                          <th>Đã cấp</th>
-                          <th>Còn kho</th>
-                          <th>Trạng thái</th>
+                          <th style={{ width: "85px", textAlign: "center", whiteSpace: "nowrap" }}>Tổng SL</th>
+                          <th style={{ width: "85px", textAlign: "center", whiteSpace: "nowrap" }}>Đã cấp</th>
+                          <th style={{ width: "135px", textAlign: "center", whiteSpace: "nowrap" }}>Còn kho</th>
+                          <th style={{ width: "150px", textAlign: "center", whiteSpace: "nowrap" }}>Trạng thái</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -597,15 +659,15 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                               <span className="code-tag">{w.code || `#${w.id}`}</span>
                             </td>
                             <td className="font-semibold">{w.name}</td>
-                            <td>
+                            <td style={{ textAlign: "center" }}>
                               <span className="font-bold">{w.totalQuantity ?? 0}</span>
                             </td>
-                            <td>
+                            <td style={{ textAlign: "center" }}>
                               <span className="badge-count-pill">{w.allocatedQuantity ?? 0}</span>
                             </td>
-                            <td>
+                            <td style={{ textAlign: "center" }}>
                               <span
-                                className={`admin-status-pill flex items-center gap-1 ${
+                                className={`admin-status-pill flex items-center justify-center gap-1 ${
                                   (w.availableQuantity ?? 0) > 0 ? "pill-approved" : "pill-rejected"
                                 }`}
                               >
@@ -617,9 +679,9 @@ export default function AdminEquipmentsModal({ room, onClose, onNotify }: Props)
                                 <span>{w.availableQuantity ?? 0} chiếc</span>
                               </span>
                             </td>
-                            <td>
+                            <td style={{ textAlign: "center" }}>
                               <span
-                                className={`admin-status-pill flex items-center gap-1 ${
+                                className={`admin-status-pill flex items-center justify-center gap-1 ${
                                   isUnderMaintenance(w.status) ? "pill-maintenance" : "pill-approved"
                                 }`}
                               >

@@ -34,7 +34,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Create([FromBody] CreateRoomTypeDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -45,7 +45,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Update(int id, [FromBody] CreateRoomTypeDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -55,7 +55,7 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin,Employee")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> Delete(int id)
         {
             var response = await _roomTypeService.DeleteAsync(id);

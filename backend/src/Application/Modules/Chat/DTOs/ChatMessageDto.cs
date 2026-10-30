@@ -15,4 +15,10 @@ namespace HUIT_RoMan.Application.Modules.Chat.DTOs
         public DateTime SentAt { get; set; }
         public bool IsRead { get; set; }
     }
+
+    public class DeleteMessageResult
+    {
+        public int MessageId { get; set; }
+        public int ConversationId { get; set; }
+    }
 }
