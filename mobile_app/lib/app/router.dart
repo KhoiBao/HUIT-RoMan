@@ -6,7 +6,11 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/presentation/forgot_password_page.dart';
 import '../features/auth/presentation/login_page.dart';
+import '../features/home/presentation/home_page.dart';
 import '../features/placeholder_page.dart';
+import '../features/rooms/presentation/room_detail_page.dart';
+import '../features/rooms/presentation/rooms_page.dart';
+import '../features/schedule/presentation/schedule_page.dart';
 import 'app_shell.dart';
 import 'splash_page.dart';
 
@@ -40,15 +44,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             AppShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(routes: [
-            GoRoute(
-                path: '/home',
-                builder: (_, _) =>
-                    const PlaceholderPage(title: 'Tổng quan')),
+            GoRoute(path: '/home', builder: (_, _) => const HomePage()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(
-                path: '/schedule',
-                builder: (_, _) => const PlaceholderPage(title: 'Lịch')),
+            GoRoute(path: '/schedule', builder: (_, _) => const SchedulePage()),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(
@@ -65,11 +64,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
           path: '/rooms',
-          builder: (_, _) => const PlaceholderPage(title: 'Danh sách phòng')),
+          builder: (_, state) => RoomsPage(
+              initialType: state.uri.queryParameters['type'])),
       GoRoute(
           path: '/rooms/:id',
-          builder: (_, state) => PlaceholderPage(
-              title: 'Phòng ${state.pathParameters['id'] ?? ''}')),
+          builder: (_, state) => RoomDetailPage(
+              roomId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0)),
       GoRoute(
           path: '/booking/new',
           builder: (_, _) => const PlaceholderPage(title: 'Đặt phòng')),
