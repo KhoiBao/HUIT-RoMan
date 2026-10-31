@@ -119,25 +119,6 @@ Mật khẩu chung: `Huit@123`
 
 Admin seed cũ: `admin@huit.edu.vn` / `Admin@123`. Danh sách đầy đủ ở `backend/account.md`.
 
-### 3.1. Build APK Android bằng Docker
-
-Máy không cần cài Flutter hay Android SDK. Service `mobile` nằm trong profile riêng nên không bị build khi chạy `docker compose up`:
-
-```powershell
-docker compose --profile mobile run --rm mobile
-```
-
-- Lần đầu tải image Flutter + Android SDK, build APK mất khoảng 10–20 phút; các lần sau dùng cache.
-- Kết quả: `mobile_app/build/docker/app-debug.apk` (đã dùng cho emulator/máy thật).
-- API mà APK gọi tới lấy từ `MOBILE_API_BASE_URL` trong `.env` (mặc định `http://10.0.2.2:5056`, tức localhost của host nhìn từ emulator). Muốn build cho máy thật, đổi sang IP LAN của máy chạy API rồi build lại.
-- Chỉ build lại image khi đổi `Dockerfile` hoặc `pubspec`; sửa code Dart thì `run` lại là đủ vì bước copy mã nguồn nằm sau `flutter pub get`.
-
-Cài APK lên emulator:
-
-```powershell
-adb install -r mobile_app/build/docker/app-debug.apk
-```
-
 ---
 
 ## 4. Quy trình làm việc hằng ngày
@@ -291,8 +272,6 @@ Quy tắc nhánh: làm trên `dev/<tên>` hoặc `feature/<tính-năng>`, mở P
 | Vào shell API | `docker compose exec api sh` |
 | Vào PostgreSQL | `docker compose exec db psql -U postgres -d LibraryDb` |
 | Build lại không dùng cache | `docker compose build --no-cache api web` |
-| Build APK Android | `docker compose --profile mobile run --rm mobile` |
-| Build lại image APK | `docker compose --profile mobile build mobile` |
 | Kiểm tra cấu hình compose | `docker compose config` |
 
 ---
@@ -407,9 +386,6 @@ HUIT-RoMan/
     Dockerfile
     .dockerignore
     nginx.conf
-  mobile_app/
-    Dockerfile
-    .dockerignore
   docs/
     docker.md        # file này
 ```
