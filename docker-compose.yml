@@ -55,5 +55,19 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Build APK Android trong container rồi chép ra ./mobile_app/build/docker.
+  # Không chạy cùng `docker compose up`; dùng profile riêng:
+  #   docker compose --profile mobile run --rm mobile
+  mobile:
+    profiles: ["mobile"]
+    build:
+      context: ./mobile_app
+      dockerfile: Dockerfile
+      args:
+        API_BASE_URL: ${MOBILE_API_BASE_URL:-http://10.0.2.2:5056}
+    image: huit-roman-mobile:latest
+    volumes:
+      - ./mobile_app/build/docker:/host
+
 volumes:
   postgres_data:
