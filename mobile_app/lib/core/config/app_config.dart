@@ -3,6 +3,6 @@ abstract final class AppConfig {
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2:5056',
   );
-  static const appName = 'RoMan';
-  static const university = 'Trường Đại học Công nghiệp TP.HCM';
+  static const appName = 'HUIT';
+  static const university = 'Trường Đại học Công Thương TP.HCM';
 }

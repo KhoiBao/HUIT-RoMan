@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/utils/date_time_x.dart';
+import '../../../core/widgets/app_sheet.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/loading_skeleton.dart';
@@ -12,11 +13,15 @@ import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/session_user.dart';
+import '../../booking/application/booking_providers.dart';
 import '../../notification/application/notifications_providers.dart';
 import '../../rooms/application/rooms_providers.dart';
 import '../../rooms/domain/room.dart';
 import '../../schedule/application/schedule_providers.dart';
 import '../../schedule/domain/schedule_entry.dart';
+import '../../usage/application/usage_providers.dart';
+import '../../usage/presentation/widgets/usage_code_sheet.dart';
+import 'widgets/ready_session_banner.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -46,10 +51,20 @@ class HomePage extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(roomsProvider);
             ref.invalidate(todaySchedulesProvider);
+            ref.invalidate(myUsageProvider);
             await Future.wait([
               ref.read(roomsProvider.future),
               ref.read(todaySchedulesProvider.future),
+              ref.read(myUsageProvider.future),
             ]);
+            final sessions = ref.read(myUsageProvider).value;
+            if (sessions != null) {
+              try {
+                await ref.read(sessionRemindersProvider).sync(sessions);
+              } catch (_) {
+                // Nhắc lịch là phụ trợ, không chặn kéo để làm mới.
+              }
+            }
           },
           child: ListView(
             physics:
@@ -59,6 +74,7 @@ class HomePage extends ConsumerWidget {
             children: [
               _HomeHeader(user: user),
               const SizedBox(height: AppSpacing.xl),
+              const ReadySessionBanner(),
               if (roomsAsync.isLoading || schedulesAsync.isLoading)
                 _HomeSkeleton()
               else if (roomsAsync.hasError)
@@ -202,13 +218,36 @@ class _NotificationButton extends StatelessWidget {
   }
 }
 
-class _HomeContent extends StatelessWidget {
+class _HomeContent extends ConsumerWidget {
   const _HomeContent({required this.rooms, required this.schedules});
   final List<Room> rooms;
   final List<ScheduleEntry> schedules;
 
+  Future<void> _openCodeLookup(BuildContext context, WidgetRef ref) async {
+    final changed = await showAppSheet<bool>(
+      context,
+      builder: (_) => const UsageCodeSheet(),
+    );
+    if (changed != true) return;
+    ref.invalidate(myUsageProvider);
+    ref.invalidate(myBookingsProvider);
+    try {
+      final sessions = await ref.read(myUsageProvider.future);
+      await ref.read(sessionRemindersProvider).sync(sessions);
+    } catch (_) {
+      // Nhắc lịch là phụ trợ, không chặn thông báo cập nhật phiên.
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Đã cập nhật phiên sử dụng phòng.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final available = rooms.where((r) => r.status == RoomStatus.available).length;
     final inUse = rooms.where((r) => r.status == RoomStatus.inUse).length;
     final maintenance =
@@ -337,6 +376,14 @@ class _HomeContent extends StatelessWidget {
                 icon: Icons.receipt_long_outlined,
                 label: 'Đơn của tôi',
                 onTap: () => context.go('/bookings'),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.confirmation_number_outlined,
+                label: 'Nhập mã',
+                onTap: () => _openCodeLookup(context, ref),
               ),
             ),
           ],

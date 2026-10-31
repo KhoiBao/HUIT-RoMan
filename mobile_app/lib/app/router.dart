@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,8 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/auth/presentation/forgot_password_page.dart';
 import '../features/auth/presentation/login_page.dart';
+import '../features/booking/application/booking_create_controller.dart';
+import '../features/booking/presentation/booking_create_page.dart';
+import '../features/booking/presentation/booking_detail_page.dart';
+import '../features/booking/presentation/bookings_page.dart';
+import '../features/chat/presentation/chat_page.dart';
 import '../features/home/presentation/home_page.dart';
-import '../features/placeholder_page.dart';
+import '../features/notification/presentation/notifications_page.dart';
+import '../features/profile/presentation/profile_page.dart';
 import '../features/rooms/presentation/room_detail_page.dart';
 import '../features/rooms/presentation/rooms_page.dart';
 import '../features/schedule/presentation/schedule_page.dart';
@@ -50,37 +55,70 @@ final routerProvider = Provider<GoRouter>((ref) {
             GoRoute(path: '/schedule', builder: (_, _) => const SchedulePage()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(
-                path: '/bookings',
-                builder: (_, _) =>
-                    const PlaceholderPage(title: 'Đơn của tôi')),
+            GoRoute(path: '/bookings', builder: (_, _) => const BookingsPage()),
           ]),
           StatefulShellBranch(routes: [
-            GoRoute(
-                path: '/profile',
-                builder: (_, _) => const PlaceholderPage(title: 'Hồ sơ')),
+            GoRoute(path: '/profile', builder: (_, _) => const ProfilePage()),
           ]),
         ],
       ),
       GoRoute(
           path: '/rooms',
-          builder: (_, state) => RoomsPage(
-              initialType: state.uri.queryParameters['type'])),
+          pageBuilder: (_, state) => _fadeSlidePage(
+              state,
+              RoomsPage(initialType: state.uri.queryParameters['type']))),
       GoRoute(
           path: '/rooms/:id',
-          builder: (_, state) => RoomDetailPage(
-              roomId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0)),
+          pageBuilder: (_, state) => _fadeSlidePage(
+              state,
+              RoomDetailPage(
+                  roomId:
+                      int.tryParse(state.pathParameters['id'] ?? '') ?? 0))),
       GoRoute(
           path: '/booking/new',
-          builder: (_, _) => const PlaceholderPage(title: 'Đặt phòng')),
+          pageBuilder: (_, state) => _fadeSlidePage(
+              state,
+              BookingCreatePage(
+                  prefill:
+                      BookingPrefill.fromQuery(state.uri.queryParameters)))),
       GoRoute(
           path: '/bookings/:id',
-          builder: (_, state) => PlaceholderPage(
-              title: 'Đơn ${state.pathParameters['id'] ?? ''}')),
+          pageBuilder: (_, state) => _fadeSlidePage(
+              state,
+              BookingDetailPage(
+                  bookingId:
+                      int.tryParse(state.pathParameters['id'] ?? '') ?? 0))),
       GoRoute(
           path: '/notifications',
-          builder: (_, _) => const PlaceholderPage(title: 'Thông báo')),
-      GoRoute(path: '/chat', builder: (_, _) => const PlaceholderPage(title: 'Hỗ trợ')),
+          pageBuilder: (_, state) =>
+              _fadeSlidePage(state, const NotificationsPage())),
+      GoRoute(
+          path: '/chat',
+          pageBuilder: (_, state) => _fadeSlidePage(state, const ChatPage())),
     ],
   );
 });
+
+CustomTransitionPage<void> _fadeSlidePage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 220),
+    reverseTransitionDuration: const Duration(milliseconds: 150),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      if (MediaQuery.disableAnimationsOf(context)) return child;
+      final curved =
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.06, 0),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}

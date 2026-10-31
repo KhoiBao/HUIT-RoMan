@@ -89,7 +89,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                       const SizedBox(height: AppSpacing.md),
                       const Text(
-                        'RoMan',
+                        'HUIT',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
@@ -244,7 +244,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                       const SizedBox(height: AppSpacing.xxl),
                       Text(
-                        'Trường Đại học Công nghiệp TP.HCM',
+                        'Trường Đại học Công Thương TP.HCM',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.45),
