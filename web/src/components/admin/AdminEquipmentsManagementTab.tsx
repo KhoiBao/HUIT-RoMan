@@ -17,6 +17,7 @@ import {
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useAuth } from "../../auth/AuthContext";
+import AdminPagination from "../common/AdminPagination";
 
 export interface WarehouseEquipment {
   id: number;
@@ -102,7 +103,7 @@ function WarehouseStatusDropdown({
   }, [open]);
 
   return (
-    <div className="status-dropdown-container" ref={dropdownRef}>
+    <div className="status-dropdown-container" ref={dropdownRef} onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
         disabled={isUpdating}
@@ -215,7 +216,7 @@ function RoomEquipStatusDropdown({
   }, [open]);
 
   return (
-    <div className="status-dropdown-container" ref={dropdownRef}>
+    <div className="status-dropdown-container" ref={dropdownRef} onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -292,6 +293,22 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [catFilter, setCatFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [stockFilter, setStockFilter] = useState<string>("ALL");
+  const [sortBy, setSortBy] = useState<"name_asc" | "name_desc" | "qty_desc" | "avail_desc">("name_asc");
+  const [warehousePage, setWarehousePage] = useState<number>(1);
+  const [warehousePageSize, setWarehousePageSize] = useState<number>(10);
+
+  // Filters and pagination for ByRoom
+  const [roomSearchTerm, setRoomSearchTerm] = useState<string>("");
+  const [roomStatusFilter, setRoomStatusFilter] = useState<string>("ALL");
+  const [roomPage, setRoomPage] = useState<number>(1);
+  const [roomPageSize, setRoomPageSize] = useState<number>(10);
+
+  // Filters and pagination for Categories
+  const [catSearchTerm, setCatSearchTerm] = useState<string>("");
+  const [catPage, setCatPage] = useState<number>(1);
+  const [catPageSize, setCatPageSize] = useState<number>(10);
 
   // Create Warehouse Equip modal
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -323,6 +340,11 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
   const [showCatModal, setShowCatModal] = useState<boolean>(false);
   const [catName, setCatName] = useState<string>("");
   const [catDesc, setCatDesc] = useState<string>("");
+
+  // Edit Category modal
+  const [editingCategory, setEditingCategory] = useState<EquipmentCategory | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState<string>("");
+  const [editCategoryDesc, setEditCategoryDesc] = useState<string>("");
 
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -387,9 +409,18 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
 
   // Filtered warehouse equipments
   const filteredEquipments = useMemo(() => {
-    return equipments.filter((e) => {
+    const list = equipments.filter((e) => {
       if (catFilter !== "ALL" && String(e.equipmentCategoryId) !== catFilter)
         return false;
+      if (statusFilter !== "ALL") {
+        const s = (e.status || "").toLowerCase();
+        if (statusFilter === "Bảo trì" && !isUnderMaintenance(e.status)) return false;
+        if (statusFilter === "Hoạt động" && isUnderMaintenance(e.status)) return false;
+        if (statusFilter === "Hỏng hóc" && !s.includes("hỏng") && !s.includes("broken")) return false;
+        if (statusFilter === "Thanh lý" && !s.includes("thanh lý") && !s.includes("disposed")) return false;
+      }
+      if (stockFilter === "available" && (e.availableQuantity ?? 0) <= 0) return false;
+      if (stockFilter === "allocated" && (e.availableQuantity ?? 0) > 0) return false;
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
         const matchesCode = (e.code || "").toLowerCase().includes(q);
@@ -399,7 +430,79 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
       }
       return true;
     });
-  }, [equipments, catFilter, searchTerm]);
+
+    return list.sort((a, b) => {
+      if (sortBy === "name_desc") return b.name.localeCompare(a.name);
+      if (sortBy === "qty_desc") return (b.totalQuantity ?? 0) - (a.totalQuantity ?? 0);
+      if (sortBy === "avail_desc") return (b.availableQuantity ?? 0) - (a.availableQuantity ?? 0);
+      return a.name.localeCompare(b.name);
+    });
+  }, [equipments, catFilter, statusFilter, stockFilter, searchTerm, sortBy]);
+
+  const warehouseTotalPages = Math.max(1, Math.ceil(filteredEquipments.length / warehousePageSize));
+  const warehouseCurrentPage = Math.min(Math.max(1, warehousePage), warehouseTotalPages);
+  const warehousePageStart = (warehouseCurrentPage - 1) * warehousePageSize;
+  const pagedWarehouseEquipments = filteredEquipments.slice(
+    warehousePageStart,
+    warehousePageStart + warehousePageSize
+  );
+
+  const resetWarehouseFilters = () => {
+    setCatFilter("ALL");
+    setStatusFilter("ALL");
+    setStockFilter("ALL");
+    setSearchTerm("");
+    setSortBy("name_asc");
+    setWarehousePage(1);
+  };
+
+  const hasWarehouseActiveFilters =
+    catFilter !== "ALL" ||
+    statusFilter !== "ALL" ||
+    stockFilter !== "ALL" ||
+    Boolean(searchTerm) ||
+    sortBy !== "name_asc";
+
+  // Filtered Room equipments
+  const filteredRoomEquipments = useMemo(() => {
+    return roomEquipments.filter((req) => {
+      if (roomStatusFilter !== "ALL" && req.status !== roomStatusFilter) return false;
+      if (roomSearchTerm.trim()) {
+        const q = roomSearchTerm.toLowerCase().trim();
+        if (!req.equipmentName.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [roomEquipments, roomStatusFilter, roomSearchTerm]);
+
+  const roomTotalPages = Math.max(1, Math.ceil(filteredRoomEquipments.length / roomPageSize));
+  const roomCurrentPage = Math.min(Math.max(1, roomPage), roomTotalPages);
+  const roomPageStart = (roomCurrentPage - 1) * roomPageSize;
+  const pagedRoomEquipments = filteredRoomEquipments.slice(
+    roomPageStart,
+    roomPageStart + roomPageSize
+  );
+
+  // Filtered categories
+  const filteredCategories = useMemo(() => {
+    return categories.filter((c) => {
+      if (catSearchTerm.trim()) {
+        const q = catSearchTerm.toLowerCase().trim();
+        const mName = c.name.toLowerCase().includes(q);
+        const mDesc = (c.description || "").toLowerCase().includes(q);
+        if (!mName && !mDesc) return false;
+      }
+      return true;
+    });
+  }, [categories, catSearchTerm]);
+
+  const catTotalPages = Math.max(1, Math.ceil(filteredCategories.length / catPageSize));
+  const catCurrentPage = Math.min(Math.max(1, catPage), catTotalPages);
+  const catPageStart = (catCurrentPage - 1) * catPageSize;
+  const pagedCategories = filteredCategories.slice(
+    catPageStart,
+    catPageStart + catPageSize
+  );
 
   // Quick toggle / update equipment status in warehouse
   const handleQuickChangeStatus = async (eq: WarehouseEquipment, newStatus: string) => {
@@ -715,12 +818,52 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
     try {
       await api.delete(`/api/EquipmentCategories/${c.id}`);
       onNotify(`Đã xóa danh mục "${c.name}" thành công!`, "info");
+      if (String(c.id) === catFilter) {
+        setCatFilter("ALL");
+      }
       await fetchData();
     } catch (err: any) {
       onNotify(
         err.response?.data?.message || err.response?.data || "Không thể xóa danh mục này.",
         "warning"
       );
+    }
+  };
+
+  // Handle Edit Category
+  const handleOpenEditCategory = (c: EquipmentCategory) => {
+    setEditingCategory(c);
+    setEditCategoryName(c.name);
+    setEditCategoryDesc(c.description || "");
+  };
+
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+    if (!editCategoryName.trim()) {
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng nhập tên danh mục.",
+        type: "warning",
+      });
+      return;
+    }
+    try {
+      setSubmitting(true);
+      await api.put(`/api/EquipmentCategories/${editingCategory.id}`, {
+        name: editCategoryName.trim(),
+        description: editCategoryDesc.trim(),
+      });
+      onNotify(`Đã cập nhật danh mục "${editCategoryName.trim()}" thành công!`, "success");
+      setEditingCategory(null);
+      await fetchData();
+    } catch (err: any) {
+      onNotify(
+        err.response?.data?.message || err.response?.data || "Lỗi khi cập nhật danh mục thiết bị.",
+        "warning"
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -842,11 +985,15 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
         </div>
 
         {subView === "warehouse" && (
-          <div className="flex-gap-10">
+          <div className="flex-gap-10 align-center flex-wrap">
             <select
               className="admin-select-filter"
               value={catFilter}
-              onChange={(e) => setCatFilter(e.target.value)}
+              onChange={(e) => {
+                setCatFilter(e.target.value);
+                setWarehousePage(1);
+              }}
+              title="Lọc theo danh mục"
             >
               <option value="ALL">-- Tất cả danh mục --</option>
               {categories.map((c) => (
@@ -856,15 +1003,88 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
               ))}
             </select>
 
+            <select
+              className="admin-select-filter"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setWarehousePage(1);
+              }}
+              title="Lọc theo tình trạng thiết bị"
+            >
+              <option value="ALL">-- Tất cả trạng thái --</option>
+              <option value="Hoạt động">Đang hoạt động</option>
+              <option value="Bảo trì">Đang bảo trì</option>
+              <option value="Hỏng hóc">Hỏng hóc</option>
+              <option value="Thanh lý">Đã thanh lý</option>
+            </select>
+
+            <select
+              className="admin-select-filter"
+              value={stockFilter}
+              onChange={(e) => {
+                setStockFilter(e.target.value);
+                setWarehousePage(1);
+              }}
+              title="Lọc theo lượng tồn kho khả dụng"
+            >
+              <option value="ALL">-- Tất cả lượng kho --</option>
+              <option value="available">Còn sẵn trong kho</option>
+              <option value="allocated">Đã gán hết cho phòng</option>
+            </select>
+
+            <select
+              className="admin-select-filter"
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value as any);
+                setWarehousePage(1);
+              }}
+              title="Sắp xếp danh sách thiết bị"
+            >
+              <option value="name_asc">Tên A-Z</option>
+              <option value="name_desc">Tên Z-A</option>
+              <option value="qty_desc">Tổng SL giảm dần</option>
+              <option value="avail_desc">Khả dụng giảm dần</option>
+            </select>
+
             <div className="admin-search-box max-w-300">
               <SearchIcon size={16} className="search-icon-muted" />
               <input
                 type="text"
                 placeholder="Tìm mã hoặc tên thiết bị..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setWarehousePage(1);
+                }}
               />
             </div>
+
+            {hasWarehouseActiveFilters && (
+              <button
+                type="button"
+                className="btn-table-action"
+                onClick={resetWarehouseFilters}
+                title="Xóa bộ lọc thiết bị kho về mặc định"
+                style={{
+                  backgroundColor: "#fef2f2",
+                  color: "#dc2626",
+                  borderColor: "#fecaca",
+                  height: "36px",
+                  padding: "0 10px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  borderRadius: "8px",
+                }}
+              >
+                <XIcon size={13} />
+                <span>Xóa lọc</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -874,14 +1094,48 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
             <select
               className="admin-select-filter font-bold text-highlight"
               value={selectedRoomId}
-              onChange={(e) => setSelectedRoomId(Number(e.target.value))}
+              onChange={(e) => {
+                setSelectedRoomId(Number(e.target.value));
+                setRoomPage(1);
+              }}
             >
               {rooms.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.roomCode} — {r.name} {r.status === "Bảo trì" || r.status === "Maintenance" ? "⚠️ (Đang bảo trì)" : ""}
+                  {r.roomCode} — {r.name} {r.status === "Bảo trì" || r.status === "Maintenance" ? "(Đang bảo trì)" : ""}
                 </option>
               ))}
             </select>
+
+            <select
+              className="admin-select-filter"
+              value={roomStatusFilter}
+              onChange={(e) => {
+                setRoomStatusFilter(e.target.value);
+                setRoomPage(1);
+              }}
+              title="Lọc tình trạng thiết bị phòng"
+            >
+              <option value="ALL">-- Tất cả tình trạng --</option>
+              <option value="Hoạt động tốt">Hoạt động tốt</option>
+              <option value="Đang sử dụng ổn định">Đang sử dụng ổn định</option>
+              <option value="Cần bảo trì nhẹ">Cần bảo trì nhẹ</option>
+              <option value="Đang bảo trì">Đang bảo trì</option>
+              <option value="Hỏng hóc">Hỏng hóc</option>
+            </select>
+
+            <div className="admin-search-box max-w-240">
+              <SearchIcon size={15} className="search-icon-muted" />
+              <input
+                type="text"
+                placeholder="Tìm tên thiết bị phòng..."
+                value={roomSearchTerm}
+                onChange={(e) => {
+                  setRoomSearchTerm(e.target.value);
+                  setRoomPage(1);
+                }}
+              />
+            </div>
+
             {selectedRoomId && (() => {
               const selRoom = rooms.find((r) => r.id === Number(selectedRoomId));
               const isRoomMaint = selRoom && (selRoom.status === "Bảo trì" || selRoom.status === "Maintenance");
@@ -919,7 +1173,8 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
               <p className="empty-title">Không tìm thấy thiết bị nào trong kho</p>
             </div>
           ) : (
-            <div className="admin-table-responsive">
+            <>
+              <div className="admin-table-responsive">
               <table className="admin-data-table">
                 <thead>
                   <tr>
@@ -935,8 +1190,13 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEquipments.map((e) => (
-                    <tr key={e.id}>
+                  {pagedWarehouseEquipments.map((e) => (
+                    <tr
+                      key={e.id}
+                      className="admin-clickable-row"
+                      onClick={() => handleOpenEdit(e)}
+                      title="Bấm vào dòng để chỉnh sửa thiết bị này"
+                    >
                       <td>
                         <span className="code-tag">{e.code || `#${e.id}`}</span>
                       </td>
@@ -968,7 +1228,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                           onChangeStatus={handleQuickChangeStatus}
                         />
                       </td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                           <button
                             type="button"
@@ -995,7 +1255,17 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                 </tbody>
               </table>
             </div>
-          )}
+
+            <AdminPagination
+              currentPage={warehouseCurrentPage}
+              totalItems={filteredEquipments.length}
+              pageSize={warehousePageSize}
+              onPageChange={(p) => setWarehousePage(p)}
+              onPageSizeChange={(sz) => setWarehousePageSize(sz)}
+              itemLabel="thiết bị"
+            />
+          </>
+        )}
         </div>
       )}
 
@@ -1037,7 +1307,8 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
               </p>
             </div>
           ) : (
-            <div className="admin-table-responsive">
+            <>
+              <div className="admin-table-responsive">
               <table className="admin-data-table">
                 <thead>
                   <tr>
@@ -1048,7 +1319,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {roomEquipments.map((req) => (
+                  {pagedRoomEquipments.map((req) => (
                     <tr key={req.equipmentId}>
                       <td className="font-semibold text-highlight">
                         {req.equipmentName}
@@ -1082,48 +1353,124 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                 </tbody>
               </table>
             </div>
-          )}
+
+            <AdminPagination
+              currentPage={roomCurrentPage}
+              totalItems={filteredRoomEquipments.length}
+              pageSize={roomPageSize}
+              onPageChange={(p) => setRoomPage(p)}
+              onPageSizeChange={(sz) => setRoomPageSize(sz)}
+              itemLabel="thiết bị phòng"
+            />
+          </>
+        )}
         </div>
       )}
 
       {subView === "categories" && (
-        <div className="admin-table-responsive">
-          <table className="admin-data-table">
-            <thead>
-              <tr>
-                <th style={{ width: "80px" }}>ID</th>
-                <th>Tên danh mục thiết bị</th>
-                <th>Mô tả quy cách</th>
-                <th style={{ width: "120px", textAlign: "right" }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {categories.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <span className="code-tag">#{c.id}</span>
-                  </td>
-                  <td className="font-semibold text-highlight">{c.name}</td>
-                  <td className="text-sm text-muted">{c.description || "—"}</td>
-                  <td style={{ textAlign: "right" }}>
-                    {isAdmin ? (
-                      <button
-                        type="button"
-                        className="btn-shift-action btn-shift-delete"
-                        onClick={() => handleDeleteCategory(c)}
-                        title="Xóa danh mục thiết bị"
-                      >
-                        <TrashIcon size={12} />
-                        <span>Xóa</span>
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: "11.5px", color: "#64748b" }}>Mặc định</span>
-                    )}
-                  </td>
+        <div>
+          <div style={{ marginBottom: "12px", display: "flex", justifyContent: "flex-end" }}>
+            <div className="admin-search-box max-w-300">
+              <SearchIcon size={16} className="search-icon-muted" />
+              <input
+                type="text"
+                placeholder="Tìm loại thiết bị..."
+                value={catSearchTerm}
+                onChange={(e) => {
+                  setCatSearchTerm(e.target.value);
+                  setCatPage(1);
+                }}
+              />
+            </div>
+          </div>
+          <div className="admin-table-responsive">
+            <table className="admin-data-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "80px" }}>ID</th>
+                  <th>Tên danh mục thiết bị</th>
+                  <th>Mô tả quy cách</th>
+                  <th style={{ width: "130px", textAlign: "center" }}>Số thiết bị</th>
+                  <th style={{ width: "140px", textAlign: "right" }}>Thao tác</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pagedCategories.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "32px 16px", color: "#64748b" }}>
+                      Không tìm thấy danh mục thiết bị nào.
+                    </td>
+                  </tr>
+                ) : (
+                  pagedCategories.map((c) => {
+                    const attachedCount = equipments.filter((eq) => eq.equipmentCategoryId === c.id).length;
+                    return (
+                      <tr
+                        key={c.id}
+                        className="admin-clickable-row"
+                        onClick={() => handleOpenEditCategory(c)}
+                        title="Bấm vào dòng để chỉnh sửa danh mục này"
+                      >
+                        <td>
+                          <span className="code-tag">#{c.id}</span>
+                        </td>
+                        <td className="font-semibold text-highlight">{c.name}</td>
+                        <td className="text-sm text-muted">{c.description || "—"}</td>
+                        <td style={{ textAlign: "center" }}>
+                          <span
+                            style={{
+                              backgroundColor: attachedCount > 0 ? "#eff6ff" : "#f1f5f9",
+                              color: attachedCount > 0 ? "#1d4ed8" : "#64748b",
+                              borderColor: attachedCount > 0 ? "#bfdbfe" : "#e2e8f0",
+                              fontWeight: 600,
+                              fontSize: "11.5px",
+                              padding: "3px 8px",
+                              borderRadius: "12px",
+                              borderWidth: "1px",
+                              borderStyle: "solid",
+                              display: "inline-block",
+                            }}
+                          >
+                            {attachedCount} thiết bị
+                          </span>
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", justifyContent: "flex-end" }}>
+                            <button
+                              type="button"
+                              className="btn-shift-action btn-shift-edit"
+                              onClick={() => handleOpenEditCategory(c)}
+                              title="Chỉnh sửa danh mục thiết bị"
+                            >
+                              <PencilIcon size={12} />
+                              <span>Sửa</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-shift-action btn-shift-delete"
+                              onClick={() => handleDeleteCategory(c)}
+                              title="Xóa danh mục thiết bị"
+                            >
+                              <TrashIcon size={12} />
+                              <span>Xóa</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+          <AdminPagination
+            currentPage={catCurrentPage}
+            totalItems={filteredCategories.length}
+            pageSize={catPageSize}
+            onPageChange={(p) => setCatPage(p)}
+            onPageSizeChange={(sz) => setCatPageSize(sz)}
+            itemLabel="loại thiết bị"
+          />
         </div>
       )}
 
@@ -1531,6 +1878,78 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
                   disabled={submitting}
                 >
                   {submitting ? "Đang lưu..." : "Lưu danh mục"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Category */}
+      {editingCategory && (
+        <div className="admin-modal-overlay">
+          <div className="admin-modal-content">
+            <div className="modal-header">
+              <h3 className="modal-title">Chỉnh sửa danh mục thiết bị</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setEditingCategory(null)}
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateCategory}>
+              <div className="modal-body">
+                <div className="form-group-admin">
+                  <label>Mã danh mục:</label>
+                  <input
+                    type="text"
+                    className="admin-input"
+                    value={`#${editingCategory.id}`}
+                    disabled
+                  />
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Tên danh mục (*):</label>
+                  <input
+                    type="text"
+                    className="admin-input"
+                    placeholder="VD: Máy chiếu, Loa & Micro, Màn hình tương tác..."
+                    value={editCategoryName}
+                    onChange={(e) => setEditCategoryName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Mô tả quy cách:</label>
+                  <textarea
+                    rows={3}
+                    className="admin-textarea"
+                    placeholder="Mô tả tiêu chuẩn thiết bị..."
+                    value={editCategoryDesc}
+                    onChange={(e) => setEditCategoryDesc(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setEditingCategory(null)}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="btn-confirm-save"
+                  disabled={submitting}
+                >
+                  {submitting ? "Đang lưu..." : "Lưu thay đổi"}
                 </button>
               </div>
             </form>

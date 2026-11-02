@@ -6,22 +6,20 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Đại diện cho người dùng hệ thống (Sinh viên, Giảng viên, v.v.).
-    /// </summary>
+    // người dùng hệ thống (Sinh viên, Giảng viên, v.v.)
     [Table("Users")]
     public class User : IdentityUser<int>, Common.ISoftDelete
     {
 
         [Required]
         [StringLength(50)]
-        public string CardCode { get; set; } // Mã thẻ (VD: MSSV)
+        public string CardCode { get; set; } = string.Empty; // Mã thẻ (VD: MSSV)
 
         [Required]
         [StringLength(255)]
-        public string FullName { get; set; }
+        public string FullName { get; set; } = string.Empty; // Họ và tên đầy đủ
 
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         public bool IsDeleted { get; set; }
         

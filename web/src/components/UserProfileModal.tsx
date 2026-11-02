@@ -10,9 +10,17 @@ import {
   AlertTriangleIcon,
   BanIcon,
   XIcon,
+  PencilIcon,
+  ClockIcon,
+  DoorIcon,
+  RefreshCwIcon,
 } from "./Icon";
-import { checkMyEligibility, type UserEligibility } from "../lib/violations";
-
+import {
+  checkMyEligibility,
+  fetchMyViolations,
+  type UserEligibility,
+  type ViolationRecordItem,
+} from "../lib/violations";
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -48,7 +56,9 @@ export default function UserProfileModal({
 
   const [profile, setProfile] = useState<FullUserProfile | null>(null);
   const [eligibility, setEligibility] = useState<UserEligibility | null>(null);
+  const [myViolations, setMyViolations] = useState<ViolationRecordItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadingViolations, setLoadingViolations] = useState<boolean>(false);
   const [isEditing, setIsEditing] = useState<boolean>(false);
 
   // Edit form fields
@@ -67,9 +77,10 @@ export default function UserProfileModal({
     async function loadProfile() {
       setLoading(true);
       try {
-        const [userRes, elig] = await Promise.all([
+        const [userRes, elig, violationsRes] = await Promise.all([
           api.get("/api/Users/me").catch(() => null),
           checkMyEligibility().catch(() => null),
+          fetchMyViolations().catch(() => []),
         ]);
 
         const data = userRes?.data?.data ?? userRes?.data;
@@ -97,6 +108,10 @@ export default function UserProfileModal({
         if (isMounted && elig) {
           setEligibility(elig);
         }
+
+        if (isMounted) {
+          setMyViolations(violationsRes || []);
+        }
       } catch (err) {
         console.error("Error loading profile:", err);
       } finally {
@@ -111,6 +126,20 @@ export default function UserProfileModal({
   }, [isOpen, user]);
 
   if (!isOpen) return null;
+
+  const handleRefreshViolations = async () => {
+    setLoadingViolations(true);
+    try {
+      const [elig, violationsRes] = await Promise.all([
+        checkMyEligibility().catch(() => null),
+        fetchMyViolations().catch(() => []),
+      ]);
+      if (elig) setEligibility(elig);
+      setMyViolations(violationsRes || []);
+    } finally {
+      setLoadingViolations(false);
+    }
+  };
 
   const handleSaveProfile = async (e: FormEvent) => {
     e.preventDefault();
@@ -132,7 +161,6 @@ export default function UserProfileModal({
         phoneNumber: normalizedPhone,
         status: profile?.status,
       });
-
 
       setProfile((prev) =>
         prev
@@ -171,7 +199,12 @@ export default function UserProfileModal({
       : "Khoa Công nghệ Thông tin");
 
   return (
-    <div className="admin-modal-overlay">
+    <div
+      className="admin-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="admin-modal-box user-profile-modal-box">
         {/* Header */}
         <div className="user-profile-header-banner">
@@ -181,6 +214,7 @@ export default function UserProfileModal({
               type="button"
               className="modal-close-btn text-white"
               onClick={onClose}
+              title="Đóng"
             >
               <XIcon size={16} />
             </button>
@@ -207,7 +241,7 @@ export default function UserProfileModal({
                     ? "Đã khóa"
                     : profile?.status || "Hoạt động"}
                 </span>
-                {eligibility?.hasActiveRestriction && (
+                {eligibility?.hasActiveRestriction ? (
                   <span
                     className="profile-status-pill pill-danger"
                     style={{
@@ -221,6 +255,21 @@ export default function UserProfileModal({
                     }}
                   >
                     <BanIcon size={12} /> Cấm mượn phòng
+                  </span>
+                ) : (
+                  <span
+                    className="profile-status-pill"
+                    style={{
+                      background: "#dcfce7",
+                      color: "#15803d",
+                      border: "1px solid #bbf7d0",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <CheckCircleIcon size={12} /> Chuẩn quy chế
                   </span>
                 )}
               </div>
@@ -244,6 +293,7 @@ export default function UserProfileModal({
           </div>
         )}
 
+        {/* Scrollable Body */}
         <div className="user-profile-body">
           {loading ? (
             <div className="profile-loading-state">
@@ -259,7 +309,6 @@ export default function UserProfileModal({
                     border: "1px solid #fca5a5",
                     borderRadius: "10px",
                     padding: "14px 16px",
-                    marginBottom: "16px",
                     color: "#991b1b",
                     boxShadow: "0 1px 3px rgba(220, 38, 38, 0.08)",
                   }}
@@ -360,7 +409,7 @@ export default function UserProfileModal({
                       className="btn-link-edit"
                       onClick={() => setIsEditing(true)}
                     >
-                      ✎ Chỉnh sửa liên hệ
+                      <PencilIcon size={13} className="inline-block" style={{ marginRight: 4 }} /> Chỉnh sửa liên hệ
                     </button>
                   )}
                 </div>
@@ -421,28 +470,175 @@ export default function UserProfileModal({
                 )}
               </div>
 
-              {/* Footer action */}
-              <div className="user-profile-footer">
-                <button
-                  type="button"
-                  className="btn-profile-logout"
-                  onClick={() => {
-                    onClose();
-                    logout();
-                  }}
-                >
-                  Đăng xuất tài khoản
-                </button>
-                <button
-                  type="button"
-                  className="btn-modal-cancel"
-                  onClick={onClose}
-                >
-                  Đóng
-                </button>
+              {/* Lịch sử vi phạm & Chế tài của bản thân */}
+              <div className="profile-section-card">
+                <div className="flex-between">
+                  <h4 className="profile-card-title">
+                    <AlertTriangleIcon size={16} /> LỊCH SỬ VI PHẠM &amp; CHẾ TÀI ({myViolations.length})
+                  </h4>
+                  <button
+                    type="button"
+                    className="btn-link-edit"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    onClick={handleRefreshViolations}
+                    disabled={loadingViolations}
+                    title="Cập nhật lại lịch sử vi phạm"
+                  >
+                    <RefreshCwIcon size={12} className={loadingViolations ? "spin" : ""} />
+                    {loadingViolations ? "Đang tải..." : "Làm mới"}
+                  </button>
+                </div>
+
+                {myViolations.length === 0 ? (
+                  eligibility?.hasActiveRestriction ? (
+                    <div className="user-profile-violations-list">
+                      <div className="user-violation-item item-active-restriction">
+                        <div className="violation-item-header">
+                          <span className="violation-item-code">
+                            {eligibility.restrictionType || "LỆNH CẤM MƯỢN PHÒNG"}
+                          </span>
+                          <span className="violation-status-badge status-pending">
+                            <BanIcon size={11} /> Đang hiệu lực
+                          </span>
+                        </div>
+                        <div className="violation-item-body">
+                          <strong>Lý do:</strong>{" "}
+                          {eligibility.reason || "Vi phạm quy chế mượn phòng thư viện"}
+                        </div>
+                        {eligibility.endAt && (
+                          <div className="violation-item-meta">
+                            <span>
+                              <ClockIcon size={12} className="inline-block" style={{ marginRight: 4 }} />
+                              Thời hạn đến: {new Date(eligibility.endAt).toLocaleDateString("vi-VN")}
+                            </span>
+                            {eligibility.remainingDays ? (
+                              <strong style={{ color: "#b91c1c" }}>
+                                (Còn {eligibility.remainingDays} ngày)
+                              </strong>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="empty-violations-box">
+                      <ShieldCheckIcon size={18} />
+                      <span>Bạn chưa có biên bản vi phạm nào. Hồ sơ học tập và mượn phòng rất tốt!</span>
+                    </div>
+                  )
+                ) : (
+                  <div className="user-profile-violations-list">
+                    {myViolations.map((v) => {
+                      const isPending = v.status === "Chờ xử lý";
+                      const isResolved = v.status === "Đã xử lý";
+                      const isFined = v.status === "Đã nộp phạt";
+
+                      return (
+                        <div
+                          key={v.id}
+                          className={`user-violation-item ${
+                            v.isRestricted ? "item-active-restriction" : ""
+                          }`}
+                        >
+                          <div className="violation-item-header">
+                            <span className="violation-item-code">
+                              #{v.code || `VP-${v.id}`}
+                            </span>
+                            <span
+                              className={`violation-status-badge ${
+                                isPending
+                                  ? "status-pending"
+                                  : isResolved
+                                  ? "status-resolved"
+                                  : isFined
+                                  ? "status-fined"
+                                  : "status-cancelled"
+                              }`}
+                            >
+                              {v.status || "Chờ xử lý"}
+                            </span>
+                          </div>
+
+                          <div className="violation-item-body">
+                            <div>
+                              <strong>Loại:</strong> {v.violationTypeName || "Quy chế sử dụng phòng"}
+                              {v.severity && (
+                                <span
+                                  style={{
+                                    marginLeft: "8px",
+                                    color: "#64748b",
+                                    fontSize: "12px",
+                                  }}
+                                >
+                                  ({v.severityText || `Mức ${v.severity}`})
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ marginTop: "4px" }}>
+                              <strong>Nội dung:</strong> {v.description}
+                            </div>
+                          </div>
+
+                          {v.penaltyApplied && (
+                            <div className="violation-penalty-pill">
+                              <BanIcon size={11} /> {v.penaltyApplied}
+                            </div>
+                          )}
+
+                          <div className="violation-item-meta">
+                            {v.incidentTime && (
+                              <span>
+                                <ClockIcon size={12} className="inline-block" style={{ marginRight: 4 }} />
+                                {new Date(v.incidentTime).toLocaleString("vi-VN", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                })}
+                              </span>
+                            )}
+                            {v.roomCode && (
+                              <span>
+                                <DoorIcon size={12} className="inline-block" style={{ marginRight: 4 }} />
+                                {v.roomCode} {v.roomName ? `(${v.roomName})` : ""}
+                              </span>
+                            )}
+                            {v.isRestricted && v.restrictDays > 0 && (
+                              <span style={{ color: "#b91c1c", fontWeight: 700 }}>
+                                Cấm mượn: còn {v.restrictDays} ngày
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </>
           )}
+        </div>
+
+        {/* Sticky Modal Footer (luôn nhìn thấy được, không bị tràn hay che mất) */}
+        <div className="user-profile-footer">
+          <button
+            type="button"
+            className="btn-profile-logout"
+            onClick={() => {
+              onClose();
+              logout();
+            }}
+          >
+            Đăng xuất tài khoản
+          </button>
+          <button
+            type="button"
+            className="btn-modal-cancel"
+            onClick={onClose}
+          >
+            Đóng
+          </button>
         </div>
       </div>
     </div>

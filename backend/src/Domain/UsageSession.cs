@@ -5,9 +5,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Phiên sử dụng phòng thực tế.
-    /// </summary>
+    // Phiên sử dụng phòng thực tế.
+
     [Table("UsageSessions")]
     public class UsageSession : Common.BaseEntity
     {
@@ -17,19 +16,19 @@ namespace HUIT_RoMan.Domain.Entities
         public DateTime? ActualCheckIn { get; set; }
         public DateTime? ActualCheckOut { get; set; }
         
-        public string Status { get; set; }
-        
-        [StringLength(50)]
-        public string ConfirmationCode { get; set; } // Mã xác nhận nhận phòng
+        public string Status { get; set; } = string.Empty;
 
-        /// <summary>Số người thực tế tại lúc nhận phòng.</summary>
+        [StringLength(50)]
+        public string ConfirmationCode { get; set; } = string.Empty; // Mã xác nhận nhận phòng
+
+        // Số người thực tế tại lúc nhận phòng
         public int? ActualGuestCount { get; set; }
 
-        /// <summary>Ghi chú của nhân sự trong quá trình nhận/trả phòng.</summary>
+        // Ghi chú của nhân sự trong quá trình nhận/trả phòng
         [StringLength(2000)]
         public string? StaffNote { get; set; }
 
-        /// <summary>Checklist bàn giao lúc trả phòng. NULL khi chưa trả phòng.</summary>
+        // Checklist bàn giao lúc trả phòng. NULL khi chưa trả phòng
         public bool? DevicesOk { get; set; }
         public bool? Cleaned { get; set; }
         public bool? LightsOff { get; set; }

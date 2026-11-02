@@ -5,9 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Cuộc hội thoại hỗ trợ trực tuyến.
-    /// </summary>
+    // Cuộc hội thoại hỗ trợ trực tuyến.
     [Table("ChatConversations")]
     public class ChatConversation : Common.BaseEntity
     {
@@ -16,7 +14,7 @@ namespace HUIT_RoMan.Domain.Entities
 
         public DateTime StartTime { get; set; } = DateTime.UtcNow;
         public DateTime? EndTime { get; set; }
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         [ForeignKey("User")]
         public int UserId { get; set; } // Người yêu cầu hỗ trợ

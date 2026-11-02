@@ -63,15 +63,15 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             }
 
             // 4. Khởi tạo 2 Nhân viên
-            await EnsureEmployeeAsync(userManager, dbContext, "NV001", "Nhân Viên Đào Tạo", deptDaoTao.Id, "Chuyên viên");
-            await EnsureEmployeeAsync(userManager, dbContext, "NV002", "Nhân Viên Thư Viện", deptThuVien.Id, "Thủ thư");
+            await EnsureEmployeeAsync(userManager, dbContext, "200123001", "Nhân Viên Đào Tạo", deptDaoTao.Id, "Chuyên viên");
+            await EnsureEmployeeAsync(userManager, dbContext, "200123002", "Nhân Viên Thư Viện", deptThuVien.Id, "Thủ thư");
 
             // 4b. Tài khoản hệ thống cho chế độ tự động duyệt + cấu hình mặc định
             await EnsureAutoApproveSystemAccountAsync(userManager, dbContext, deptAdmin.Id);
 
             // 5. Khởi tạo Sinh viên & Giảng viên thuộc Khoa CNTT
-            await EnsureUserAsync(userManager, "SV001", "Sinh Viên CNTT 01", "Student", deptCNTT.Id);
-            await EnsureUserAsync(userManager, "GV001", "Giảng Viên CNTT 01", "Lecturer", deptCNTT.Id);
+            await EnsureUserAsync(userManager, "300123001", "Sinh Viên CNTT 01", "Student", deptCNTT.Id);
+            await EnsureUserAsync(userManager, "300123002", "Giảng Viên CNTT 01", "Lecturer", deptCNTT.Id);
 
             // 5b. Tài khoản demo cho đồ án nội bộ (login bằng email @huit.edu.vn, pass Huit@123).
             // Nhóm người dùng: 5 SV + 3 GV; nhóm nhân sự: 3 thủ thư + 3 quản lý phòng; nhóm quản trị: +2 admin.
@@ -98,24 +98,21 @@ namespace HUIT_RoMan.Infrastructure.Persistence
 
             var librarians = new[]
             {
-                ("TV001", "Trưởng Đơn vị Thư viện", "Manager", "Quản lý Thư viện"),
-                ("TV002", "Thủ thư 02", "Employee", "Thủ thư"),
-                ("TV003", "Thủ thư 03", "Employee", "Thủ thư"),
+                ("400123001", "Trưởng Đơn vị Thư viện", "Manager", "Quản lý Thư viện"),
+                ("400123002", "Thủ thư 02", "Employee", "Thủ thư"),
+                ("400123003", "Thủ thư 03", "Employee", "Thủ thư"),
             };
             foreach (var (code, name, role, pos) in librarians)
                 await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code.ToLower()}@huit.edu.vn", name, role, deptThuVien.Id, demoPassword, pos);
 
             var managers = new[]
             {
-                ("QLP001", "Trưởng Phòng Đào tạo", "Manager", "Quản lý Phòng Đào tạo"),
-                ("QLP002", "Quản lý phòng 02", "Employee", "Nhân viên phòng đào tạo"),
-                ("QLP003", "Quản lý phòng 03", "Employee", "Nhân viên phòng đào tạo"),
+                ("500123001", "Trưởng Phòng Đào tạo", "Manager", "Quản lý Phòng Đào tạo"),
+                ("500123002", "Quản lý phòng 02", "Employee", "Nhân viên phòng đào tạo"),
+                ("500123003", "Quản lý phòng 03", "Employee", "Nhân viên phòng đào tạo"),
             };
             foreach (var (code, name, role, pos) in managers)
                 await EnsureDemoAccountAsync(userManager, dbContext, code, $"{code.ToLower()}@huit.edu.vn", name, role, deptDaoTao.Id, demoPassword, pos);
-
-            await EnsureDemoAccountAsync(userManager, dbContext, "ADMIN002", "admin02@huit.edu.vn", "Quản trị viên 02", "Admin", deptAdmin.Id, demoPassword, null);
-            await EnsureDemoAccountAsync(userManager, dbContext, "ADMIN003", "admin03@huit.edu.vn", "Quản trị viên 03", "Admin", deptAdmin.Id, demoPassword, null);
 
             // 6. Apply Stored Procedures / Functions PostgreSQL
             await SeedStoredProceduresAsync(dbContext);
@@ -160,6 +157,21 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                   AND bd."Status" IN ('Đã hủy', 'Từ chối');
                 """;
             await dbContext.Database.ExecuteSqlRawAsync(sql);
+
+            // Đồng bộ tin nhắn của các phiên chat đã kết thúc: tự động coi là đã đọc
+            var chatSql = """
+                UPDATE "ChatMessages" cm
+                SET "IsRead" = TRUE
+                FROM "ChatConversations" cc
+                WHERE cc."Id" = cm."ChatConversationId"
+                  AND cc."Status" IN ('Closed', 'Ended', 'Đã đóng')
+                  AND cm."IsRead" = FALSE;
+                """;
+            try
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(chatSql);
+            }
+            catch { }
         }
 
         /// <summary>

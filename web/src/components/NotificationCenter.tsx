@@ -146,7 +146,7 @@ export default function NotificationCenter() {
     await handleMarkAsRead(item);
     setOpen(false);
 
-    // Chuyển hướng tới trang đặt phòng cá nhân nếu là thông báo đơn đặt hoặc nhắc lịch
+    // Chuyển hướng tới trang đặt phòng cá nhân nếu là thông báo đặt phòng hoặc nhắc lịch
     if (item.type === 1 || item.type === 2 || item.type === 3) {
       navigate("/dat-phong?tab=my-bookings");
     }

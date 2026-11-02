@@ -4,10 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities;
 
-/// <summary>
-/// Immutable audit record for one successful room-extension transaction.
-/// BookingDetail keeps the currently effective end time; this entity preserves every change.
-/// </summary>
+
+// Lưu trữ thông tin về việc gia hạn thời gian sử dụng phòng/thiết bị trong hệ thống đặt phòng.
 [Table("BookingExtensions")]
 public class BookingExtension : Common.BaseEntity
 {

@@ -3,9 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Cấu hình điều kiện sử dụng cho từng loại phòng.
-    /// </summary>
+    // Cấu hình điều kiện sử dụng cho từng loại phòng.
     [Table("RoomTypeConditions")]
     public class RoomTypeCondition : Common.BaseEntity
     {
@@ -19,7 +17,7 @@ namespace HUIT_RoMan.Domain.Entities
         public int UsageConditionId { get; set; }
         public virtual UsageCondition UsageCondition { get; set; }
 
-        public string Value { get; set; } // Giá trị cấu hình thêm nếu có
+        public string Value { get; set; } = string.Empty; // Giá trị cấu hình thêm nếu có
         public bool IsRequired { get; set; } // Bắt buộc hay không
     }
 }

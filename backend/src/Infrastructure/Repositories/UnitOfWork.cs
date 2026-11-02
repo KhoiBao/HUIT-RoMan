@@ -4,18 +4,19 @@ using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using System.Collections.Generic;
 
 namespace HUIT_RoMan.Infrastructure.Repositories
 {
     public class UnitOfWork : IUnitOfWork
     {
         private readonly ApplicationDbContext _context;
-        private readonly System.Collections.Generic.Dictionary<System.Type, object> _repositories;
+        private readonly Dictionary<Type, object> _repositories;
 
         public UnitOfWork(ApplicationDbContext context)
         {
             _context = context;
-            _repositories = new System.Collections.Generic.Dictionary<System.Type, object>();
+            _repositories = new Dictionary<Type, object>();
         }
 
         public IRepository<TEntity> Repository<TEntity>() where TEntity : class

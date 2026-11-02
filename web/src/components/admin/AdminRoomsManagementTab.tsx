@@ -476,7 +476,18 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
             </thead>
             <tbody>
               {pagedRooms.map((r) => (
-                <tr key={r.id}>
+                <tr
+                  key={r.id}
+                  className="admin-clickable-row"
+                  onClick={() => {
+                    if (isAdmin) {
+                      openEditModal(r);
+                    } else {
+                      setEquipmentTarget(r);
+                    }
+                  }}
+                  title={isAdmin ? "Bấm vào dòng để chỉnh sửa thông tin phòng" : "Bấm vào dòng để xem thiết bị phòng"}
+                >
                   <td>
                     <span className="room-code-badge-lg">{r.roomCode}</span>
                   </td>
@@ -497,7 +508,7 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                       {r.isBookingByPeriod ? "Theo Tiết học" : "Theo Giờ tự do"}
                     </span>
                   </td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <div className="table-action-btns">
                       {/* Equipment button */}
                       <button

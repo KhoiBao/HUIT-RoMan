@@ -10,6 +10,12 @@ import {
   InfoIcon,
   RefreshCwIcon,
   XIcon,
+  TvIcon,
+  PlugIcon,
+  WifiIcon,
+  ClipboardListIcon,
+  MicIcon,
+  MegaphoneIcon,
 } from "../components/Icon";
 import {
   type Period,
@@ -1124,12 +1130,12 @@ export default function SchedulePage() {
                               .filter((item) => item.iconType !== "users")
                               .map((item, index) => (
                                 <span key={index} className="amenity-chip">
-                                  {item.iconType === "tv" && <span>🖥</span>}
-                                  {item.iconType === "plug" && <span>🔌</span>}
-                                  {item.iconType === "wifi" && <span>📶</span>}
-                                  {item.iconType === "board" && <span>📋</span>}
-                                  {item.iconType === "mic" && <span>🎙</span>}
-                                  {item.iconType === "speaker" && <span>📢</span>}
+                                  {item.iconType === "tv" && <TvIcon size={13} className="inline-block" style={{ marginRight: 2 }} />}
+                                  {item.iconType === "plug" && <PlugIcon size={13} className="inline-block" style={{ marginRight: 2 }} />}
+                                  {item.iconType === "wifi" && <WifiIcon size={13} className="inline-block" style={{ marginRight: 2 }} />}
+                                  {item.iconType === "board" && <ClipboardListIcon size={13} className="inline-block" style={{ marginRight: 2 }} />}
+                                  {item.iconType === "mic" && <MicIcon size={13} className="inline-block" style={{ marginRight: 2 }} />}
+                                  {item.iconType === "speaker" && <MegaphoneIcon size={13} className="inline-block" style={{ marginRight: 2 }} />}
                                   <span>{item.label}</span>
                                 </span>
                               ))}
@@ -1390,9 +1396,7 @@ export default function SchedulePage() {
                                         <span className="card-live-dot">●</span>
                                       )}
                                       {segment.type === "conference" && (
-                                        <span className="card-speaker-icon">
-                                          📢
-                                        </span>
+                                        <span className="card-speaker-icon"><MegaphoneIcon size={12} className="inline-block" /></span>
                                       )}
                                       {segment.startTimeStr} -{" "}
                                       {segment.endTimeStr}

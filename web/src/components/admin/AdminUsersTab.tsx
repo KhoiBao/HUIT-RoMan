@@ -404,7 +404,12 @@ export default function AdminUsersTab({ onNotify }: Props) {
                   u.status === "Ngừng kích hoạt";
 
                 return (
-                  <tr key={u.id}>
+                  <tr
+                    key={u.id}
+                    className="admin-clickable-row"
+                    onClick={() => openEdit(u)}
+                    title="Bấm vào dòng để chỉnh sửa thông tin người dùng"
+                  >
                     <td>
                       <span className="code-tag">{u.cardCode || u.userName}</span>
                     </td>
@@ -433,7 +438,7 @@ export default function AdminUsersTab({ onNotify }: Props) {
                         )}
                       </span>
                     </td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div className="table-action-btns">
                         <button
                           type="button"

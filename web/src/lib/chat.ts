@@ -42,7 +42,9 @@ export interface OnDutyStaffItem {
   code: string;
   fullName: string;
   position: string;
+  departmentId?: number;
   departmentName: string;
+  role?: string;
   shiftName: string;
   shiftTimeRange: string;
   isActiveShift: boolean;
@@ -144,13 +146,19 @@ export async function leaveConversationGroup(conversationId: number): Promise<vo
   }
 }
 
-export async function sendHubMessage(conversationId: number, content: string): Promise<void> {
+export async function sendHubMessage(conversationId: number, content: string): Promise<ChatMessageItem | null> {
   const connection = getChatHubConnection();
   if (connection.state === HubConnectionState.Connected) {
-    await connection.invoke("SendMessage", conversationId, content);
+    try {
+      const res = await connection.invoke<ChatMessageItem>("SendMessage", conversationId, content);
+      return res;
+    } catch (err) {
+      console.warn("SignalR SendMessage invoke thất bại, fallback qua REST API:", err);
+      return await sendChatMessage(conversationId, content);
+    }
   } else {
     // Fallback qua REST API nếu SignalR chưa sẵn sàng
-    await sendChatMessage(conversationId, content);
+    return await sendChatMessage(conversationId, content);
   }
 }
 
@@ -203,8 +211,31 @@ export async function createNewConversation(params?: {
   initialMessage?: string;
   roomId?: number;
 }): Promise<ChatConversationItem> {
-  const res = await api.post("/api/Chat/start-new", params ?? {});
-  return res.data?.data || res.data;
+  const payload = {
+    initialMessage: params?.initialMessage,
+    roomId: params?.roomId,
+  };
+  try {
+    const res = await api.post("/api/Chat/new-conversation", payload);
+    return res.data?.data || res.data;
+  } catch (err: unknown) {
+    const axiosErr = err as { response?: { status?: number } };
+    if (axiosErr?.response?.status === 404) {
+      const res = await api.post("/api/Chat/start-new", payload);
+      return res.data?.data || res.data;
+    }
+    // Fallback: nếu lỗi endpoint, gọi my-active để tự tạo phiên mới
+    try {
+      const activeRes = await api.get("/api/Chat/my-active", {
+        params: payload.initialMessage ? { initialMessage: payload.initialMessage } : undefined,
+      });
+      const data = activeRes.data?.data || activeRes.data;
+      if (data) return data;
+    } catch {
+      // Ignore fallback
+    }
+    throw err;
+  }
 }
 
 export async function reopenConversation(id: number): Promise<boolean> {

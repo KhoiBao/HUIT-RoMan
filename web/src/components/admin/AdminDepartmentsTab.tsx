@@ -419,7 +419,12 @@ export default function AdminDepartmentsTab({ onNotify }: Props) {
               {filteredDepartments.map((dept) => {
                 const isAct = normalizeStatus(dept.status) === "Hoạt động";
                 return (
-                  <tr key={dept.id}>
+                  <tr
+                    key={dept.id}
+                    className={isAdmin ? "admin-clickable-row" : ""}
+                    onClick={isAdmin ? () => openEdit(dept) : undefined}
+                    title={isAdmin ? "Bấm vào dòng để chỉnh sửa đơn vị này" : undefined}
+                  >
                     <td>
                       <span className="code-tag">#{dept.id}</span>
                     </td>
@@ -457,7 +462,7 @@ export default function AdminDepartmentsTab({ onNotify }: Props) {
                       </span>
                     </td>
                     {isAdmin && (
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <div className="table-action-btns" style={{ justifyContent: "flex-end" }}>
                           <button
                             type="button"

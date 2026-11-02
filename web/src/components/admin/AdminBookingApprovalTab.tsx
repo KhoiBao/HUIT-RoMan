@@ -27,6 +27,7 @@ import {
   type AutoApprovalSetting,
 } from "../../lib/booking";
 import { ApprovalHistoryModal } from "../ApprovalHistoryModal";
+import AdminPagination from "../common/AdminPagination";
 
 export interface BookingDetail {
   id: number;
@@ -65,7 +66,7 @@ export interface BookingItem {
   userFullName: string;
   /** Thời điểm check-in (UTC ISO). NULL = chưa nhận phòng */
   checkedInAt?: string | null;
-  /** Mã lý do hủy: CHANGE_PLAN | NO_LONGER_NEEDED | OTHER | NO_SHOW. NULL = đơn cũ */
+  /** Mã lý do hủy: CHANGE_PLAN | NO_LONGER_NEEDED | OTHER | NO_SHOW. NULL = lịch cũ */
   cancelReason?: string | null;
   cancelReasonDetail?: string | null;
   /** Nguồn hủy: STUDENT | AUTO | STAFF. NULL = không ghi nhận */
@@ -92,6 +93,10 @@ export default function AdminBookingApprovalTab({
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [dateFilter, setDateFilter] = useState<string>("");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "guest_desc" | "user_asc">("newest");
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   // Reject modal state
@@ -117,7 +122,7 @@ export default function AdminBookingApprovalTab({
   const [autoSetting, setAutoSetting] = useState<AutoApprovalSetting | null>(null);
   const [autoLoading, setAutoLoading] = useState<boolean>(true);
   const [autoSaving, setAutoSaving] = useState<boolean>(false);
-  /** "on" = đang chờ xác nhận bật kèm duyệt đơn tồn */
+  /** "on" = đang chờ xác nhận bật kèm duyệt yêu cầu tồn */
   const [autoConfirm, setAutoConfirm] = useState<"on" | null>(null);
 
   useEffect(() => {
@@ -139,7 +144,7 @@ export default function AdminBookingApprovalTab({
       setBookings(list.sort((a: BookingItem, b: BookingItem) => b.id - a.id));
     } catch (err: any) {
       console.error("Failed to load bookings:", err);
-      onNotify("Không thể tải danh sách đơn đặt phòng từ máy chủ.", "warning");
+      onNotify("Không thể tải danh sách yêu cầu đặt phòng từ máy chủ.", "warning");
     } finally {
       setLoading(false);
     }
@@ -165,8 +170,8 @@ export default function AdminBookingApprovalTab({
         const result = await approvePendingBookingsApi();
         onNotify(
           result.failedCount > 0
-            ? `Đã bật duyệt tự động. Duyệt được ${result.approvedCount} đơn, ${result.failedCount} đơn lỗi.`
-            : `Đã bật duyệt tự động và duyệt ${result.approvedCount} đơn.`,
+            ? `Đã bật duyệt tự động. Duyệt được ${result.approvedCount} yêu cầu, ${result.failedCount} yêu cầu lỗi.`
+            : `Đã bật duyệt tự động và duyệt ${result.approvedCount} yêu cầu.`,
           result.failedCount > 0 ? "warning" : "success"
         );
       } else {
@@ -217,8 +222,14 @@ export default function AdminBookingApprovalTab({
 
   // Filtered list
   const filteredBookings = useMemo(() => {
-    return bookings.filter((b) => {
+    let list = bookings.filter((b) => {
       if (statusFilter !== "ALL" && b.status !== statusFilter) return false;
+      if (dateFilter) {
+        const dStr = dateFilter;
+        const matchesRequest = (b.requestedAt || "").startsWith(dStr) || (b.createdAt || "").startsWith(dStr);
+        const matchesDetail = b.details.some((d) => (d.startAt || "").startsWith(dStr));
+        if (!matchesRequest && !matchesDetail) return false;
+      }
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
         const matchesId = `#${b.id}`.includes(q) || String(b.id).includes(q);
@@ -236,9 +247,28 @@ export default function AdminBookingApprovalTab({
       }
       return true;
     });
-  }, [bookings, statusFilter, searchTerm]);
 
-  // Đơn chờ duyệt kế tiếp trong hàng đợi (để duyệt liên tiếp)
+    list = [...list].sort((a, b) => {
+      if (sortBy === "oldest") return a.id - b.id;
+      if (sortBy === "guest_desc") return (b.guestCount || 0) - (a.guestCount || 0);
+      if (sortBy === "user_asc") {
+        const nameA = a.userFullName || a.userName || "";
+        const nameB = b.userFullName || b.userName || "";
+        return nameA.localeCompare(nameB);
+      }
+      return b.id - a.id;
+    });
+
+    return list;
+  }, [bookings, statusFilter, searchTerm, dateFilter, sortBy]);
+
+  // Phân trang
+  const pagedBookings = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredBookings.slice(start, start + pageSize);
+  }, [filteredBookings, page, pageSize]);
+
+  // Yêu cầu chờ duyệt kế tiếp trong hàng đợi (để duyệt liên tiếp)
   const nextPendingBooking = useMemo(() => {
     if (!approveTarget || approveTarget.type !== "booking") return null;
     const queue = bookings.filter((b) => b.status === "Chờ duyệt");
@@ -261,7 +291,7 @@ export default function AdminBookingApprovalTab({
       if (res.data?.success) {
         onNotify(
           nextPendingId
-            ? `Đã duyệt đơn #${bookingId}. Còn đơn #${nextPendingId} đang chờ.`
+            ? `Đã duyệt yêu cầu #${bookingId}. Còn yêu cầu #${nextPendingId} đang chờ.`
             : `Đã duyệt đặt phòng #${bookingId} thành công!`,
           "success"
         );
@@ -333,7 +363,7 @@ export default function AdminBookingApprovalTab({
         });
         if (res.data?.success) {
           onNotify(
-            `Đã từ chối đơn #${rejectTarget.id} với lý do: "${rejectionReason.trim()}"`,
+            `Đã từ chối yêu cầu #${rejectTarget.id} với lý do: "${rejectionReason.trim()}"`,
             "info"
           );
         }
@@ -359,7 +389,7 @@ export default function AdminBookingApprovalTab({
           ? "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
           : err.response?.status === 403
           ? "Bạn không có quyền thực hiện thao tác từ chối này."
-          : err.message || "Lỗi xử lý từ chối đơn từ máy chủ.");
+          : err.message || "Lỗi xử lý từ chối yêu cầu từ máy chủ.");
       onNotify(msg, "warning");
     } finally {
       setSubmittingAction(false);
@@ -542,12 +572,12 @@ export default function AdminBookingApprovalTab({
                   </span>
                   <span className="auto-approve-state-text">
                     {autoSetting?.enabled
-                      ? "Đơn mới được duyệt ngay"
-                      : "Đơn mới chờ duyệt thủ công"}
+                      ? "Yêu cầu mới được duyệt ngay"
+                      : "Yêu cầu mới chờ duyệt thủ công"}
                   </span>
                   {autoSetting && autoSetting.pendingCount > 0 && (
                     <span className="auto-approve-pill is-pending">
-                      {autoSetting.pendingCount} đơn chờ duyệt
+                      {autoSetting.pendingCount} yêu cầu chờ duyệt
                     </span>
                   )}
                 </>
@@ -581,7 +611,10 @@ export default function AdminBookingApprovalTab({
           className={`admin-stat-card cursor-pointer ${
             statusFilter === "Chờ duyệt" ? "stat-active" : ""
           }`}
-          onClick={() => setStatusFilter("Chờ duyệt")}
+          onClick={() => {
+            setStatusFilter("Chờ duyệt");
+            setPage(1);
+          }}
         >
           <span className="stat-label color-amber">
             <HourglassIcon size={12} className="mr-1 inline-block" /> Cần duyệt ngay
@@ -592,7 +625,10 @@ export default function AdminBookingApprovalTab({
           className={`admin-stat-card cursor-pointer ${
             statusFilter === "Đã duyệt" ? "stat-active" : ""
           }`}
-          onClick={() => setStatusFilter("Đã duyệt")}
+          onClick={() => {
+            setStatusFilter("Đã duyệt");
+            setPage(1);
+          }}
         >
           <span className="stat-label color-green">
             <CheckIcon size={12} className="mr-1 inline-block" /> Đã duyệt
@@ -603,7 +639,10 @@ export default function AdminBookingApprovalTab({
           className={`admin-stat-card cursor-pointer ${
             statusFilter === "Từ chối" ? "stat-active" : ""
           }`}
-          onClick={() => setStatusFilter("Từ chối")}
+          onClick={() => {
+            setStatusFilter("Từ chối");
+            setPage(1);
+          }}
         >
           <span className="stat-label color-red">
             <XIcon size={12} className="mr-1 inline-block" /> Đã từ chối
@@ -618,15 +657,21 @@ export default function AdminBookingApprovalTab({
           <SearchIcon size={18} className="search-icon-muted" />
           <input
             type="text"
-            placeholder="Tìm theo Mã đơn (#ID), MSSV, Tên người mượn, Tên phòng, Hoạt động..."
+            placeholder="Tìm theo Mã đặt phòng (#ID), MSSV, Tên người mượn, Tên phòng, Hoạt động..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
           />
           {searchTerm && (
             <button
               type="button"
               className="search-clear-btn"
-              onClick={() => setSearchTerm("")}
+              onClick={() => {
+                setSearchTerm("");
+                setPage(1);
+              }}
             >
               <XIcon size={14} />
             </button>
@@ -647,11 +692,80 @@ export default function AdminBookingApprovalTab({
               className={`filter-pill-btn ${
                 statusFilter === item.id ? "active-pill" : ""
               }`}
-              onClick={() => setStatusFilter(item.id)}
+              onClick={() => {
+                setStatusFilter(item.id);
+                setPage(1);
+              }}
             >
               {item.label}
             </button>
           ))}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <CalendarIcon size={15} className="search-icon-muted" />
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                padding: "6px 10px",
+                borderRadius: "6px",
+                border: "1px solid #cbd5e1",
+                fontSize: "13px",
+                color: "#334155",
+                backgroundColor: "#ffffff",
+                outline: "none",
+              }}
+              title="Lọc theo ngày mượn / ngày sử dụng"
+            />
+          </div>
+
+          <select
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value as any);
+              setPage(1);
+            }}
+            style={{
+              padding: "6px 10px",
+              borderRadius: "6px",
+              border: "1px solid #cbd5e1",
+              fontSize: "13px",
+              color: "#334155",
+              backgroundColor: "#ffffff",
+              cursor: "pointer",
+              outline: "none",
+            }}
+          >
+            <option value="newest">Mới nhất (Mặc định)</option>
+            <option value="oldest">Cũ nhất</option>
+            <option value="guest_desc">Số người tham gia giảm dần</option>
+            <option value="user_asc">Người mượn A-Z</option>
+          </select>
+
+          {(searchTerm || statusFilter !== "ALL" || dateFilter || sortBy !== "newest") && (
+            <button
+              type="button"
+              className="filter-pill-btn"
+              style={{ display: "flex", alignItems: "center", gap: "4px" }}
+              onClick={() => {
+                setSearchTerm("");
+                setStatusFilter("ALL");
+                setDateFilter("");
+                setSortBy("newest");
+                setPage(1);
+              }}
+              title="Xóa tất cả bộ lọc và hoàn tác sắp xếp"
+            >
+              <RefreshCwIcon size={12} />
+              <span>Đặt lại</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -666,12 +780,13 @@ export default function AdminBookingApprovalTab({
           <AlertTriangleIcon size={36} className="text-muted" />
           <p className="empty-title">Không tìm thấy phiếu mượn nào</p>
           <p className="empty-desc">
-            Không có đơn đặt phòng nào phù hợp với bộ lọc hiện tại.
+            Không có yêu cầu đặt phòng nào phù hợp với bộ lọc hiện tại.
           </p>
         </div>
       ) : (
-        <div className="admin-booking-cards-list">
-          {filteredBookings.map((b) => {
+        <>
+          <div className="admin-booking-cards-list">
+            {pagedBookings.map((b) => {
             const isExpanded = expandedId === b.id;
             const isPending = b.status === "Chờ duyệt";
 
@@ -683,7 +798,12 @@ export default function AdminBookingApprovalTab({
                   isPending ? "border-highlight-pending" : ""
                 }`}
               >
-                <div className="booking-card-main-header">
+                <div
+                  className="booking-card-main-header"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setExpandedId(isExpanded ? null : b.id)}
+                  title="Bấm vào để xem chi tiết / thu gọn các phòng đăng ký"
+                >
                   <div className="booking-card-id-col">
                     <span className="booking-code-badge">#{b.id}</span>
                     {getStatusBadge(b.status)}
@@ -747,7 +867,7 @@ export default function AdminBookingApprovalTab({
                   </div>
 
                   {/* Action buttons */}
-                  <div className="booking-card-actions-col">
+                  <div className="booking-card-actions-col" onClick={(e) => e.stopPropagation()}>
                     {isPending && (
                       <>
                         <button
@@ -771,10 +891,10 @@ export default function AdminBookingApprovalTab({
                           type="button"
                           className="btn-action-reject"
                           onClick={() =>
-                            openRejectModal("booking", b.id, `Đơn #${b.id} - ${b.activityName}`)
+                            openRejectModal("booking", b.id, `Đặt phòng #${b.id} - ${b.activityName}`)
                           }
                           disabled={submittingAction}
-                          title="Từ chối đơn đăng ký"
+                          title="Từ chối yêu cầu đặt phòng"
                         >
                           <XIcon size={14} /> Từ chối
                         </button>
@@ -795,7 +915,7 @@ export default function AdminBookingApprovalTab({
                       type="button"
                       className="btn-action-expand"
                       onClick={() => setHistoryTarget(b)}
-                      title="Xem lịch sử duyệt của đơn này"
+                      title="Xem lịch sử duyệt đặt phòng"
                     >
                       <HistoryIcon size={13} /> Lịch sử duyệt
                     </button>
@@ -806,7 +926,7 @@ export default function AdminBookingApprovalTab({
                 {isExpanded && (
                   <div className="booking-card-expanded-drawer">
                     <h4 className="expanded-rooms-title">
-                      <DoorIcon size={16} /> Danh sách phòng đăng ký trong đơn ({b.details.length} phòng):
+                      <DoorIcon size={16} /> Danh sách phòng đăng ký ({b.details.length} phòng):
                     </h4>
 
                     <div className="admin-table-responsive expanded-details-table-wrap">
@@ -823,7 +943,20 @@ export default function AdminBookingApprovalTab({
                         </thead>
                         <tbody>
                           {b.details.map((detail) => (
-                            <tr key={detail.id}>
+                            <tr
+                              key={detail.id}
+                              className={detail.status === "Chờ duyệt" ? "admin-clickable-row" : ""}
+                              onClick={() => {
+                                if (detail.status === "Chờ duyệt") {
+                                  setApproveTarget({
+                                    type: "detail",
+                                    booking: b,
+                                    detail,
+                                  });
+                                }
+                              }}
+                              title={detail.status === "Chờ duyệt" ? "Bấm vào dòng để xét duyệt phòng này" : undefined}
+                            >
                               <td>
                                 <div className="room-info-cell">
                                   <span className="room-code-badge-lg">{detail.roomCode}</span>
@@ -874,7 +1007,7 @@ export default function AdminBookingApprovalTab({
                                   </div>
                                 )}
                               </td>
-                              <td style={{ textAlign: "right" }}>
+                              <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
                                 {detail.status === "Chờ duyệt" ? (
                                   <div className="table-row-actions">
                                     <button
@@ -929,9 +1062,21 @@ export default function AdminBookingApprovalTab({
             );
           })}
         </div>
+        <AdminPagination
+          currentPage={page}
+          totalItems={filteredBookings.length}
+          pageSize={pageSize}
+          onPageChange={(p) => setPage(p)}
+          onPageSizeChange={(sz) => {
+            setPageSize(sz);
+            setPage(1);
+          }}
+          itemLabel="yêu cầu đặt phòng"
+        />
+      </>
       )}
 
-      {/* Xác nhận bật duyệt tự động khi còn đơn chờ */}
+      {/* Xác nhận bật duyệt tự động khi còn yêu cầu chờ */}
       {autoConfirm === "on" && autoSetting && (
         <div
           className="admin-modal-overlay"
@@ -961,8 +1106,8 @@ export default function AdminBookingApprovalTab({
 
             <div className="modal-body">
               <p className="modal-prompt-text">
-                Có {autoSetting.pendingCount} đơn đang chờ duyệt. Duyệt luôn các
-                đơn này?
+                Có {autoSetting.pendingCount} yêu cầu đang chờ duyệt. Duyệt luôn
+                các yêu cầu này?
               </p>
             </div>
 
@@ -984,7 +1129,7 @@ export default function AdminBookingApprovalTab({
               >
                 {autoSaving
                   ? "Đang duyệt..."
-                  : `Bật & duyệt ${autoSetting.pendingCount} đơn`}
+                  : `Bật & duyệt ${autoSetting.pendingCount} yêu cầu`}
               </button>
             </div>
           </div>
@@ -1009,7 +1154,7 @@ export default function AdminBookingApprovalTab({
               <h3 id="approve-modal-title" className="modal-title color-green">
                 <CheckCircleIcon size={18} className="mr-1" /> Xác nhận duyệt{" "}
                 {approveTarget.type === "booking"
-                  ? `đơn #${approveTarget.booking.id}`
+                  ? `yêu cầu #${approveTarget.booking.id}`
                   : `phòng ${approveTarget.detail?.roomCode}`}
               </h3>
               <button
@@ -1024,7 +1169,7 @@ export default function AdminBookingApprovalTab({
 
             <div className="modal-body">
               <p className="modal-prompt-text">
-                Kiểm tra lại thông tin trước khi duyệt. Sau khi duyệt, đơn không
+                Kiểm tra lại thông tin trước khi duyệt. Sau khi duyệt, yêu cầu không
                 thể quay lại trạng thái Chờ duyệt và người đặt sẽ nhận thông báo
                 ngay.
               </p>
@@ -1094,7 +1239,7 @@ export default function AdminBookingApprovalTab({
                 <AlertTriangleIcon size={16} />
                 <span>
                   Thao tác này không thể hoàn tác. Nếu chọn nhầm, hãy từ chối
-                  đơn và yêu cầu người dùng đặt lại.
+                  yêu cầu và yêu cầu người dùng đặt lại.
                 </span>
               </div>
             </div>
@@ -1119,7 +1264,7 @@ export default function AdminBookingApprovalTab({
                 >
                   {approvingBookingId
                     ? "Đang duyệt..."
-                    : `Duyệt & xem đơn #${nextPendingBooking.id}`}
+                    : `Duyệt & xem yêu cầu #${nextPendingBooking.id}`}
                 </button>
               )}
               <button

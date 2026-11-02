@@ -5,9 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Trang thiết bị trong thư viện.
-    /// </summary>
+    // Trang thiết bị trong thư viện.
     [Table("Equipments")]
     public class Equipment : Common.BaseEntity
     {
@@ -16,15 +14,15 @@ namespace HUIT_RoMan.Domain.Entities
 
         [Required]
         [StringLength(50)]
-        public string Code { get; set; }
+        public string Code { get; set; } = string.Empty;
 
         [Required]
         [StringLength(255)]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         public DateTime? PurchaseDate { get; set; }
-        public string Status { get; set; }
-        public string Description { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
 
         public int TotalQuantity { get; set; } = 0;
         public int AvailableQuantity { get; set; } = 0;

@@ -134,8 +134,25 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<ShiftDto>> CreateShiftAsync(CreateShiftDto dto)
         {
+            var localToday = DateTime.UtcNow.AddHours(7).Date;
+            if (dto.Date.Date <= localToday)
+                return ApiResponse<ShiftDto>.ErrorResponse("Chỉ được phân ca trực cho các ngày sau ngày hiện tại.");
+
             if (dto.StartTime >= dto.EndTime)
                 return ApiResponse<ShiftDto>.ErrorResponse("Giờ bắt đầu ca trực phải trước giờ kết thúc.");
+
+            // Kiểm tra trùng lặp thời gian với các ca trực khác trong cùng ngày (trừ ca đã Hủy)
+            var allShifts = await _shiftRepo.GetAllAsync();
+            var shiftDate = dto.Date.Date;
+            var overlappingShift = allShifts
+                .Where(s => s.Date.Date == shiftDate && s.Status != "Hủy")
+                .FirstOrDefault(s => dto.StartTime < s.EndTime && dto.EndTime > s.StartTime);
+
+            if (overlappingShift != null)
+            {
+                return ApiResponse<ShiftDto>.ErrorResponse(
+                    $"Khung giờ {dto.StartTime:hh\\:mm} - {dto.EndTime:hh\\:mm} bị trùng với ca trực \"{overlappingShift.Name}\" ({overlappingShift.StartTime:hh\\:mm} - {overlappingShift.EndTime:hh\\:mm}) trong ngày {dto.Date:dd/MM/yyyy}.");
+            }
 
             var shift = new Domain.Entities.Shift
             {
@@ -143,7 +160,7 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
                 Name = dto.Name.Trim(),
                 StartTime = dto.StartTime,
                 EndTime = dto.EndTime,
-                Status = string.IsNullOrWhiteSpace(dto.Status) ? "Lên lịch" : dto.Status,
+                Status = "Lên lịch",
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -182,8 +199,28 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
             if (shift == null)
                 return ApiResponse<ShiftDto>.ErrorResponse("Không tìm thấy ca trực.");
 
+            var localToday = DateTime.UtcNow.AddHours(7).Date;
+            if (shift.Date.Date <= localToday)
+                return ApiResponse<ShiftDto>.ErrorResponse("Không thể chỉnh sửa ca trực của ngày hiện tại hoặc quá khứ. Chỉ được phân ca trực cho các ngày sau ngày hiện tại.");
+
+            if (dto.Date.Date <= localToday)
+                return ApiResponse<ShiftDto>.ErrorResponse("Chỉ được phân ca trực cho các ngày sau ngày hiện tại.");
+
             if (dto.StartTime >= dto.EndTime)
                 return ApiResponse<ShiftDto>.ErrorResponse("Giờ bắt đầu ca trực phải trước giờ kết thúc.");
+
+            // Kiểm tra trùng lặp thời gian với các ca trực khác trong cùng ngày (trừ chính ca đang sửa và ca đã Hủy)
+            var allExistingShifts = await _shiftRepo.GetAllAsync();
+            var updateShiftDate = dto.Date.Date;
+            var updateOverlap = allExistingShifts
+                .Where(s => s.Id != id && s.Date.Date == updateShiftDate && s.Status != "Hủy")
+                .FirstOrDefault(s => dto.StartTime < s.EndTime && dto.EndTime > s.StartTime);
+
+            if (updateOverlap != null)
+            {
+                return ApiResponse<ShiftDto>.ErrorResponse(
+                    $"Khung giờ {dto.StartTime:hh\\:mm} - {dto.EndTime:hh\\:mm} bị trùng với ca trực \"{updateOverlap.Name}\" ({updateOverlap.StartTime:hh\\:mm} - {updateOverlap.EndTime:hh\\:mm}) trong ngày {dto.Date:dd/MM/yyyy}.");
+            }
 
             shift.Date = DateTime.SpecifyKind(dto.Date.Date, DateTimeKind.Utc);
             shift.Name = dto.Name.Trim();
@@ -294,6 +331,10 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
             var shift = await _shiftRepo.GetByIdAsync(id, s => s.Employees);
             if (shift == null)
                 return ApiResponse<ShiftDto>.ErrorResponse("Không tìm thấy ca trực.");
+
+            var localToday = DateTime.UtcNow.AddHours(7).Date;
+            if (shift.Date.Date <= localToday)
+                return ApiResponse<ShiftDto>.ErrorResponse("Chỉ được phân ca trực cho các ngày sau ngày hiện tại.");
 
             shift.Employees.Clear();
             if (employeeIds != null && employeeIds.Any())

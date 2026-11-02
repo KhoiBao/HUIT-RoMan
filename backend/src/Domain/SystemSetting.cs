@@ -4,19 +4,18 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities;
 
-/// <summary>
-/// Cấu hình hệ thống dạng khoá/giá trị. Mỗi thay đổi đều lưu người thực hiện
-/// để truy vết ai đã bật/tắt một chế độ toàn hệ thống.
-/// </summary>
+
+// Cấu hình hệ thống dạng khoá/giá trị. Mỗi thay đổi đều lưu người thực hiện
+// để truy vết ai đã bật/tắt một chế độ toàn hệ thống.
 [Table("SystemSettings")]
 public class SystemSetting
 {
     [Key]
     [StringLength(100)]
-    public string Key { get; set; }
+    public string Key { get; set; } = string.Empty;
 
     [StringLength(255)]
-    public string Value { get; set; }
+    public string Value { get; set; } = string.Empty;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

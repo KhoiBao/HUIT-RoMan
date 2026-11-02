@@ -264,6 +264,17 @@ export async function checkMyEligibility(): Promise<UserEligibility> {
   );
 }
 
+export async function fetchMyViolations(): Promise<ViolationRecordItem[]> {
+  try {
+    const res = await api.get("/api/Violations/my-violations");
+    const data = res.data?.data || res.data;
+    if (Array.isArray(data)) return data;
+  } catch (err) {
+    console.warn("fetchMyViolations API error:", err);
+  }
+  return [];
+}
+
 export async function checkUserEligibility(
   userId: number
 ): Promise<UserEligibility> {

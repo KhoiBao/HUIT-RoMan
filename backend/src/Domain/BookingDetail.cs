@@ -5,9 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Chi tiết đặt phòng (đặt phòng nào, thời gian nào).
-    /// </summary>
+    // Chi tiết đặt phòng (đặt phòng nào, thời gian nào).
     [Table("BookingDetails")]
     public class BookingDetail : Common.BaseEntity
     {
@@ -18,12 +16,12 @@ namespace HUIT_RoMan.Domain.Entities
         public DateTime EndAt { get; set; }
         
         public int GuestCount { get; set; }
-        public string Purpose { get; set; }
-        public string Status { get; set; }
-        public string RejectionReason { get; set; }
+        public string Purpose { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string RejectionReason { get; set; } = string.Empty;
 
-        // ── Người quyết định chi tiết phòng ───────────────────────────
-        /// <summary>Tài khoản đã duyệt phòng này. AUTO duyệt thì là tài khoản hệ thống.</summary>
+        // Người quyết định chi tiết phòng
+        // Tài khoản đã duyệt phòng này. AUTO duyệt thì là tài khoản hệ thống.</summary>
         public int? ApprovedByUserId { get; set; }
 
         [ForeignKey(nameof(ApprovedByUserId))]
@@ -31,7 +29,7 @@ namespace HUIT_RoMan.Domain.Entities
 
         public DateTime? ApprovedAt { get; set; }
 
-        /// <summary>MANUAL (người thật duyệt) | AUTO (chế độ tự động duyệt).</summary>
+        // MANUAL (người thật duyệt) | AUTO (chế độ tự động duyệt)
         [StringLength(10)]
         public string? ApprovalMode { get; set; }
         
@@ -43,6 +41,7 @@ namespace HUIT_RoMan.Domain.Entities
         [ForeignKey("Room")]
         public int RoomId { get; set; }
         public virtual Room Room { get; set; }
+
         // tiet bat dau
         [ForeignKey("StartPeriod")]
         public int? StartPeriodId { get; set; } 

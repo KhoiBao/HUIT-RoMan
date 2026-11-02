@@ -4,9 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Danh mục các loại vi phạm (VD: Trả trễ, Làm hỏng tài sản).
-    /// </summary>
+    // Danh mục các loại vi phạm (VD: Trả trễ, Làm hỏng tài sản).
     [Table("ViolationTypes")]
     public class ViolationType : Common.BaseEntity
     {
@@ -15,15 +13,15 @@ namespace HUIT_RoMan.Domain.Entities
 
         [Required]
         [StringLength(50)]
-        public string Code { get; set; }
+        public string Code { get; set; } = string.Empty;
 
         [Required]
         [StringLength(255)]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
-        public string Description { get; set; }
+        public string Description { get; set; } = string.Empty;
         public int Severity { get; set; } // Mức độ nghiêm trọng
-        public string DefaultPenalty { get; set; } // Hình phạt mặc định
+        public string DefaultPenalty { get; set; } = string.Empty; // Hình phạt mặc định
 
         // Navigation properties
         public virtual ICollection<ViolationRecord> ViolationRecords { get; set; } = new List<ViolationRecord>();

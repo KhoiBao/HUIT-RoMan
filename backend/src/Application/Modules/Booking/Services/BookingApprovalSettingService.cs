@@ -91,7 +91,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             };
         }
 
-        /// <summary>Đơn đang chờ duyệt mà người gọi có quyền xử lý (Manager bị giới hạn theo đơn vị).</summary>
+        // Đơn đang chờ duyệt mà người gọi có quyền xử lý (Manager bị giới hạn theo đơn vị).
         private async Task<int> CountPendingAsync()
         {
             var pending = await _bookingRepo.FindAsync(

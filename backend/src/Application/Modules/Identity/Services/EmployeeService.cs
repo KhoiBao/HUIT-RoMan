@@ -26,9 +26,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             _currentUser = currentUser;
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // GET ALL
-        // ─────────────────────────────────────────────────────────────────
+       // Lấy all danh sách nhân viên
         public async Task<ApiResponse<IEnumerable<EmployeeDto>>> GetAllAsync()
         {
             var employees = await _employeeRepo.GetAllAsync(e => e.User, e => e.User.Department);
@@ -52,9 +50,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<IEnumerable<EmployeeDto>>.SuccessResponse(dtos);
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // GET BY ID
-        // ─────────────────────────────────────────────────────────────────
+        // Lấy ds theo id
         public async Task<ApiResponse<EmployeeDto>> GetByIdAsync(int id)
         {
             var e = await _employeeRepo.GetByIdAsync(id, e => e.User, e => e.User.Department);
@@ -70,9 +66,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<EmployeeDto>.SuccessResponse(await MapDtoAsync(e));
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // CREATE
-        // ─────────────────────────────────────────────────────────────────
+
         public async Task<ApiResponse<EmployeeDto>> CreateAsync(CreateEmployeeDto request)
         {
             var user = await _userManager.FindByIdAsync(request.UserId.ToString());
@@ -132,9 +126,6 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<EmployeeDto>.SuccessResponse(result.Data, "Tạo hồ sơ nhân viên thành công.");
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // UPDATE
-        // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<bool>> UpdateAsync(int id, UpdateEmployeeDto request)
         {
             var e = await _employeeRepo.GetByIdAsync(id, e => e.User);
@@ -175,6 +166,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
 
                 if (!string.IsNullOrWhiteSpace(request.Role))
                 {
+                    // nếu user đó là quản lý thì ko thể chỉ định role Admin cho người khác
                     if (_currentUser.Role == "Manager" && request.Role == "Admin")
                     {
                         return ApiResponse<bool>.ErrorResponse("Bạn không có quyền chỉ định vai trò Quản trị viên.");
@@ -196,9 +188,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<bool>.SuccessResponse(true, "Cập nhật nhân viên thành công.");
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // DELETE (xoá hồ sơ nhân viên, giữ lại User)
-        // ─────────────────────────────────────────────────────────────────
+
         public async Task<ApiResponse<bool>> DeleteAsync(int id)
         {
             var e = await _employeeRepo.GetByIdAsync(id, e => e.User);
@@ -227,9 +217,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<bool>.SuccessResponse(true, "Xoá hồ sơ nhân viên thành công.");
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // HELPERS
-        // ─────────────────────────────────────────────────────────────────
+
         private async Task<EmployeeDto> MapDtoAsync(Employee e)
         {
             var dto = new EmployeeDto

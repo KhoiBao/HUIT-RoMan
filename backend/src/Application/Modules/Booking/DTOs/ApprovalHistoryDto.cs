@@ -23,13 +23,13 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
         public string EmployeeCode { get; set; } = string.Empty;
         public string EmployeePosition { get; set; } = string.Empty;
 
-        /// <summary>Tài khoản đã quyết định (NULL với bản ghi tự động duyệt).</summary>
+        // Tài khoản đã quyết định
         public int? ActorUserId { get; set; }
 
-        /// <summary>Tên hiển thị của người quyết định, đã gồm cả trường hợp "Hệ thống".</summary>
+        // Tên hiển thị của người quyết định, đã gồm cả trường hợp "Hệ thống".
         public string ActorName { get; set; } = string.Empty;
 
-        /// <summary>MANUAL | AUTO. NULL với bản ghi cũ.</summary>
+        // MANUAL | AUTO. NULL với bản ghi cũ.
         public string? ApprovalMode { get; set; }
     }
 }

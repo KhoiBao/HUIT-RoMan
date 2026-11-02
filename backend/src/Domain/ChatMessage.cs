@@ -4,9 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Tin nhắn trong một cuộc hội thoại.
-    /// </summary>
+    // Tin nhắn trong một cuộc hội thoại.
     [Table("ChatMessages")]
     public class ChatMessage : Common.BaseEntity
     {
@@ -14,7 +12,7 @@ namespace HUIT_RoMan.Domain.Entities
         public int Id { get; set; }
 
         [Required]
-        public string Content { get; set; }
+        public string Content { get; set; } = string.Empty; // Nội dung tin nhắn
 
         public DateTime SentAt { get; set; } = DateTime.UtcNow;
         public bool IsRead { get; set; } = false;

@@ -1,10 +1,4 @@
 namespace HUIT_RoMan.Domain;
-
-/// <summary>
-/// Cách một đơn / chi tiết đặt phòng được quyết định: bởi người thật (MANUAL)
-/// hay bởi chế độ tự động duyệt (AUTO). Giá trị được ghi thẳng vào DB và
-/// ràng buộc bởi CHECK constraint nên không được đổi tuỳ ý.
-/// </summary>
 public static class ApprovalModes
 {
     public const string Manual = "MANUAL";

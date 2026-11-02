@@ -4,9 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Hồ sơ vi phạm của người dùng trong một phiên sử dụng.
-    /// </summary>
+    // Hồ sơ vi phạm của người dùng trong một phiên sử dụng.
     [Table("ViolationRecords")]
     public class ViolationRecord : Common.BaseEntity
     {
@@ -14,13 +12,13 @@ namespace HUIT_RoMan.Domain.Entities
         public int Id { get; set; }
 
         [StringLength(50)]
-        public string Code { get; set; }
+        public string Code { get; set; } = string.Empty; // Mã vi phạm (VD: V001, V002,...)
 
         public DateTime IncidentTime { get; set; }
-        public string Description { get; set; }
+        public string Description { get; set; } = string.Empty;
         public int Severity { get; set; }
-        public string PenaltyApplied { get; set; }
-        public string Status { get; set; }
+        public string PenaltyApplied { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
 
         [ForeignKey("User")]
         public int UserId { get; set; }

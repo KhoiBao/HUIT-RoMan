@@ -726,7 +726,7 @@ export default function AdminDashboardPage() {
       handleCloseManualModal();
       setApprovalRefreshKey((k) => k + 1);
       showToast(
-        `Khởi tạo thành công đơn đặt phòng thủ công cho ${manualForm.borrowerName} (${selectedRoom.roomCode})! Đã duyệt vào hệ thống.`,
+        `Khởi tạo thành công yêu cầu đặt phòng thủ công cho ${manualForm.borrowerName} (${selectedRoom.roomCode})! Đã duyệt vào hệ thống.`,
         "success"
       );
     } catch (err: any) {
@@ -737,7 +737,7 @@ export default function AdminDashboardPage() {
           ? Object.values(err.response.data.errors).flat().join(", ")
           : null) ||
         err.message ||
-        "Không thể lưu đơn đặt phòng vào cơ sở dữ liệu.";
+        "Không thể lưu yêu cầu đặt phòng vào cơ sở dữ liệu.";
 
       await confirmAlert({
         title: "Khởi tạo đặt phòng thất bại",
@@ -759,8 +759,8 @@ export default function AdminDashboardPage() {
     },
     {
       id: "approvals" as AdminTabType,
-      label: "Duyệt đơn đặt",
-      title: "Duyệt đơn đăng ký mượn phòng",
+      label: "Duyệt đặt phòng",
+      title: "Duyệt yêu cầu đặt phòng",
       icon: ClipboardListIcon,
       badge: pendingCount,
       badgeVariant: "primary" as const,
@@ -1060,11 +1060,11 @@ export default function AdminDashboardPage() {
               type="button"
               className="admin-search-pill-btn"
               onClick={() => setShowGlobalSearchModal(true)}
-              title="Tìm kiếm nhanh phòng, đơn đặt, người dùng (Ctrl+K)"
+              title="Tìm kiếm nhanh phòng, đặt phòng, người dùng (Ctrl+K)"
             >
               <SearchIcon size={16} />
               <span className="admin-search-placeholder-text">
-                Tìm phòng, đơn mượn, sinh viên, cán bộ... (Ctrl+K)
+                Tìm phòng, yêu cầu đặt phòng, sinh viên, cán bộ... (Ctrl+K)
               </span>
               <kbd className="admin-search-shortcut-kbd">Ctrl+K</kbd>
             </button>

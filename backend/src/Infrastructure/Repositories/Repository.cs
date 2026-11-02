@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using HUIT_RoMan.Domain.Common;
 
 namespace HUIT_RoMan.Infrastructure.Repositories
 {
@@ -84,7 +85,7 @@ namespace HUIT_RoMan.Infrastructure.Repositories
         public void Remove(T entity)
         {
             // Xóa mềm theo Developing_rules: chỉ set IsDeleted, không xóa dòng.
-            if (entity is HUIT_RoMan.Domain.Common.ISoftDelete soft)
+            if (entity is ISoftDelete soft)
             {
                 soft.IsDeleted = true;
                 soft.UpdatedAt = DateTime.UtcNow;

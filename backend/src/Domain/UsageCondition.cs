@@ -4,9 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Các điều kiện, quy định sử dụng.
-    /// </summary>
+    // Các điều kiện, quy định sử dụng.
     [Table("UsageConditions")]
     public class UsageCondition : Common.BaseEntity
     {
@@ -15,14 +13,14 @@ namespace HUIT_RoMan.Domain.Entities
 
         [Required]
         [StringLength(255)]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [StringLength(50)]
-        public string Code { get; set; }
+        public string Code { get; set; } = string.Empty;
 
-        public string Content { get; set; }
+        public string Content { get; set; } = string.Empty;
         public int Type { get; set; }
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         // Navigation properties
         public virtual ICollection<RoomTypeCondition> RoomTypeConditions { get; set; } = new List<RoomTypeCondition>();

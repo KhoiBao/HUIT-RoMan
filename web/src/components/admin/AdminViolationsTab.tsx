@@ -32,9 +32,14 @@ import {
   PlusIcon,
   DoorIcon,
   TagIcon,
+  BellRingIcon,
+  MegaphoneIcon,
+  FlameIcon,
 } from "../Icon";
+import { getAllReminders, type SessionReminderItem } from "../../lib/reminders";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useAuth } from "../../auth/AuthContext";
+import AdminPagination from "../common/AdminPagination";
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
@@ -57,6 +62,51 @@ interface UserOption {
   departmentName?: string;
 }
 
+const SUGGESTED_PENALTIES = [
+  {
+    category: "Mức 1 - Nhẹ",
+    items: [
+      "Nhắc nhở / Cảnh cáo lần đầu",
+      "Yêu cầu giữ trật tự / Nhắc nhở",
+      "Nhắc nhở và ghi nhận biên bản vi phạm lần 1",
+    ],
+  },
+  {
+    category: "Mức 2 - Vừa",
+    items: [
+      "Cảnh cáo & Vệ sinh lại phòng",
+      "Cảnh cáo & Cấm mượn phòng 3 ngày",
+      "Cấm mượn phòng 7 ngày",
+    ],
+  },
+  {
+    category: "Mức 3 - Nghiêm trọng",
+    items: [
+      "Cấm mượn phòng 14 ngày & Bồi thường chi phí sửa chữa",
+      "Bồi thường chi phí sửa chữa / vệ sinh thiết bị",
+      "Cấm mượn phòng 14 ngày",
+    ],
+  },
+  {
+    category: "Mức 4 - Rất nghiêm trọng",
+    items: [
+      "Cấm mượn phòng 30 ngày & Trừ điểm rèn luyện",
+      "Cấm mượn phòng vô thời hạn & Chuyển HĐ Kỷ luật nhà trường",
+      "Tạm đình chỉ quyền mượn phòng toàn trường",
+    ],
+  },
+];
+
+const QUICK_PENALTY_PILLS = [
+  "Nhắc nhở / Cảnh cáo lần đầu",
+  "Yêu cầu giữ trật tự / Nhắc nhở",
+  "Cảnh cáo & Vệ sinh lại phòng",
+  "Cảnh cáo & Cấm mượn phòng 3 ngày",
+  "Cấm mượn phòng 7 ngày",
+  "Cấm mượn phòng 14 ngày & Bồi thường chi phí sửa chữa",
+  "Cấm mượn phòng 30 ngày & Trừ điểm rèn luyện",
+];
+
 export default function AdminViolationsTab({
   onNotify,
   initialSessionForViolation,
@@ -65,9 +115,9 @@ export default function AdminViolationsTab({
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
   const { confirm, alert } = useConfirm();
-  // Navigation Sub-tabs: 'records' | 'restrictions' | 'types'
+  // Navigation Sub-tabs: 'records' | 'restrictions' | 'reminders' | 'types'
   const [activeSubTab, setActiveSubTab] = useState<
-    "records" | "restrictions" | "types"
+    "records" | "restrictions" | "reminders" | "types"
   >("records");
 
   // State: Data
@@ -84,18 +134,105 @@ export default function AdminViolationsTab({
   const [usersList, setUsersList] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Filters for Records
+  // Filters and Pagination for Records
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>("ALL");
   const [selectedSeverityFilter, setSelectedSeverityFilter] =
     useState<string>("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] =
     useState<string>("ALL");
+  const [recordSortBy, setRecordSortBy] = useState<
+    "newest" | "oldest" | "severity_desc" | "severity_asc" | "user"
+  >("newest");
+  const [recordDateFilter, setRecordDateFilter] = useState<string>("");
+  const [recordPage, setRecordPage] = useState<number>(1);
+  const [recordPageSize, setRecordPageSize] = useState<number>(10);
 
-  // Filters for Restrictions
+  // Filters and Pagination for Restrictions
   const [restrictionSearch, setRestrictionSearch] = useState("");
   const [restrictionStatusFilter, setRestrictionStatusFilter] =
     useState<string>("ACTIVE");
+  const [restrictionSortBy, setRestrictionSortBy] = useState<
+    "end_date_asc" | "end_date_desc" | "newest" | "user"
+  >("end_date_asc");
+  const [restrictionPage, setRestrictionPage] = useState<number>(1);
+  const [restrictionPageSize, setRestrictionPageSize] = useState<number>(10);
+
+  // Filters and Pagination for Types
+  const [typeSearchTerm, setTypeSearchTerm] = useState("");
+  const [typeSeverityFilter, setTypeSeverityFilter] = useState<string>("ALL");
+  const [typePage, setTypePage] = useState<number>(1);
+  const [typePageSize, setTypePageSize] = useState<number>(10);
+
+  // Filters and Pagination for Reminders (Rule of 3)
+  const [reminders, setReminders] = useState<SessionReminderItem[]>([]);
+  const [reminderSearch, setReminderSearch] = useState("");
+  const [reminderLevelFilter, setReminderLevelFilter] = useState<string>("ALL");
+  const [reminderPage, setReminderPage] = useState<number>(1);
+  const [reminderPageSize, setReminderPageSize] = useState<number>(10);
+
+  const refreshReminders = () => {
+    setReminders(getAllReminders());
+  };
+
+  useEffect(() => {
+    refreshReminders();
+  }, []);
+
+  useEffect(() => {
+    setReminderPage(1);
+  }, [reminderSearch, reminderLevelFilter]);
+
+  const filteredReminders = useMemo(() => {
+    return reminders.filter((r) => {
+      if (reminderLevelFilter !== "ALL") {
+        if (reminderLevelFilter === "ESCALATED" && !r.escalatedToViolation) return false;
+        if (
+          reminderLevelFilter === "LEVEL_3" &&
+          (r.warningLevel !== 3 || r.escalatedToViolation)
+        )
+          return false;
+        if (
+          reminderLevelFilter === "LEVEL_1_2" &&
+          (r.warningLevel > 2 || r.escalatedToViolation)
+        )
+          return false;
+      }
+      if (reminderSearch.trim()) {
+        const q = reminderSearch.toLowerCase().trim();
+        const matchUser =
+          r.userFullName.toLowerCase().includes(q) ||
+          (r.userCardCode || "").toLowerCase().includes(q) ||
+          (r.userName || "").toLowerCase().includes(q);
+        const matchRoom =
+          r.roomCode.toLowerCase().includes(q) ||
+          r.roomName.toLowerCase().includes(q);
+        const matchReason =
+          r.reason.toLowerCase().includes(q) ||
+          (r.note || "").toLowerCase().includes(q);
+        const matchStaff = r.remindedByStaff.toLowerCase().includes(q);
+        if (!matchUser && !matchRoom && !matchReason && !matchStaff) return false;
+      }
+      return true;
+    });
+  }, [reminders, reminderSearch, reminderLevelFilter]);
+
+  const pagedReminders = useMemo(() => {
+    const start = (reminderPage - 1) * reminderPageSize;
+    return filteredReminders.slice(start, start + reminderPageSize);
+  }, [filteredReminders, reminderPage, reminderPageSize]);
+
+  useEffect(() => {
+    setRecordPage(1);
+  }, [searchTerm, selectedTypeFilter, selectedSeverityFilter, selectedStatusFilter, recordDateFilter, recordSortBy]);
+
+  useEffect(() => {
+    setRestrictionPage(1);
+  }, [restrictionSearch, restrictionStatusFilter, restrictionSortBy]);
+
+  useEffect(() => {
+    setTypePage(1);
+  }, [typeSearchTerm, typeSeverityFilter]);
 
   // Modal: Record Violation
   const [showRecordModal, setShowRecordModal] = useState(false);
@@ -232,9 +369,9 @@ export default function AdminViolationsTab({
     }
   };
 
-  // Filtered Violations list
+  // Filtered & Sorted Violations list
   const filteredViolations = useMemo(() => {
-    return violations.filter((v) => {
+    let result = violations.filter((v) => {
       if (
         selectedTypeFilter !== "ALL" &&
         v.violationTypeId !== Number(selectedTypeFilter)
@@ -250,6 +387,9 @@ export default function AdminViolationsTab({
         v.status.toLowerCase() !== selectedStatusFilter.toLowerCase()
       )
         return false;
+      if (recordDateFilter && (!v.incidentTime || !v.incidentTime.startsWith(recordDateFilter))) {
+        return false;
+      }
 
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
@@ -274,17 +414,45 @@ export default function AdminViolationsTab({
       }
       return true;
     });
+
+    result.sort((a, b) => {
+      if (recordSortBy === "newest") {
+        return new Date(b.incidentTime).getTime() - new Date(a.incidentTime).getTime();
+      }
+      if (recordSortBy === "oldest") {
+        return new Date(a.incidentTime).getTime() - new Date(b.incidentTime).getTime();
+      }
+      if (recordSortBy === "severity_desc") {
+        return b.severity - a.severity;
+      }
+      if (recordSortBy === "severity_asc") {
+        return a.severity - b.severity;
+      }
+      if (recordSortBy === "user") {
+        return (a.userFullName || "").localeCompare(b.userFullName || "");
+      }
+      return 0;
+    });
+
+    return result;
   }, [
     violations,
     selectedTypeFilter,
     selectedSeverityFilter,
     selectedStatusFilter,
+    recordDateFilter,
+    recordSortBy,
     searchTerm,
   ]);
 
-  // Filtered Restrictions list
+  const pagedViolations = useMemo(() => {
+    const start = (recordPage - 1) * recordPageSize;
+    return filteredViolations.slice(start, start + recordPageSize);
+  }, [filteredViolations, recordPage, recordPageSize]);
+
+  // Filtered & Sorted Restrictions list
   const filteredRestrictions = useMemo(() => {
-    return restrictions.filter((r) => {
+    let result = restrictions.filter((r) => {
       if (restrictionStatusFilter === "ACTIVE" && !r.isActive) return false;
       if (
         restrictionStatusFilter === "EXPIRED" &&
@@ -308,7 +476,53 @@ export default function AdminViolationsTab({
       }
       return true;
     });
-  }, [restrictions, restrictionStatusFilter, restrictionSearch]);
+
+    result.sort((a, b) => {
+      if (restrictionSortBy === "end_date_asc") {
+        return new Date(a.endAt || 0).getTime() - new Date(b.endAt || 0).getTime();
+      }
+      if (restrictionSortBy === "end_date_desc") {
+        return new Date(b.endAt || 0).getTime() - new Date(a.endAt || 0).getTime();
+      }
+      if (restrictionSortBy === "newest") {
+        return new Date(b.startAt).getTime() - new Date(a.startAt).getTime();
+      }
+      if (restrictionSortBy === "user") {
+        return (a.userFullName || "").localeCompare(b.userFullName || "");
+      }
+      return 0;
+    });
+
+    return result;
+  }, [restrictions, restrictionStatusFilter, restrictionSearch, restrictionSortBy]);
+
+  const pagedRestrictions = useMemo(() => {
+    const start = (restrictionPage - 1) * restrictionPageSize;
+    return filteredRestrictions.slice(start, start + restrictionPageSize);
+  }, [filteredRestrictions, restrictionPage, restrictionPageSize]);
+
+  // Filtered & Sorted Violation Types
+  const filteredTypes = useMemo(() => {
+    return violationTypes.filter((vt) => {
+      if (typeSeverityFilter !== "ALL" && vt.severity !== Number(typeSeverityFilter)) {
+        return false;
+      }
+      if (typeSearchTerm.trim()) {
+        const q = typeSearchTerm.toLowerCase().trim();
+        const mCode = (vt.code || "").toLowerCase().includes(q);
+        const mName = (vt.name || "").toLowerCase().includes(q);
+        const mDesc = (vt.description || "").toLowerCase().includes(q);
+        const mPenalty = (vt.defaultPenalty || "").toLowerCase().includes(q);
+        if (!mCode && !mName && !mDesc && !mPenalty) return false;
+      }
+      return true;
+    });
+  }, [violationTypes, typeSeverityFilter, typeSearchTerm]);
+
+  const pagedTypes = useMemo(() => {
+    const start = (typePage - 1) * typePageSize;
+    return filteredTypes.slice(start, start + typePageSize);
+  }, [filteredTypes, typePage, typePageSize]);
 
   // Users filtered for user picker
   const filteredUsersForPicker = useMemo(() => {
@@ -562,6 +776,15 @@ export default function AdminViolationsTab({
       return;
     }
 
+    if (!typeFormPenalty.trim()) {
+      await alert({
+        title: "Thiếu thông tin",
+        message: "Vui lòng chọn hoặc nhập hình phạt / xử lý gợi ý!",
+        type: "warning",
+      });
+      return;
+    }
+
     try {
       setSubmittingType(true);
       if (editingTypeId) {
@@ -614,7 +837,7 @@ export default function AdminViolationsTab({
     setTypeFormName("");
     setTypeFormDesc("");
     setTypeFormSeverity(1);
-    setTypeFormPenalty("");
+    setTypeFormPenalty("Nhắc nhở / Cảnh cáo lần đầu");
     setShowTypeModal(true);
   };
 
@@ -773,6 +996,20 @@ export default function AdminViolationsTab({
 
           <button
             type="button"
+            className={`subtab-btn ${
+              activeSubTab === "reminders" ? "active" : ""
+            }`}
+            onClick={() => setActiveSubTab("reminders")}
+          >
+            <BellRingIcon size={16} />
+            <span>Theo dõi Nhắc nhở (Quy tắc 3 lần)</span>
+            <span className="subtab-count highlight-amber">
+              {reminders.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
             className={`subtab-btn ${activeSubTab === "types" ? "active" : ""}`}
             onClick={() => setActiveSubTab("types")}
           >
@@ -903,6 +1140,51 @@ export default function AdminViolationsTab({
                   <option value="Hủy bỏ">Hủy bỏ</option>
                 </select>
               </div>
+
+              <div className="filter-item">
+                <span className="filter-label">Ngày vi phạm:</span>
+                <input
+                  type="date"
+                  value={recordDateFilter}
+                  onChange={(e) => setRecordDateFilter(e.target.value)}
+                  className="filter-select"
+                  style={{ padding: "5px 8px" }}
+                />
+              </div>
+
+              <div className="filter-item">
+                <span className="filter-label">Sắp xếp:</span>
+                <select
+                  value={recordSortBy}
+                  onChange={(e) => setRecordSortBy(e.target.value as any)}
+                  className="filter-select"
+                >
+                  <option value="newest">Mới nhất trước</option>
+                  <option value="oldest">Cũ nhất trước</option>
+                  <option value="severity_desc">Mức độ nghiêm trọng giảm dần</option>
+                  <option value="severity_asc">Mức độ nghiêm trọng tăng dần</option>
+                  <option value="user">Người vi phạm (A-Z)</option>
+                </select>
+              </div>
+
+              {(Boolean(searchTerm || selectedTypeFilter !== "ALL" || selectedSeverityFilter !== "ALL" || selectedStatusFilter !== "ALL" || recordDateFilter || recordSortBy !== "newest")) && (
+                <button
+                  type="button"
+                  className="btn-link"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSelectedTypeFilter("ALL");
+                    setSelectedSeverityFilter("ALL");
+                    setSelectedStatusFilter("ALL");
+                    setRecordDateFilter("");
+                    setRecordSortBy("newest");
+                    setRecordPage(1);
+                  }}
+                  style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600, padding: "4px 8px", cursor: "pointer", background: "none", border: "none" }}
+                >
+                  Xóa bộ lọc
+                </button>
+              )}
             </div>
           </div>
 
@@ -951,14 +1233,30 @@ export default function AdminViolationsTab({
                     </td>
                   </tr>
                 ) : (
-                  filteredViolations.map((v) => (
-                    <tr key={v.id}>
+                  pagedViolations.map((v) => (
+                    <tr
+                      key={v.id}
+                      className="admin-clickable-row"
+                      onClick={() => openDetailModal(v)}
+                      title="Bấm vào dòng để xem chi tiết & cập nhật xử lý biên bản"
+                    >
                       <td>
                         <span className="code-pill">{v.code}</span>
                         {v.roomCode && (
                           <span className="room-ref-badge" title="Phòng liên quan">
                             <DoorIcon size={12} /> {v.roomCode}
                           </span>
+                        )}
+                        {(v.description.includes("VƯỢT QUÁ 3 LẦN NHẮC NHỞ") ||
+                          v.description.includes("quá 3 lần nhắc nhở")) && (
+                          <div style={{ marginTop: "4px" }}>
+                            <span
+                              className="reminder-escalated-pill"
+                              title="Biên bản sinh tự động do quá 3 lần nhắc nhở"
+                            >
+                              <MegaphoneIcon size={12} className="inline-block" style={{ marginRight: "3px" }} /> Quá 3 lần nhắc
+                            </span>
+                          </div>
                         )}
                       </td>
                       <td>
@@ -1020,7 +1318,7 @@ export default function AdminViolationsTab({
                           {v.status}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <div className="table-actions-inline">
                           <button
                             type="button"
@@ -1049,6 +1347,15 @@ export default function AdminViolationsTab({
               </tbody>
             </table>
           </div>
+
+          <AdminPagination
+            currentPage={recordPage}
+            totalItems={filteredViolations.length}
+            pageSize={recordPageSize}
+            onPageChange={(p) => setRecordPage(p)}
+            onPageSizeChange={(sz) => setRecordPageSize(sz)}
+            itemLabel="biên bản vi phạm"
+          />
         </div>
       )}
 
@@ -1081,6 +1388,36 @@ export default function AdminViolationsTab({
                   <option value="EXPIRED">Đã hết hạn</option>
                 </select>
               </div>
+
+              <div className="filter-item">
+                <span className="filter-label">Sắp xếp:</span>
+                <select
+                  value={restrictionSortBy}
+                  onChange={(e) => setRestrictionSortBy(e.target.value as any)}
+                  className="filter-select"
+                >
+                  <option value="end_date_asc">Hạn cấm sắp hết trước</option>
+                  <option value="end_date_desc">Hạn cấm xa nhất trước</option>
+                  <option value="newest">Mới áp dụng nhất</option>
+                  <option value="user">Người dùng (A-Z)</option>
+                </select>
+              </div>
+
+              {(Boolean(restrictionSearch || restrictionStatusFilter !== "ACTIVE" || restrictionSortBy !== "end_date_asc")) && (
+                <button
+                  type="button"
+                  className="btn-link"
+                  onClick={() => {
+                    setRestrictionSearch("");
+                    setRestrictionStatusFilter("ACTIVE");
+                    setRestrictionSortBy("end_date_asc");
+                    setRestrictionPage(1);
+                  }}
+                  style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600, padding: "4px 8px", cursor: "pointer", background: "none", border: "none" }}
+                >
+                  Xóa bộ lọc
+                </button>
+              )}
             </div>
           </div>
 
@@ -1107,7 +1444,7 @@ export default function AdminViolationsTab({
                     </td>
                   </tr>
                 ) : (
-                  filteredRestrictions.map((r) => (
+                  pagedRestrictions.map((r) => (
                     <tr key={r.id}>
                       <td>
                         <div className="user-info-cell">
@@ -1187,12 +1524,342 @@ export default function AdminViolationsTab({
               </tbody>
             </table>
           </div>
+
+          <AdminPagination
+            currentPage={restrictionPage}
+            totalItems={filteredRestrictions.length}
+            pageSize={restrictionPageSize}
+            onPageChange={(p) => setRestrictionPage(p)}
+            onPageSizeChange={(sz) => setRestrictionPageSize(sz)}
+            itemLabel="lệnh hạn chế"
+          />
+        </div>
+      )}
+
+      {/* ── SUB-TAB: REMINDERS (RULE OF 3 WARNINGS) ────────────────────── */}
+      {activeSubTab === "reminders" && (
+        <div className="violations-content-card">
+          {/* 4 Thẻ KPI giám sát nhắc nhở */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "14px",
+              marginBottom: "18px",
+            }}
+          >
+            <div className="kpi-mini-card">
+              <span className="kpi-label">Tổng số lượt nhắc nhở</span>
+              <strong className="kpi-value color-blue">{reminders.length}</strong>
+              <span className="kpi-subtext">Đã ghi nhận trên hệ thống</span>
+            </div>
+
+            <div className="kpi-mini-card">
+              <span className="kpi-label">Mức 1 - 2 (Nhắc nhẹ &amp; Cảnh cáo)</span>
+              <strong className="kpi-value color-amber">
+                {
+                  reminders.filter(
+                    (r) => r.warningLevel <= 2 && !r.escalatedToViolation
+                  ).length
+                }
+              </strong>
+              <span className="kpi-subtext">Đang trong ngưỡng an toàn</span>
+            </div>
+
+            <div className="kpi-mini-card">
+              <span className="kpi-label">Mức 3 (Cảnh báo tối đa 3/3)</span>
+              <strong
+                className="kpi-value color-amber"
+                style={{ color: "#ea580c" }}
+              >
+                {
+                  reminders.filter(
+                    (r) => r.warningLevel === 3 && !r.escalatedToViolation
+                  ).length
+                }
+              </strong>
+              <span className="kpi-subtext">Chạm ngưỡng giới hạn</span>
+            </div>
+
+            <div className="kpi-mini-card">
+              <span className="kpi-label">Quá 3 lần (Đã lập biên bản)</span>
+              <strong className="kpi-value color-red">
+                {reminders.filter((r) => r.escalatedToViolation).length}
+              </strong>
+              <span className="kpi-subtext">
+                Đã tự động xử phạt &amp; cấm mượn
+              </span>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="table-filter-bar">
+            <div className="search-input-wrap">
+              <SearchIcon size={16} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Tìm theo MSSV, tên sinh viên, phòng, lý do nhắc nhở, cán bộ..."
+                value={reminderSearch}
+                onChange={(e) => setReminderSearch(e.target.value)}
+                className="search-input"
+              />
+              {reminderSearch && (
+                <button
+                  type="button"
+                  className="search-clear-btn"
+                  onClick={() => setReminderSearch("")}
+                >
+                  <XIcon size={14} />
+                </button>
+              )}
+            </div>
+
+            <div className="filters-group">
+              <select
+                value={reminderLevelFilter}
+                onChange={(e) => setReminderLevelFilter(e.target.value)}
+                className="filter-select"
+              >
+                <option value="ALL">Tất cả cấp độ cảnh báo</option>
+                <option value="LEVEL_1_2">Mức 1 - 2 (Nhắc nhở nhẹ)</option>
+                <option value="LEVEL_3">Mức 3 (Cảnh báo tối đa)</option>
+                <option value="ESCALATED">Quá 3 lần (Đã lập biên bản)</option>
+              </select>
+
+              {(reminderSearch || reminderLevelFilter !== "ALL") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReminderSearch("");
+                    setReminderLevelFilter("ALL");
+                  }}
+                  style={{
+                    fontSize: "12px",
+                    color: "#2563eb",
+                    fontWeight: 600,
+                    padding: "4px 8px",
+                    cursor: "pointer",
+                    background: "none",
+                    border: "none",
+                  }}
+                >
+                  Xóa bộ lọc
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="table-responsive-wrapper">
+            <table className="admin-custom-table">
+              <thead>
+                <tr>
+                  <th style={{ width: "135px" }}>Thời gian</th>
+                  <th>Người mượn</th>
+                  <th>Phòng &amp; Phiên</th>
+                  <th style={{ width: "140px", textAlign: "center" }}>
+                    Cấp độ cảnh báo
+                  </th>
+                  <th>Lý do nhắc nhở &amp; Ghi chú</th>
+                  <th style={{ width: "140px" }}>Cán bộ thực hiện</th>
+                  <th style={{ width: "130px", textAlign: "center" }}>
+                    Biên bản xử lý
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredReminders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="table-empty-row">
+                      <AlertTriangleIcon size={36} className="text-muted" />
+                      <p>Không tìm thấy ghi nhận nhắc nhở nào phù hợp.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  pagedReminders.map((r) => (
+                    <tr key={r.id}>
+                      <td style={{ fontSize: "12px", color: "#64748b" }}>
+                        <div>
+                          {new Date(r.remindedAt).toLocaleTimeString("vi-VN", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                        <div>
+                          {new Date(r.remindedAt).toLocaleDateString("vi-VN")}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="user-info-cell">
+                          <strong className="user-name">
+                            {r.userFullName}
+                          </strong>
+                          <span className="user-sub">
+                            {r.userCardCode
+                              ? `MSSV: ${r.userCardCode}`
+                              : r.userName}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="code-pill font-mono">{r.roomCode}</span>
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#64748b",
+                            marginTop: "2px",
+                          }}
+                        >
+                          Phiên #{r.sessionId}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        {r.escalatedToViolation ? (
+                          <span className="reminder-tag-badge reminder-tag-violation">
+                            <BanIcon size={12} className="inline-block" style={{ marginRight: "3px" }} /> Quá 3 lần (Đã lập biên bản)
+                          </span>
+                        ) : r.warningLevel === 3 ? (
+                          <span className="reminder-tag-badge reminder-tag-max">
+                            <FlameIcon size={12} className="inline-block" style={{ marginRight: "3px" }} /> Cảnh báo tối đa (3/3)
+                          </span>
+                        ) : r.warningLevel === 2 ? (
+                          <span className="reminder-tag-badge reminder-tag-warn">
+                            <AlertTriangleIcon size={12} className="inline-block" style={{ marginRight: "3px" }} /> Nhắc nhở (2/3)
+                          </span>
+                        ) : (
+                          <span className="reminder-tag-badge reminder-tag-light">
+                            <MegaphoneIcon size={12} className="inline-block" style={{ marginRight: "3px" }} /> Nhắc nhở (1/3)
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            color: "#1e293b",
+                            fontSize: "13px",
+                          }}
+                        >
+                          {r.reason}
+                        </div>
+                        {r.note && (
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "#64748b",
+                              fontStyle: "italic",
+                              marginTop: "3px",
+                            }}
+                          >
+                            "{r.note}"
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ fontSize: "12.5px", color: "#334155" }}>
+                        {r.remindedByStaff}
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        {r.violationCode ? (
+                          <span
+                            className="code-pill font-mono"
+                            style={{
+                              backgroundColor: "#fee2e2",
+                              color: "#b91c1c",
+                              borderColor: "#fca5a5",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => {
+                              setActiveSubTab("records");
+                              setSearchTerm(r.violationCode || "");
+                            }}
+                            title="Bấm để xem biên bản vi phạm này"
+                          >
+                            #{r.violationCode}
+                          </span>
+                        ) : (
+                          <span
+                            className="text-muted"
+                            style={{ fontSize: "11px" }}
+                          >
+                            —
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <AdminPagination
+            currentPage={reminderPage}
+            totalItems={filteredReminders.length}
+            pageSize={reminderPageSize}
+            onPageChange={(p) => setReminderPage(p)}
+            onPageSizeChange={(sz) => setReminderPageSize(sz)}
+            itemLabel="lượt nhắc nhở"
+          />
         </div>
       )}
 
       {/* ── SUB-TAB 3: VIOLATION TYPES ──────────────────────────────────── */}
       {activeSubTab === "types" && (
         <div className="violations-content-card">
+          <div className="table-filter-bar">
+            <div className="search-input-wrap">
+              <SearchIcon size={16} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Tìm mã hoặc tên loại vi phạm..."
+                value={typeSearchTerm}
+                onChange={(e) => setTypeSearchTerm(e.target.value)}
+                className="search-input"
+              />
+              {typeSearchTerm && (
+                <button
+                  type="button"
+                  className="clear-search-btn"
+                  onClick={() => setTypeSearchTerm("")}
+                >
+                  <XIcon size={14} />
+                </button>
+              )}
+            </div>
+
+            <div className="filter-select-group">
+              <div className="filter-item">
+                <span className="filter-label">Mức độ:</span>
+                <select
+                  value={typeSeverityFilter}
+                  onChange={(e) => setTypeSeverityFilter(e.target.value)}
+                  className="filter-select"
+                >
+                  <option value="ALL">Tất cả mức độ</option>
+                  <option value="1">Mức 1 - Nhẹ</option>
+                  <option value="2">Mức 2 - Vừa</option>
+                  <option value="3">Mức 3 - Nghiêm trọng</option>
+                  <option value="4">Mức 4 - Rất nghiêm trọng</option>
+                </select>
+              </div>
+
+              {(Boolean(typeSearchTerm || typeSeverityFilter !== "ALL")) && (
+                <button
+                  type="button"
+                  className="btn-link"
+                  onClick={() => {
+                    setTypeSearchTerm("");
+                    setTypeSeverityFilter("ALL");
+                    setTypePage(1);
+                  }}
+                  style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600, padding: "4px 8px", cursor: "pointer", background: "none", border: "none" }}
+                >
+                  Xóa bộ lọc
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="table-responsive-wrapper">
             <table className="admin-custom-table">
               <thead>
@@ -1209,8 +1876,21 @@ export default function AdminViolationsTab({
                 </tr>
               </thead>
               <tbody>
-                {violationTypes.map((vt) => (
-                  <tr key={vt.id}>
+                {filteredTypes.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="table-empty-row">
+                      <AlertTriangleIcon size={36} className="text-muted" />
+                      <p>Không tìm thấy loại vi phạm nào phù hợp với bộ lọc.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  pagedTypes.map((vt) => (
+                  <tr
+                    key={vt.id}
+                    className="admin-clickable-row"
+                    onClick={() => openEditTypeModal(vt)}
+                    title="Bấm vào dòng để chỉnh sửa loại vi phạm này"
+                  >
                     <td>
                       <span className="code-pill font-mono">{vt.code}</span>
                     </td>
@@ -1243,7 +1923,7 @@ export default function AdminViolationsTab({
                     <td style={{ textAlign: "center" }}>
                       <span className="record-count-badge">{vt.recordCount}</span>
                     </td>
-                    <td style={{ textAlign: "right" }}>
+                    <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
                       <div className="table-actions-inline">
                         <button
                           type="button"
@@ -1265,10 +1945,19 @@ export default function AdminViolationsTab({
                       </div>
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
+
+          <AdminPagination
+            currentPage={typePage}
+            totalItems={filteredTypes.length}
+            pageSize={typePageSize}
+            onPageChange={(p) => setTypePage(p)}
+            onPageSizeChange={(sz) => setTypePageSize(sz)}
+            itemLabel="loại vi phạm"
+          />
         </div>
       )}
 
@@ -1430,6 +2119,44 @@ export default function AdminViolationsTab({
                   <label className="admin-field-label required">
                     Hình thức xử lý / Hình phạt
                   </label>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "6px",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    {QUICK_PENALTY_PILLS.map((pill) => {
+                      const isSelected = formPenaltyApplied === pill;
+                      return (
+                        <button
+                          key={pill}
+                          type="button"
+                          style={{
+                            fontSize: "11px",
+                            padding: "2px 7px",
+                            borderRadius: "5px",
+                            border: isSelected ? "1px solid #0284c7" : "1px solid #cbd5e1",
+                            backgroundColor: isSelected ? "#e0f2fe" : "#f8fafc",
+                            color: isSelected ? "#0369a1" : "#475569",
+                            cursor: "pointer",
+                            fontWeight: isSelected ? 700 : 400,
+                          }}
+                          onClick={() => {
+                            setFormPenaltyApplied(pill);
+                            if (pill.includes("3 ngày")) setFormRestrictDays(3);
+                            else if (pill.includes("7 ngày")) setFormRestrictDays(7);
+                            else if (pill.includes("14 ngày")) setFormRestrictDays(14);
+                            else if (pill.includes("30 ngày")) setFormRestrictDays(30);
+                            else if (pill.includes("Nhắc nhở") || pill.includes("Vệ sinh")) setFormRestrictDays(0);
+                          }}
+                        >
+                          {pill}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <input
                     type="text"
                     placeholder="VD: Cảnh cáo, Bồi thường 350.000đ sửa micro..."
@@ -1879,7 +2606,17 @@ export default function AdminViolationsTab({
                 </label>
                 <select
                   value={typeFormSeverity}
-                  onChange={(e) => setTypeFormSeverity(Number(e.target.value))}
+                  onChange={(e) => {
+                    const newSev = Number(e.target.value);
+                    setTypeFormSeverity(newSev);
+                    const allDefaults = SUGGESTED_PENALTIES.flatMap((g) => g.items);
+                    if (!typeFormPenalty || allDefaults.includes(typeFormPenalty)) {
+                      if (newSev === 1) setTypeFormPenalty("Nhắc nhở / Cảnh cáo lần đầu");
+                      else if (newSev === 2) setTypeFormPenalty("Cảnh cáo & Cấm mượn phòng 3 ngày");
+                      else if (newSev === 3) setTypeFormPenalty("Cấm mượn phòng 14 ngày & Bồi thường chi phí sửa chữa");
+                      else if (newSev === 4) setTypeFormPenalty("Cấm mượn phòng 30 ngày & Trừ điểm rèn luyện");
+                    }
+                  }}
                   className="admin-input-text"
                 >
                   <option value={1}>Mức 1 - Nhẹ</option>
@@ -1890,15 +2627,84 @@ export default function AdminViolationsTab({
               </div>
 
               <div className="form-group">
-                <label className="admin-field-label">
-                  Hình thức xử phạt mặc định gợi ý
+                <label className="admin-field-label required">
+                  Hình phạt / Xử lý gợi ý
                 </label>
+                <p className="field-hint" style={{ marginBottom: "6px", fontSize: "12px", color: "#64748b" }}>
+                  Chọn từ danh mục hình phạt gợi ý chuẩn theo quy chế hoặc nhập chỉnh sửa chi tiết:
+                </p>
+
+                {/* Dropdown danh mục hình phạt gợi ý chuẩn */}
+                <select
+                  value={
+                    SUGGESTED_PENALTIES.flatMap((g) => g.items).includes(typeFormPenalty)
+                      ? typeFormPenalty
+                      : typeFormPenalty ? "__CUSTOM__" : ""
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val && val !== "__CUSTOM__") {
+                      setTypeFormPenalty(val);
+                    }
+                  }}
+                  className="admin-input-text"
+                  style={{ marginBottom: "8px" }}
+                >
+                  <option value="">-- Chọn hình phạt gợi ý có sẵn --</option>
+                  {SUGGESTED_PENALTIES.map((group) => (
+                    <optgroup key={group.category} label={`── ${group.category} ──`}>
+                      {group.items.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                  <option value="__CUSTOM__">-- Nhập tùy chỉnh khác... --</option>
+                </select>
+
+                {/* Quick Chips bấm chọn nhanh */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "6px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  {QUICK_PENALTY_PILLS.map((pill) => {
+                    const isSelected = typeFormPenalty === pill;
+                    return (
+                      <button
+                        key={pill}
+                        type="button"
+                        style={{
+                          fontSize: "11.5px",
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          border: isSelected ? "1px solid #0284c7" : "1px solid #cbd5e1",
+                          backgroundColor: isSelected ? "#e0f2fe" : "#f8fafc",
+                          color: isSelected ? "#0369a1" : "#475569",
+                          cursor: "pointer",
+                          fontWeight: isSelected ? 700 : 400,
+                          transition: "all 0.15s ease",
+                        }}
+                        onClick={() => setTypeFormPenalty(pill)}
+                      >
+                        {pill}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Input text để chỉnh sửa hoặc nhập tự do */}
                 <input
                   type="text"
-                  placeholder="VD: Cảnh cáo lần đầu / Cấm mượn 3 ngày"
+                  placeholder="Nhập hoặc chỉnh sửa chi tiết hình thức xử lý / hình phạt gợi ý..."
                   value={typeFormPenalty}
                   onChange={(e) => setTypeFormPenalty(e.target.value)}
                   className="admin-input-text"
+                  required
                 />
               </div>
 

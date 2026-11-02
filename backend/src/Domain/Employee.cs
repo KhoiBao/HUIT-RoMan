@@ -5,9 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Đại diện cho nhân viên quản lý hoặc vận hành.
-    /// </summary>
+    //  Đại diện cho nhân viên quản lý hoặc vận hành.
     [Table("Employees")]
     public class Employee : Common.BaseEntity
     {
@@ -16,13 +14,13 @@ namespace HUIT_RoMan.Domain.Entities
 
         [Required]
         [StringLength(50)]
-        public string Code { get; set; } // Mã nhân viên
+        public string Code { get; set; } = string.Empty; // Mã nhân viên
 
         [StringLength(100)]
-        public string Position { get; set; } // Chức vụ
+        public string Position { get; set; } = string.Empty; // Chức vụ
 
         public DateTime? HireDate { get; set; }
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
         
 
         [ForeignKey("User")]

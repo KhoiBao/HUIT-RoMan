@@ -267,6 +267,63 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
             return ApiResponse<IEnumerable<ViolationRecordDto>>.SuccessResponse(result);
         }
 
+        public async Task<ApiResponse<IEnumerable<ViolationRecordDto>>> GetMyViolationRecordsAsync(int userId)
+        {
+            var records = await _violationRecordRepo.GetAllAsync(
+                vr => vr.User,
+                vr => vr.User.Department,
+                vr => vr.ViolationType,
+                vr => vr.UsageSession,
+                vr => vr.UsageSession.BookingDetail,
+                vr => vr.UsageSession.BookingDetail.Room,
+                vr => vr.UsageSession.BookingDetail.Room.RoomType);
+
+            var query = records.Where(vr => vr.UserId == userId && !vr.IsDeleted);
+
+            var activeRestrictions = (await _userRestrictionRepo.FindAsync(
+                ur => ur.UserId == userId && ur.Status == "Hoạt động" && ur.StartAt <= DateTime.UtcNow && (ur.EndAt == null || ur.EndAt >= DateTime.UtcNow)
+            )).OrderByDescending(x => x.EndAt).FirstOrDefault();
+
+            var result = query
+                .OrderByDescending(vr => vr.IncidentTime)
+                .Select(vr =>
+                {
+                    var room = vr.UsageSession?.BookingDetail?.Room;
+                    var hasRestr = activeRestrictions != null;
+                    return new ViolationRecordDto
+                    {
+                        Id = vr.Id,
+                        Code = vr.Code ?? $"VP-{vr.Id:D4}",
+                        IncidentTime = vr.IncidentTime,
+                        Description = vr.Description,
+                        Severity = vr.Severity,
+                        SeverityText = GetSeverityText(vr.Severity),
+                        PenaltyApplied = vr.PenaltyApplied,
+                        Status = vr.Status,
+                        UserId = vr.UserId,
+                        UserName = vr.User?.UserName ?? "",
+                        UserFullName = vr.User?.FullName ?? "",
+                        UserCardCode = vr.User?.CardCode ?? "",
+                        UserEmail = vr.User?.Email ?? "",
+                        UserPhoneNumber = vr.User?.PhoneNumber,
+                        DepartmentName = vr.User?.Department?.Name,
+                        UsageSessionId = vr.UsageSessionId,
+                        RoomId = room?.Id,
+                        RoomCode = room?.RoomCode,
+                        RoomName = room?.Name,
+                        ViolationTypeId = vr.ViolationTypeId,
+                        ViolationTypeCode = vr.ViolationType?.Code ?? "",
+                        ViolationTypeName = vr.ViolationType?.Name ?? "",
+                        IsRestricted = hasRestr,
+                        RestrictDays = hasRestr && activeRestrictions?.EndAt != null ? Math.Max(0, (int)Math.Ceiling((activeRestrictions.EndAt.Value - DateTime.UtcNow).TotalDays)) : 0,
+                        RestrictionEndAt = hasRestr ? activeRestrictions?.EndAt : null,
+                        CreatedAt = vr.CreatedAt
+                    };
+                }).ToList();
+
+            return ApiResponse<IEnumerable<ViolationRecordDto>>.SuccessResponse(result);
+        }
+
         public async Task<ApiResponse<ViolationRecordDto>> GetViolationRecordByIdAsync(int id)
         {
             var vr = await _violationRecordRepo.GetByIdAsync(

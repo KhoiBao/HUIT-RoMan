@@ -9,6 +9,14 @@ import {
   createShiftLog,
   fetchMyShifts,
   fetchShiftStats,
+  getTomorrowDateString,
+  isShiftDateValid,
+  findOverlappingShift,
+  getMondayOfWeek,
+  get7DaysOfWeek,
+  normalizeShiftDateString,
+  getTodayDateString,
+  getLocalDateString,
   type ShiftItem,
   type ShiftLogItem,
   type ShiftStats,
@@ -97,6 +105,21 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
   const [dateFilterType, setDateFilterType] = useState<"this-week" | "today" | "next-week" | "all">("this-week");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState<string>("");
+
+  // Danh sách nhân sự sau khi lọc theo từ khóa tìm kiếm trong modal phân ca
+  const filteredModalEmployees = useMemo(() => {
+    if (!employeeSearchQuery.trim()) return assignableEmployees;
+    const q = employeeSearchQuery.trim().toLowerCase();
+    return assignableEmployees.filter(
+      (emp) =>
+        emp.fullName?.toLowerCase().includes(q) ||
+        emp.code?.toLowerCase().includes(q) ||
+        emp.email?.toLowerCase().includes(q) ||
+        emp.position?.toLowerCase().includes(q) ||
+        emp.departmentName?.toLowerCase().includes(q)
+    );
+  }, [assignableEmployees, employeeSearchQuery]);
 
   // Modals
   const [isShiftModalOpen, setIsShiftModalOpen] = useState<boolean>(false);
@@ -105,7 +128,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
 
   // Shift Form state
   const [shiftForm, setShiftForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
+    date: getTomorrowDateString(),
     name: "Ca Sáng - Quản lý phòng & Tiếp nhận mượn",
     startTime: "07:00",
     endTime: "11:30",
@@ -121,22 +144,21 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Calculate current week boundaries
-  const currentWeekDays = useMemo(() => {
-    const today = new Date();
-    const currentDayOfWeek = today.getDay(); // 0 is Sunday
-    const distanceToMonday = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + distanceToMonday);
-
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      days.push(d);
-    }
-    return days;
+  // Calculate week boundaries
+  const currentMonday = useMemo(() => {
+    return getMondayOfWeek(new Date());
   }, []);
+
+  const thisWeekDays = useMemo(() => {
+    return get7DaysOfWeek(currentMonday);
+  }, [currentMonday]);
+
+  const nextWeekDays = useMemo(() => {
+    const nextMon = new Date(currentMonday.getFullYear(), currentMonday.getMonth(), currentMonday.getDate() + 7);
+    return get7DaysOfWeek(nextMon);
+  }, [currentMonday]);
+
+
 
   // Load shifts and related data
   const loadData = async () => {
@@ -169,6 +191,13 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
 
   // Filtered shifts
   const filteredShifts = useMemo(() => {
+    const todayStr = getTodayDateString();
+    const thisMonStr = getLocalDateString(thisWeekDays[0]);
+    const thisSunStr = getLocalDateString(thisWeekDays[6]);
+
+    const nextMonStr = getLocalDateString(nextWeekDays[0]);
+    const nextSunStr = getLocalDateString(nextWeekDays[6]);
+
     return shifts.filter((s) => {
       // Status filter
       if (statusFilter !== "ALL" && s.status !== statusFilter) {
@@ -188,34 +217,148 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
       }
 
       // Date quick filter
-      const shiftDateStr = s.dateString || s.date.slice(0, 10);
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const shiftDateStr = normalizeShiftDateString(s.dateString || s.date);
 
       if (dateFilterType === "today") {
         return shiftDateStr === todayStr;
       } else if (dateFilterType === "this-week") {
-        const monStr = currentWeekDays[0].toISOString().slice(0, 10);
-        const sunStr = currentWeekDays[6].toISOString().slice(0, 10);
-        return shiftDateStr >= monStr && shiftDateStr <= sunStr;
+        return shiftDateStr >= thisMonStr && shiftDateStr <= thisSunStr;
       } else if (dateFilterType === "next-week") {
-        const nextMon = new Date(currentWeekDays[0]);
-        nextMon.setDate(nextMon.getDate() + 7);
-        const nextSun = new Date(currentWeekDays[6]);
-        nextSun.setDate(nextSun.getDate() + 7);
-        const monStr = nextMon.toISOString().slice(0, 10);
-        const sunStr = nextSun.toISOString().slice(0, 10);
-        return shiftDateStr >= monStr && shiftDateStr <= sunStr;
+        return shiftDateStr >= nextMonStr && shiftDateStr <= nextSunStr;
       }
 
       return true;
     });
-  }, [shifts, statusFilter, searchQuery, dateFilterType, currentWeekDays]);
+  }, [shifts, statusFilter, searchQuery, dateFilterType, thisWeekDays, nextWeekDays]);
+
+  // Weeks to display in calendar view
+  interface CalendarWeekView {
+    key: string;
+    title: string;
+    dateRangeText: string;
+    days: Date[];
+    isCurrentWeek: boolean;
+  }
+
+  const weeksToDisplay = useMemo<CalendarWeekView[]>(() => {
+    const thisWeekRange = `${thisWeekDays[0].getDate()}/${thisWeekDays[0].getMonth() + 1} – ${thisWeekDays[6].getDate()}/${thisWeekDays[6].getMonth() + 1}/${thisWeekDays[6].getFullYear()}`;
+    const nextWeekRange = `${nextWeekDays[0].getDate()}/${nextWeekDays[0].getMonth() + 1} – ${nextWeekDays[6].getDate()}/${nextWeekDays[6].getMonth() + 1}/${nextWeekDays[6].getFullYear()}`;
+
+    if (dateFilterType === "this-week" || dateFilterType === "today") {
+      return [
+        {
+          key: "this-week",
+          title: dateFilterType === "today" ? "Hôm nay trong tuần" : "Tuần này",
+          dateRangeText: thisWeekRange,
+          days: thisWeekDays,
+          isCurrentWeek: true,
+        },
+      ];
+    }
+
+    if (dateFilterType === "next-week") {
+      return [
+        {
+          key: "next-week",
+          title: "Tuần sau",
+          dateRangeText: nextWeekRange,
+          days: nextWeekDays,
+          isCurrentWeek: false,
+        },
+      ];
+    }
+
+    // dateFilterType === "all": Include all weeks that have shifts, plus this-week and next-week
+    const weekMap = new Map<string, Date>();
+    const thisMonKey = getLocalDateString(currentMonday);
+    const nextMonKey = getLocalDateString(nextWeekDays[0]);
+
+    // Always include this week and next week
+    weekMap.set(thisMonKey, currentMonday);
+    weekMap.set(nextMonKey, nextWeekDays[0]);
+
+    // Include other weeks that have shifts
+    for (const s of shifts) {
+      const dStr = normalizeShiftDateString(s.dateString || s.date);
+      if (!dStr) continue;
+      const parts = dStr.split("-").map(Number);
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        const sDate = new Date(parts[0], parts[1] - 1, parts[2]);
+        const mon = getMondayOfWeek(sDate);
+        const monKey = getLocalDateString(mon);
+        if (!weekMap.has(monKey)) {
+          weekMap.set(monKey, mon);
+        }
+      }
+    }
+
+    // Sort chronologically
+    const sortedMondays = Array.from(weekMap.values()).sort(
+      (a, b) => a.getTime() - b.getTime()
+    );
+
+    return sortedMondays.map((mon) => {
+      const days = get7DaysOfWeek(mon);
+      const monKey = getLocalDateString(mon);
+      const isCurrent = monKey === thisMonKey;
+      const isNext = monKey === nextMonKey;
+      const title = isCurrent
+        ? "Tuần này"
+        : isNext
+        ? "Tuần sau"
+        : `Tuần từ ${days[0].getDate()}/${days[0].getMonth() + 1}`;
+      const range = `${days[0].getDate()}/${days[0].getMonth() + 1} – ${days[6].getDate()}/${days[6].getMonth() + 1}/${days[6].getFullYear()}`;
+
+      return {
+        key: monKey,
+        title,
+        dateRangeText: range,
+        days,
+        isCurrentWeek: isCurrent,
+      };
+    });
+  }, [dateFilterType, currentMonday, thisWeekDays, nextWeekDays, shifts]);
+
+  // Counts for segmented filter buttons
+  const countsByFilter = useMemo(() => {
+    const todayStr = getTodayDateString();
+    const thisMonStr = getLocalDateString(thisWeekDays[0]);
+    const thisSunStr = getLocalDateString(thisWeekDays[6]);
+    const nextMonStr = getLocalDateString(nextWeekDays[0]);
+    const nextSunStr = getLocalDateString(nextWeekDays[6]);
+
+    let todayCount = 0;
+    let thisWeekCount = 0;
+    let nextWeekCount = 0;
+
+    for (const s of shifts) {
+      if (statusFilter !== "ALL" && s.status !== statusFilter) continue;
+      const dStr = normalizeShiftDateString(s.dateString || s.date);
+      if (dStr === todayStr) todayCount++;
+      if (dStr >= thisMonStr && dStr <= thisSunStr) thisWeekCount++;
+      if (dStr >= nextMonStr && dStr <= nextSunStr) nextWeekCount++;
+    }
+
+    return {
+      today: todayCount,
+      thisWeek: thisWeekCount,
+      nextWeek: nextWeekCount,
+      all: shifts.filter((s) => statusFilter === "ALL" || s.status === statusFilter).length,
+    };
+  }, [shifts, statusFilter, thisWeekDays, nextWeekDays]);
 
   // Open modal create
-  const handleOpenCreateModal = () => {
+  const handleOpenCreateModal = (defaultDate?: string) => {
     setEditingShift(null);
+    setEmployeeSearchQuery("");
+    let initialDate = getTomorrowDateString();
+    if (defaultDate && isShiftDateValid(defaultDate)) {
+      initialDate = defaultDate;
+    } else if (dateFilterType === "next-week") {
+      initialDate = getLocalDateString(nextWeekDays[0]);
+    }
     setShiftForm({
-      date: new Date().toISOString().slice(0, 10),
+      date: initialDate,
       name: "Ca Sáng - Tiếp nhận mượn & Quản lý phòng",
       startTime: "07:00",
       endTime: "11:30",
@@ -227,7 +370,13 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
 
   // Open modal edit
   const handleOpenEditModal = (shift: ShiftItem) => {
+    const shiftDay = shift.dateString || shift.date.slice(0, 10);
+    if (!isShiftDateValid(shiftDay)) {
+      onNotify?.("Không thể chỉnh sửa ca trực của ngày hiện tại hoặc quá khứ. Chỉ được phân ca trực cho các ngày sau ngày hiện tại.", "warning");
+      return;
+    }
     setEditingShift(shift);
+    setEmployeeSearchQuery("");
     setShiftForm({
       date: shift.dateString || shift.date.slice(0, 10),
       name: shift.name,
@@ -242,6 +391,27 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
   // Submit create or update shift
   const handleSaveShift = async (e: FormEvent) => {
     e.preventDefault();
+    if (!isShiftDateValid(shiftForm.date)) {
+      onNotify?.("Chỉ được phân ca trực cho các ngày sau ngày hiện tại.", "warning");
+      return;
+    }
+
+    // Kiểm tra trùng lặp thời gian ca trực trên cùng một ngày
+    const overlapping = findOverlappingShift(
+      shiftForm.date,
+      shiftForm.startTime,
+      shiftForm.endTime,
+      shifts,
+      editingShift?.id
+    );
+    if (overlapping) {
+      onNotify?.(
+        `Khung giờ ${shiftForm.startTime} - ${shiftForm.endTime} bị trùng với ca trực "${overlapping.name}" (${overlapping.startTime.slice(0, 5)} - ${overlapping.endTime.slice(0, 5)}) trong ngày ${shiftForm.date}. Vui lòng chọn khung giờ khác.`,
+        "warning"
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       if (editingShift) {
@@ -446,29 +616,33 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
             type="button"
             className={`seg-item-btn ${dateFilterType === "this-week" ? "active" : ""}`}
             onClick={() => setDateFilterType("this-week")}
+            title="Xem lịch trực tuần hiện tại"
           >
-            Tuần này
+            Tuần này ({countsByFilter.thisWeek})
           </button>
           <button
             type="button"
             className={`seg-item-btn ${dateFilterType === "today" ? "active" : ""}`}
             onClick={() => setDateFilterType("today")}
+            title="Xem các ca trực hôm nay"
           >
-            Hôm nay
+            Hôm nay ({countsByFilter.today})
           </button>
           <button
             type="button"
             className={`seg-item-btn ${dateFilterType === "next-week" ? "active" : ""}`}
             onClick={() => setDateFilterType("next-week")}
+            title="Xem lịch trực tuần sau"
           >
-            Tuần sau
+            Tuần sau ({countsByFilter.nextWeek})
           </button>
           <button
             type="button"
             className={`seg-item-btn ${dateFilterType === "all" ? "active" : ""}`}
             onClick={() => setDateFilterType("all")}
+            title="Xem toàn bộ lịch trực các tuần"
           >
-            Tất cả
+            Tất cả ({countsByFilter.all})
           </button>
         </div>
 
@@ -534,7 +708,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
             <button
               type="button"
               className="btn-toolbar-primary"
-              onClick={handleOpenCreateModal}
+              onClick={() => handleOpenCreateModal()}
               title="Quản lý toàn quyền thiết lập và phân công ca trực mới"
             >
               <PlusIcon size={16} />
@@ -551,23 +725,79 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
         </div>
       ) : viewMode === "calendar" ? (
         /* Calendar Week View */
-        <div
-          className="shift-calendar-week"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, minmax(172px, 1fr))",
-            gap: "10px",
-            overflowX: "auto",
-            marginTop: "16px",
-            marginBottom: "24px",
-          }}
-        >
-          {currentWeekDays.map((day, idx) => {
-            const dateStr = day.toISOString().slice(0, 10);
-            const isToday = dateStr === new Date().toISOString().slice(0, 10);
-            const dayShifts = filteredShifts.filter(
-              (s) => (s.dateString || s.date.slice(0, 10)) === dateStr
-            );
+        <div className="shift-calendar-container" style={{ marginTop: "16px", marginBottom: "24px" }}>
+          {weeksToDisplay.map((week) => {
+            const weekShifts = filteredShifts.filter((s) => {
+              const sDate = normalizeShiftDateString(s.dateString || s.date);
+              const monStr = getLocalDateString(week.days[0]);
+              const sunStr = getLocalDateString(week.days[6]);
+              return sDate >= monStr && sDate <= sunStr;
+            });
+
+            return (
+              <div key={week.key} className="shift-week-group" style={{ marginBottom: "28px" }}>
+                {/* Week Header Banner */}
+                <div
+                  className="shift-week-banner"
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    background: week.isCurrentWeek ? "#eff6ff" : "#f8fafc",
+                    border: week.isCurrentWeek ? "1px solid #bfdbfe" : "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    padding: "8px 14px",
+                    marginBottom: "12px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <CalendarIcon size={16} className={week.isCurrentWeek ? "color-blue" : "text-muted"} />
+                    <strong style={{ fontSize: "14px", color: week.isCurrentWeek ? "#1e40af" : "#1e293b" }}>
+                      {week.title}
+                    </strong>
+                    <span style={{ fontSize: "12.5px", color: "#64748b" }}>
+                      ({week.dateRangeText})
+                    </span>
+                    {week.isCurrentWeek && (
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          background: "#dbeafe",
+                          color: "#1d4ed8",
+                          fontWeight: 700,
+                          padding: "1px 8px",
+                          borderRadius: "10px",
+                        }}
+                      >
+                        Tuần hiện tại
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "12.5px", color: "#475569", fontWeight: 600 }}>
+                    {weekShifts.length > 0 ? (
+                      <span style={{ color: "#0284c7" }}>{weekShifts.length} ca trực</span>
+                    ) : (
+                      <span style={{ color: "#94a3b8" }}>Chưa có ca trực</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 7-Day Grid */}
+                <div
+                  className="shift-calendar-week"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(7, minmax(172px, 1fr))",
+                    gap: "10px",
+                    overflowX: "auto",
+                  }}
+                >
+                  {week.days.map((day, idx) => {
+                    const dateStr = getLocalDateString(day);
+                    const isToday = dateStr === getTodayDateString();
+                    const dayShifts = weekShifts.filter(
+                      (s) => normalizeShiftDateString(s.dateString || s.date) === dateStr
+                    );
 
             return (
               <div
@@ -639,11 +869,38 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                         fontSize: "12px",
                         color: "#94a3b8",
                         textAlign: "center",
-                        marginTop: "40px",
+                        marginTop: "30px",
                         fontStyle: "italic",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "8px",
                       }}
                     >
-                      Chưa có ca trực
+                      <span>Chưa có ca trực</span>
+                      {canManageShifts && isShiftDateValid(dateStr) && (
+                        <button
+                          type="button"
+                          style={{
+                            fontSize: "11px",
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                            border: "1px dashed #93c5fd",
+                            background: "#f0f9ff",
+                            color: "#0284c7",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontWeight: 600,
+                          }}
+                          onClick={() => handleOpenCreateModal(dateStr)}
+                          title={`Phân ca trực cho ngày ${day.getDate()}/${day.getMonth() + 1}`}
+                        >
+                          <PlusIcon size={12} />
+                          <span>Phân ca</span>
+                        </button>
+                      )}
                     </div>
                   ) : (
                     dayShifts.map((s) => {
@@ -829,24 +1086,36 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                             )}
                             {canManageShifts && (
                               <>
-                                <button
-                                  type="button"
-                                  style={{
-                                    fontSize: "10.5px",
-                                    padding: "3px 6px",
-                                    borderRadius: "4px",
-                                    background: "#f8fafc",
-                                    border: "1px solid #cbd5e1",
-                                    cursor: "pointer",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    color: "#475569",
-                                  }}
-                                  onClick={() => handleOpenEditModal(s)}
-                                  title="Chỉnh sửa ca trực"
-                                >
-                                  <PencilIcon size={12} />
-                                </button>
+                                {(() => {
+                                  const isFuture = isShiftDateValid(s.dateString || s.date.slice(0, 10));
+                                  return (
+                                    <button
+                                      type="button"
+                                      style={{
+                                        fontSize: "10.5px",
+                                        padding: "3px 6px",
+                                        borderRadius: "4px",
+                                        background: "#f8fafc",
+                                        border: "1px solid #cbd5e1",
+                                        cursor: isFuture ? "pointer" : "not-allowed",
+                                        opacity: isFuture ? 1 : 0.45,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        color: "#475569",
+                                      }}
+                                      onClick={() => {
+                                        if (!isFuture) {
+                                          onNotify?.("Không thể chỉnh sửa ca trực của ngày hiện tại hoặc quá khứ. Chỉ được phân ca trực cho các ngày sau ngày hiện tại.", "warning");
+                                          return;
+                                        }
+                                        handleOpenEditModal(s);
+                                      }}
+                                      title={isFuture ? "Chỉnh sửa ca trực" : "Chỉ có thể chỉnh sửa ca trực của ngày sau ngày hiện tại"}
+                                    >
+                                      <PencilIcon size={12} />
+                                    </button>
+                                  );
+                                })()}
                                 <button
                                   type="button"
                                   style={{
@@ -872,6 +1141,10 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                       );
                     })
                   )}
+                </div>
+              </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -1001,15 +1274,28 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                         )}
                         {canManageShifts && (
                           <>
-                            <button
-                              type="button"
-                              className="btn-shift-action btn-shift-edit"
-                              onClick={() => handleOpenEditModal(s)}
-                              title="Chỉnh sửa ca trực"
-                            >
-                              <PencilIcon size={12} />
-                              <span>Sửa</span>
-                            </button>
+                            {(() => {
+                              const isFuture = isShiftDateValid(s.dateString || s.date.slice(0, 10));
+                              return (
+                                <button
+                                  type="button"
+                                  className="btn-shift-action btn-shift-edit"
+                                  onClick={() => {
+                                    if (!isFuture) {
+                                      onNotify?.("Không thể chỉnh sửa ca trực của ngày hiện tại hoặc quá khứ. Chỉ được phân ca trực cho các ngày sau ngày hiện tại.", "warning");
+                                      return;
+                                    }
+                                    handleOpenEditModal(s);
+                                  }}
+                                  disabled={!isFuture}
+                                  style={{ opacity: isFuture ? 1 : 0.45, cursor: isFuture ? "pointer" : "not-allowed" }}
+                                  title={isFuture ? "Chỉnh sửa ca trực" : "Chỉ có thể chỉnh sửa ca trực của ngày sau ngày hiện tại"}
+                                >
+                                  <PencilIcon size={12} />
+                                  <span>Sửa</span>
+                                </button>
+                              );
+                            })()}
                             <button
                               type="button"
                               className="btn-shift-action btn-shift-delete"
@@ -1151,9 +1437,13 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                   <input
                     type="date"
                     required
+                    min={getTomorrowDateString()}
                     value={shiftForm.date}
                     onChange={(e) => setShiftForm({ ...shiftForm, date: e.target.value })}
                   />
+                  <span style={{ fontSize: "11.5px", color: "#64748b", marginTop: "4px", display: "block" }}>
+                    * Chỉ được phân ca trực cho các ngày sau ngày hiện tại (từ ngày mai trở đi).
+                  </span>
                 </div>
 
                 <div className="form-field" style={{ minWidth: 0 }}>
@@ -1181,29 +1471,109 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                 </div>
               </div>
 
-              <div className="form-field">
-                <label>Trạng thái ca trực:</label>
-                <select
-                  value={shiftForm.status}
-                  onChange={(e) => setShiftForm({ ...shiftForm, status: e.target.value })}
-                >
-                  <option value="Lên lịch">Lên lịch</option>
-                  <option value="Đang trực">Đang trực</option>
-                  <option value="Hoàn thành">Hoàn thành</option>
-                  <option value="Hủy">Đã hủy</option>
-                </select>
-              </div>
+              {/* Trạng thái ca trực (chỉ hiển thị khi chỉnh sửa ca đã có; khi thêm mới mặc định luôn là "Lên lịch") */}
+              {editingShift && (
+                <div className="form-field">
+                  <label>Trạng thái ca trực:</label>
+                  <select
+                    value={shiftForm.status}
+                    onChange={(e) => setShiftForm({ ...shiftForm, status: e.target.value })}
+                  >
+                    <option value="Lên lịch">Lên lịch</option>
+                    <option value="Đang trực">Đang trực</option>
+                    <option value="Hoàn thành">Hoàn thành</option>
+                    <option value="Hủy">Đã hủy</option>
+                  </select>
+                </div>
+              )}
 
-              {/* Multi-employee selection */}
+              {/* Multi-employee selection with search */}
               <div className="form-field">
-                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                   <span>
                     Phân công nhân sự trực: <span className="req-star">*</span>
                   </span>
-                  <span style={{ fontSize: "12px", color: "#0284c7", fontWeight: 600 }}>
-                    Đã chọn: {shiftForm.selectedEmployeeIds.length} nhân viên
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {shiftForm.selectedEmployeeIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShiftForm((prev) => ({ ...prev, selectedEmployeeIds: [] }))}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#ef4444",
+                          fontSize: "11.5px",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          padding: 0,
+                        }}
+                      >
+                        Bỏ chọn tất cả
+                      </button>
+                    )}
+                    <span style={{ fontSize: "12px", color: "#0284c7", fontWeight: 600 }}>
+                      Đã chọn: {shiftForm.selectedEmployeeIds.length} nhân viên
+                    </span>
+                  </div>
                 </label>
+
+                {/* Thanh tìm kiếm nhân viên */}
+                <div
+                  style={{
+                    position: "relative",
+                    marginBottom: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: "10px",
+                      color: "#94a3b8",
+                      pointerEvents: "none",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <SearchIcon size={14} />
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Tìm nhanh nhân viên theo họ tên, mã NV, email hoặc phòng ban..."
+                    value={employeeSearchQuery}
+                    onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "7px 30px 7px 32px",
+                      borderRadius: "6px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "12.5px",
+                      background: "#ffffff",
+                    }}
+                  />
+                  {employeeSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setEmployeeSearchQuery("")}
+                      style={{
+                        position: "absolute",
+                        right: "8px",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#94a3b8",
+                        display: "flex",
+                        alignItems: "center",
+                        padding: "2px",
+                      }}
+                      title="Xóa tìm kiếm"
+                    >
+                      <XIcon size={14} />
+                    </button>
+                  )}
+                </div>
+
                 <div
                   style={{
                     maxHeight: "190px",
@@ -1217,52 +1587,79 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                     background: "#f8fafc",
                   }}
                 >
-                  {assignableEmployees.map((emp) => {
-                    const isChecked = shiftForm.selectedEmployeeIds.includes(emp.id);
-                    return (
-                      <label
-                        key={emp.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          padding: "8px 12px",
-                          borderRadius: "8px",
-                          background: isChecked ? "#f0f9ff" : "#ffffff",
-                          border: `1.5px solid ${isChecked ? "#0284c7" : "#e2e8f0"}`,
-                          cursor: "pointer",
-                          fontSize: "13px",
-                          userSelect: "none",
-                          transition: "all 0.15s ease",
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleToggleEmployee(emp.id)}
+                  {filteredModalEmployees.length === 0 ? (
+                    <div style={{ padding: "16px", textAlign: "center", color: "#94a3b8", fontSize: "12.5px", fontStyle: "italic" }}>
+                      {employeeSearchQuery ? (
+                        <>
+                          Không tìm thấy nhân viên nào phù hợp với &ldquo;<strong>{employeeSearchQuery}</strong>&rdquo;.{" "}
+                          <button
+                            type="button"
+                            onClick={() => setEmployeeSearchQuery("")}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#0284c7",
+                              cursor: "pointer",
+                              textDecoration: "underline",
+                              fontSize: "12.5px",
+                              padding: 0,
+                            }}
+                          >
+                            Xóa tìm kiếm
+                          </button>
+                        </>
+                      ) : (
+                        "Chưa có nhân viên nào trong danh sách."
+                      )}
+                    </div>
+                  ) : (
+                    filteredModalEmployees.map((emp) => {
+                      const isChecked = shiftForm.selectedEmployeeIds.includes(emp.id);
+                      return (
+                        <label
+                          key={emp.id}
                           style={{
-                            width: "16px",
-                            height: "16px",
-                            minWidth: "16px",
-                            margin: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            padding: "8px 12px",
+                            borderRadius: "8px",
+                            background: isChecked ? "#f0f9ff" : "#ffffff",
+                            border: `1.5px solid ${isChecked ? "#0284c7" : "#e2e8f0"}`,
                             cursor: "pointer",
-                            flexShrink: 0,
+                            fontSize: "13px",
+                            userSelect: "none",
+                            transition: "all 0.15s ease",
                           }}
-                        />
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
-                          <span style={{ fontWeight: 600, color: "#0f172a" }}>
-                            {emp.fullName}
-                          </span>
-                          <span style={{ color: "#0284c7", fontSize: "12px", fontWeight: 600 }}>
-                            ({emp.code})
-                          </span>
-                          <span style={{ color: "#64748b", fontSize: "12px", marginLeft: "auto" }}>
-                            — {emp.position || "Nhân viên"}
-                          </span>
-                        </div>
-                      </label>
-                    );
-                  })}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleEmployee(emp.id)}
+                            style={{
+                              width: "16px",
+                              height: "16px",
+                              minWidth: "16px",
+                              margin: 0,
+                              cursor: "pointer",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
+                            <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                              {emp.fullName}
+                            </span>
+                            <span style={{ color: "#0284c7", fontSize: "12px", fontWeight: 600 }}>
+                              ({emp.code})
+                            </span>
+                            <span style={{ color: "#64748b", fontSize: "12px", marginLeft: "auto", whiteSpace: "nowrap" }}>
+                              — {emp.position || "Nhân viên"}{emp.departmentName ? ` • ${emp.departmentName}` : ""}
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })
+                  )}
                 </div>
               </div>
 

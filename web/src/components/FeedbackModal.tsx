@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { StarIcon } from "./Icon";
 import {
   createFeedbackApi,
   fetchFeedbackByBookingApi,
@@ -119,7 +120,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
               {existingFeedback ? "Cập nhật đánh giá phòng" : "Đánh giá trải nghiệm sử dụng phòng"}
             </h3>
             <p className="feedback-modal-subtitle">
-              Đơn đặt #{bookingId} {roomName ? `• ${roomName}` : ""}
+              Đặt phòng #{bookingId} {roomName ? `• ${roomName}` : ""}
             </p>
           </div>
           <button
@@ -157,7 +158,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                     onClick={() => setRating(star)}
                     title={`${star} sao`}
                   >
-                    ★
+                    <StarIcon size={28} filled={star <= activeRating} />
                   </button>
                 ))}
               </div>

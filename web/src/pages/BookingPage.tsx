@@ -10,6 +10,7 @@ import {
   BanIcon,
   ZapIcon,
   CheckIcon,
+  XIcon,
   CopyIcon,
   HourglassIcon,
   RefreshCwIcon,
@@ -623,7 +624,7 @@ export default function BookingPage() {
     return () => window.clearInterval(timer);
   }, []);
 
-  // Khi một đơn vừa bước qua hạn nhận phòng → tải lại danh sách để phản ánh
+  // Khi một lượt đặt phòng vừa bước qua hạn nhận phòng → tải lại danh sách để phản ánh
   // trạng thái do backend (tác vụ nền) xử lý.
   useEffect(() => {
     if (isLoadingBookings) return;
@@ -783,7 +784,7 @@ export default function BookingPage() {
     });
   }, [myBookings, sessionByDetailId, nowWithOffset]);
 
-  // Lọc theo ngày mượn (ngày bắt đầu của từng chi tiết đơn).
+  // Lọc theo ngày mượn (ngày bắt đầu của từng chi tiết phòng).
   const historyDateRange = useMemo<BookingDateRange | null>(() => {
     if (historyDateFilter === "custom") return historyCustomRange;
     if (historyDateFilter === "all") return null;
@@ -847,7 +848,7 @@ export default function BookingPage() {
     if (!cleanCode) {
       setUsageToast({
         type: "error",
-        text: "Vui lòng nhập mã nhận phòng (VD: HUIT-18549) để check-in hoặc bấm nút '⚡ Check-in nhận phòng ngay' bên dưới.",
+        text: "Vui lòng nhập mã nhận phòng (VD: HUIT-18549) để check-in hoặc bấm nút 'Check-in nhận phòng ngay' bên dưới.",
       });
       return;
     }
@@ -858,7 +859,7 @@ export default function BookingPage() {
       const res = await checkInSession({ confirmationCode: cleanCode });
       setUsageToast({
         type: "success",
-        text: `✓ Nhận phòng ${res.roomName} (${res.roomCode}) thành công! Trạng thái phòng chuyển sang 'Đang sử dụng'.`,
+        text: `Nhận phòng ${res.roomName} (${res.roomCode}) thành công! Trạng thái phòng chuyển sang 'Đang sử dụng'.`,
       });
       setQuickCodeInput("");
       await loadMyBookings();
@@ -893,7 +894,7 @@ export default function BookingPage() {
       });
       setUsageToast({
         type: "success",
-        text: `✓ Check-in nhận phòng ${res.roomCode} thành công! Phòng đã chuyển sang trạng thái 'Đang sử dụng'.`,
+        text: `Check-in nhận phòng ${res.roomCode} thành công! Phòng đã chuyển sang trạng thái 'Đang sử dụng'.`,
       });
       await loadMyBookings();
     } catch (err: any) {
@@ -939,7 +940,7 @@ export default function BookingPage() {
       setIsCheckInModalOpen(false);
       setUsageToast({
         type: "success",
-        text: `✓ Check-in nhận phòng ${res.roomCode} thành công! Chúc bạn có buổi học tập/sinh hoạt hiệu quả.`,
+        text: `Check-in nhận phòng ${res.roomCode} thành công! Chúc bạn có buổi học tập/sinh hoạt hiệu quả.`,
       });
       await loadMyBookings();
     } catch (err: any) {
@@ -990,7 +991,7 @@ export default function BookingPage() {
       setIsCheckOutModalOpen(false);
       setUsageToast({
         type: "success",
-        text: `✓ Xác nhận trả phòng ${res.roomCode} thành công! Cảm ơn bạn đã giữ gìn vệ sinh và thiết bị phòng.`,
+        text: `Xác nhận trả phòng ${res.roomCode} thành công! Cảm ơn bạn đã giữ gìn vệ sinh và thiết bị phòng.`,
       });
       await loadMyBookings();
     } catch (err: any) {
@@ -1057,7 +1058,7 @@ export default function BookingPage() {
       setIsSubmitting(true);
       const res = await createBookingApi(payload);
       setSubmitSuccess(
-        `Đăng ký mượn phòng thành công! Mã đơn: #${res.id}. Trạng thái hiện tại: "Chờ duyệt".`
+        `Đăng ký mượn phòng thành công! Mã đặt phòng: #${res.id}. Trạng thái hiện tại: "Chờ duyệt".`
       );
 
       // Reset form
@@ -1074,14 +1075,14 @@ export default function BookingPage() {
         err.response?.data?.title ||
         (err instanceof Error
           ? err.message
-          : "Gửi đơn đặt phòng thất bại. Vui lòng kiểm tra lại thông tin.");
+          : "Gửi yêu cầu đặt phòng thất bại. Vui lòng kiểm tra lại thông tin.");
       setSubmitError(serverMsg);
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  // Handle Check-in cả đơn (Nhận phòng) — backend tự kiểm tra cửa sổ [T-15 phút, T)
+  // Handle Check-in cả lượt đặt (Nhận phòng) — backend tự kiểm tra cửa sổ [T-15 phút, T)
   async function handleCheckInBooking(booking: BookingResponse) {
     setCheckingInBookingId(booking.id);
     setUsageToast(null);
@@ -1089,7 +1090,7 @@ export default function BookingPage() {
       await checkInBookingApi(booking.id);
       setUsageToast({
         type: "success",
-        text: `✓ Nhận phòng đơn #${booking.id} thành công! Đơn chuyển sang trạng thái "Đang sử dụng".`,
+        text: `Nhận phòng #${booking.id} thành công! Lịch đặt chuyển sang trạng thái "Đang sử dụng".`,
       });
       await loadMyBookings();
     } catch (err: any) {
@@ -1109,7 +1110,7 @@ export default function BookingPage() {
     if (!eligibility.allowed) {
       setUsageToast({
         type: "error",
-        text: eligibility.message ?? "Không thể hủy đơn này.",
+        text: eligibility.message ?? "Không thể hủy yêu cầu đặt phòng này.",
       });
       return;
     }
@@ -1132,7 +1133,7 @@ export default function BookingPage() {
 
     const eligibility = canCancelBookingOnline(booking, nowWithOffset);
     if (!eligibility.allowed) {
-      setCancelFormError(eligibility.message ?? "Không thể hủy đơn này.");
+      setCancelFormError(eligibility.message ?? "Không thể hủy yêu cầu đặt phòng này.");
       return;
     }
 
@@ -1153,8 +1154,8 @@ export default function BookingPage() {
       : "—";
 
     const isConfirmed = await confirm({
-      title: "Xác nhận hủy đơn đặt phòng",
-      message: `Bạn có chắc chắn muốn hủy đơn đặt phòng #${booking.id} không?`,
+      title: "Xác nhận hủy đặt phòng",
+      message: `Bạn có chắc chắn muốn hủy đặt phòng #${booking.id} không?`,
       subMessage:
         "Sau khi xác nhận, phòng sẽ được giải phóng và bạn không thể hoàn tác thao tác này.",
       itemDetails: [
@@ -1170,7 +1171,7 @@ export default function BookingPage() {
       type: "danger",
     });
 
-    // Chọn "Quay lại" → trở về form chỉnh sửa, không thay đổi trạng thái đơn.
+    // Chọn "Quay lại" → trở về form chỉnh sửa, không thay đổi trạng thái đặt phòng.
     if (!isConfirmed) return;
 
     try {
@@ -1182,13 +1183,13 @@ export default function BookingPage() {
       setCancelFormBooking(null);
       setUsageToast({
         type: "success",
-        text: `✓ Đã hủy đơn đặt phòng #${booking.id} thành công. Khung giờ đã được giải phóng.`,
+        text: `Đã hủy đặt phòng #${booking.id} thành công. Khung giờ đã được giải phóng.`,
       });
       await loadMyBookings();
     } catch (err: any) {
       const msg =
         err.response?.data?.message ||
-        (err instanceof Error ? err.message : "Hủy đơn thất bại. Vui lòng thử lại.");
+        (err instanceof Error ? err.message : "Hủy đặt phòng thất bại. Vui lòng thử lại.");
       setCancelFormError(msg);
     } finally {
       setIsSubmittingCancel(false);
@@ -1304,7 +1305,7 @@ export default function BookingPage() {
                 onClick={() => navigate("/dat-phong")}
               >
                 <PlusIcon size={16} />
-                <span>Tạo đơn đặt phòng mới</span>
+                <span>Đặt phòng mới</span>
               </button>
               <button
                 type="button"
@@ -1314,7 +1315,7 @@ export default function BookingPage() {
                 onClick={() => navigate("/dat-phong?tab=my-bookings")}
               >
                 <ClockIcon size={16} />
-                <span>Lịch sử đơn của tôi</span>
+                <span>Lịch sử đặt phòng của tôi</span>
               </button>
             </div>
           </section>
@@ -1367,7 +1368,7 @@ export default function BookingPage() {
                         fontSize: "12.5px",
                       }}
                     >
-                      * Hệ thống tạm khóa chức năng gửi đơn mượn phòng của bạn trong thời gian này.
+                      * Hệ thống tạm khóa chức năng đặt phòng của bạn trong thời gian này.
                     </div>
                   </div>
                 </div>
@@ -1802,7 +1803,7 @@ export default function BookingPage() {
                         className="btn-link"
                         onClick={() => navigate("/dat-phong?tab=my-bookings")}
                       >
-                        Xem trong danh sách đơn của tôi →
+                        Xem trong danh sách đặt phòng của tôi →
                       </button>
                     </div>
                   )}
@@ -1840,7 +1841,7 @@ export default function BookingPage() {
                     }
                   >
                     {isSubmitting ? (
-                      <span>Đang xử lý gửi đơn...</span>
+                      <span>Đang xử lý gửi yêu cầu...</span>
                     ) : myEligibility?.hasActiveRestriction ? (
                       <span
                         style={{
@@ -2080,7 +2081,7 @@ export default function BookingPage() {
                                           </span>
                                           <span className="room-tile-check">
                                             {isSelected
-                                              ? "✓ Đã chọn"
+                                              ? "Đã chọn"
                                               : "Chọn phòng"}
                                           </span>
                                         </button>
@@ -2124,7 +2125,7 @@ export default function BookingPage() {
                               className="chip-remove-btn"
                               title="Bỏ chọn"
                             >
-                              ✕
+                              <XIcon size={12} />
                             </button>
                           </span>
                         ))}
@@ -2142,7 +2143,7 @@ export default function BookingPage() {
             <section className="my-bookings-section">
               <div className="section-head-bar">
                 <div>
-                  <h2>Lịch sử đơn & Nhận phòng</h2>
+                  <h2>Lịch sử đặt phòng & Nhận phòng</h2>
                   <p>Theo dõi tiến độ duyệt, lấy mã nhận phòng và thực hiện Check-in / Trả phòng</p>
                 </div>
                 <button
@@ -2163,7 +2164,7 @@ export default function BookingPage() {
                     className="usage-toast-close"
                     onClick={() => setUsageToast(null)}
                   >
-                    ✕
+                    <XIcon size={14} />
                   </button>
                 </div>
               )}
@@ -2216,16 +2217,16 @@ export default function BookingPage() {
               {isLoadingBookings && (
                 <div className="loading-box">
                   <div className="spinner"></div>
-                  <span>Đang tải lịch sử đơn đặt & phiên sử dụng...</span>
+                  <span>Đang tải lịch sử đặt phòng & phiên sử dụng...</span>
                 </div>
               )}
 
               {!isLoadingBookings && myBookings.length === 0 && (
                 <div className="table-empty-box">
                   <CalendarIcon size={36} className="empty-icon" />
-                  <h4>Bạn chưa có đơn đặt phòng nào</h4>
+                  <h4>Bạn chưa có yêu cầu đặt phòng nào</h4>
                   <p>
-                    Hãy tạo đơn đặt phòng đầu tiên để phục vụ nhu cầu học tập,
+                    Hãy tạo yêu cầu đặt phòng đầu tiên để phục vụ nhu cầu học tập,
                     nghiên cứu hoặc sinh hoạt tại trường.
                   </p>
                   <button
@@ -2381,7 +2382,7 @@ export default function BookingPage() {
                     <div className="table-empty-box" style={{ padding: "40px 20px" }}>
                       <p>
                         {historyDateRange
-                          ? `Không có đơn phù hợp với khoảng ngày ${formatDdMmYyyy(
+                          ? `Không có yêu cầu phù hợp với khoảng ngày ${formatDdMmYyyy(
                               historyDateRange.from
                             )} – ${formatDdMmYyyy(historyDateRange.to)}.`
                           : "Không tìm thấy lịch đặt phòng nào phù hợp với bộ lọc."}
@@ -2401,11 +2402,11 @@ export default function BookingPage() {
                       <table className="user-bookings-table">
                         <thead>
                           <tr>
-                            <th>Đơn / Hoạt động</th>
+                            <th>Mã / Hoạt động</th>
                             <th>Tên phòng</th>
                             <th>Khung giờ (Bắt đầu - Kết thúc)</th>
                             <th>Mã nhận phòng</th>
-                            <th>Trạng thái đơn</th>
+                            <th>Trạng thái đặt phòng</th>
                             <th style={{ textAlign: "right" }}>Thao tác</th>
                           </tr>
                         </thead>
@@ -2417,7 +2418,7 @@ export default function BookingPage() {
 
                             return (
                               <tr key={`${item.booking.id}-${item.detail.id}`}>
-                                {/* Đơn / Hoạt động */}
+                                {/* Mã / Hoạt động */}
                                 <td className="table-booking-id-col">
                                   <div className="table-id-badge">#{item.booking.id}</div>
                                   <div
@@ -2483,7 +2484,7 @@ export default function BookingPage() {
                                   )}
                                 </td>
 
-                                {/* Trạng thái đơn */}
+                                {/* Trạng thái đặt phòng */}
                                 <td className="table-status-col">
                                   {item.isInUse ? (
                                     <span className="badge-in-use-pill">
@@ -2557,7 +2558,7 @@ export default function BookingPage() {
                                           type="button"
                                           className="btn-table-cancel"
                                           onClick={() => openCancelForm(item.booking)}
-                                          title="Hủy đơn đặt phòng (bắt buộc chọn lý do)"
+                                          title="Hủy đặt phòng (bắt buộc chọn lý do)"
                                         >
                                           <BanIcon size={13} />
                                           <span>Hủy</span>
@@ -2599,18 +2600,18 @@ export default function BookingPage() {
                                         type="button"
                                         className="btn-table-detail"
                                         onClick={() => setViewingDetailItem(item)}
-                                        title="Xem chi tiết đơn"
+                                        title="Xem chi tiết đặt phòng"
                                       >
                                         Chi tiết
                                       </button>
                                     )}
 
-                                    {/* Lịch sử duyệt đơn */}
+                                    {/* Lịch sử duyệt đặt phòng */}
                                     <button
                                       type="button"
                                       className="btn-table-history"
                                       onClick={() => openApprovalHistoryModal(item.booking.id, item.booking.activityName)}
-                                      title="Xem lịch sử duyệt đơn"
+                                      title="Xem lịch sử duyệt đặt phòng"
                                     >
                                       <HistoryIcon size={13} />
                                       <span>Lịch sử</span>
@@ -2656,7 +2657,7 @@ export default function BookingPage() {
                   <div className="modal-title-wrap">
                     <h3 style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
                       <InfoIcon size={18} />
-                      Chi tiết đơn đặt phòng #{viewingDetailItem.booking.id}
+                      Chi tiết đặt phòng #{viewingDetailItem.booking.id}
                     </h3>
                     <span className="modal-subtitle">
                       Ngày tạo: {new Date(viewingDetailItem.booking.createdAt).toLocaleDateString("vi-VN")}
@@ -2667,7 +2668,7 @@ export default function BookingPage() {
                     className="modal-close-btn"
                     onClick={() => setViewingDetailItem(null)}
                   >
-                    ✕
+                    <XIcon size={14} />
                   </button>
                 </div>
 
@@ -2827,10 +2828,10 @@ export default function BookingPage() {
                   <div className="modal-title-wrap">
                     <h3 style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
                       <BanIcon size={18} />
-                      Hủy đơn đặt phòng #{cancelFormBooking.id}
+                      Hủy đặt phòng #{cancelFormBooking.id}
                     </h3>
                     <span className="modal-subtitle">
-                      Đơn chỉ bị hủy sau khi bạn xác nhận ở bước cuối cùng
+                      Yêu cầu chỉ bị hủy sau khi bạn xác nhận ở bước cuối cùng
                     </span>
                   </div>
                   <button
@@ -2838,7 +2839,7 @@ export default function BookingPage() {
                     className="modal-close-btn"
                     onClick={closeCancelForm}
                   >
-                    ✕
+                    <XIcon size={14} />
                   </button>
                 </div>
 
@@ -2902,7 +2903,7 @@ export default function BookingPage() {
                       <textarea
                         rows={3}
                         className="form-input"
-                        placeholder="Mô tả cụ thể lý do bạn hủy đơn đặt phòng..."
+                        placeholder="Mô tả cụ thể lý do bạn hủy đặt phòng..."
                         value={cancelReasonDetail}
                         onChange={(e) => setCancelReasonDetail(e.target.value)}
                       />
@@ -2961,7 +2962,7 @@ export default function BookingPage() {
                     className="modal-close-btn"
                     onClick={() => setIsCheckInModalOpen(false)}
                   >
-                    ✕
+                    <XIcon size={14} />
                   </button>
                 </div>
 
@@ -3079,7 +3080,7 @@ export default function BookingPage() {
                     className="modal-close-btn"
                     onClick={() => setIsCheckOutModalOpen(false)}
                   >
-                    ✕
+                    <XIcon size={14} />
                   </button>
                 </div>
 

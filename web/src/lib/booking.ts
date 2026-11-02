@@ -84,15 +84,15 @@ export interface BookingResponse {
   userFullName?: string;
   /** Thời điểm check-in (UTC ISO). NULL = chưa nhận phòng */
   checkedInAt?: string | null;
-  /** Mã lý do hủy: CHANGE_PLAN | NO_LONGER_NEEDED | OTHER | NO_SHOW. NULL = đơn cũ chưa có dữ liệu */
+  /** Mã lý do hủy: CHANGE_PLAN | NO_LONGER_NEEDED | OTHER | NO_SHOW. NULL = lịch cũ chưa có dữ liệu */
   cancelReason?: string | null;
   /** Nội dung chi tiết khi lý do hủy là OTHER */
   cancelReasonDetail?: string | null;
   /** Nguồn hủy: STUDENT | AUTO | STAFF. NULL = không ghi nhận */
   cancelSource?: string | null;
-  /** Cửa sổ nhận phòng theo thời gian server (chỉ đơn đã duyệt, chưa check-in) */
+  /** Cửa sổ nhận phòng theo thời gian server (chỉ lịch đã duyệt, chưa check-in) */
   checkInWindow?: CheckInWindow | null;
-  /** Tài khoản quyết định duyệt đơn. NULL = chưa duyệt hoặc bị từ chối */
+  /** Tài khoản quyết định duyệt đặt phòng. NULL = chưa duyệt hoặc bị từ chối */
   approvedByUserId?: number | null;
   approvedByName?: string | null;
   approvedAt?: string | null;
@@ -674,7 +674,7 @@ export function buildBookingPayload(
 }
 
 /**
- * Kiểm tra xem đơn đặt phòng có thể hủy được hay không
+ * Kiểm tra xem lịch đặt phòng có thể hủy được hay không
  */
 export function canCancelBooking(status: string): boolean {
   const s = (status || "").trim().toLowerCase();
@@ -789,7 +789,7 @@ export function getBookingStartAt(booking: BookingResponse): Date | null {
   return Number.isFinite(requested) ? new Date(requested) : null;
 }
 
-/** Đơn đã được duyệt (kể cả duyệt một phần) — điều kiện cần cho nhận phòng và hủy trực tuyến */
+/** Yêu cầu đã được duyệt (kể cả duyệt một phần) — điều kiện cần cho nhận phòng và hủy trực tuyến */
 export function isApprovedBookingStatus(status?: string | null): boolean {
   const s = (status || "").trim();
   return s === "Đã duyệt" || s === "Duyệt một phần";
@@ -804,21 +804,21 @@ export function canCancelBookingOnline(
   now: Date = new Date()
 ): { allowed: boolean; message?: string } {
   if (booking.checkedInAt) {
-    return { allowed: false, message: "Đơn đã được nhận phòng, không thể hủy trực tuyến." };
+    return { allowed: false, message: "Yêu cầu đã được nhận phòng, không thể hủy trực tuyến." };
   }
   if (!isApprovedBookingStatus(booking.status)) {
     return {
       allowed: false,
-      message: "Chỉ đơn đã được duyệt mới có thể hủy trực tuyến.",
+      message: "Chỉ yêu cầu đặt phòng đã được duyệt mới có thể hủy trực tuyến.",
     };
   }
   if (booking.status === "Đã hủy") {
-    return { allowed: false, message: "Đơn đã bị hủy trước đó." };
+    return { allowed: false, message: "Yêu cầu đặt phòng đã bị hủy trước đó." };
   }
 
   const startAt = getBookingStartAt(booking);
   if (!startAt) {
-    return { allowed: false, message: "Không xác định được giờ bắt đầu của đơn." };
+    return { allowed: false, message: "Không xác định được giờ bắt đầu đặt phòng." };
   }
 
   const deadline = startAt.getTime() - CANCEL_LEAD_HOURS * 60 * 60 * 1000;
@@ -872,7 +872,7 @@ export function describeCancelSource(
   return { label: "Đã hủy", cssClass: "cancel-unknown" };
 }
 
-/** Nội dung hiển thị lý do hủy (an toàn với đơn cũ chưa có dữ liệu) */
+/** Nội dung hiển thị lý do hủy (an toàn với lịch cũ chưa có dữ liệu) */
 export function describeCancelReason(
   booking: Pick<BookingResponse, "cancelReason" | "cancelReasonDetail">
 ): string {
@@ -909,7 +909,7 @@ export function getServerClockOffsetMs(
 }
 
 /**
- * Hiển thị tóm tắt thời gian của chi tiết đơn đặt phòng
+ * Hiển thị tóm tắt thời gian của chi tiết đặt phòng
  */
 export function formatDetailTimeRange(detail: BookingDetailItem): string {
   if (detail.startPeriodName && detail.endPeriodName) {
@@ -1043,7 +1043,7 @@ export async function cancelBookingApi(
   return Boolean(res.data?.success ?? true);
 }
 
-/** Nhận phòng (check-in) đơn đã duyệt trong cửa sổ [T - 15 phút, T) */
+/** Nhận phòng (check-in) lịch đã duyệt trong cửa sổ [T - 15 phút, T) */
 export async function checkInBookingApi(bookingId: number): Promise<BookingResponse> {
   const res = await api.post(`/api/Bookings/${bookingId}/check-in`);
   return (res.data?.data ?? res.data) as BookingResponse;
@@ -1068,7 +1068,7 @@ export interface ApprovalHistoryItem {
   approvalMode?: string | null;
 }
 
-/** Lấy lịch sử phê duyệt / từ chối / hủy đơn đặt phòng */
+/** Lấy lịch sử phê duyệt / từ chối / hủy đặt phòng */
 export async function fetchApprovalHistoryApi(bookingId: number): Promise<ApprovalHistoryItem[]> {
   const res = await api.get(`/api/Bookings/${bookingId}/approval-history`);
   const data = res.data?.data ?? res.data;
@@ -1081,7 +1081,7 @@ export interface AutoApprovalSetting {
   enabled: boolean;
   updatedAt?: string | null;
   updatedByName?: string | null;
-  /** Số đơn đang chờ duyệt trong phạm vi quản lý */
+  /** Số yêu cầu đang chờ duyệt trong phạm vi quản lý */
   pendingCount: number;
 }
 
@@ -1096,13 +1096,13 @@ export async function fetchAutoApprovalSettingApi(): Promise<AutoApprovalSetting
   return (res.data?.data ?? res.data) as AutoApprovalSetting;
 }
 
-/** Bật/tắt duyệt tự động cho toàn bộ đơn mới */
+/** Bật/tắt duyệt tự động cho toàn bộ yêu cầu mới */
 export async function updateAutoApprovalSettingApi(enabled: boolean): Promise<AutoApprovalSetting> {
   const res = await api.put("/api/Bookings/auto-approval", { enabled });
   return (res.data?.data ?? res.data) as AutoApprovalSetting;
 }
 
-/** Duyệt toàn bộ đơn đang chờ duyệt trong phạm vi quản lý */
+/** Duyệt toàn bộ yêu cầu đang chờ duyệt trong phạm vi quản lý */
 export async function approvePendingBookingsApi(): Promise<BulkApproveResult> {
   const res = await api.post("/api/Bookings/auto-approval/approve-pending");
   return (res.data?.data ?? res.data) as BulkApproveResult;

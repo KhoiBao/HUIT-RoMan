@@ -28,12 +28,11 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         }
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request)
-        {
-            // UI chỉ nhập email; field giữ tên CardCode để tương thích ngược.
-            // Chấp nhận CardCode hoặc Email hoặc UserName.
+        {       
+            // Chấp nhận mssv.
             var loginKey = request.CardCode?.Trim();
             var user = await _unitOfWork.Repository<User>().FirstOrDefaultAsync(
-                u => u.CardCode == loginKey || u.Email == loginKey || u.UserName == loginKey,
+                u => u.CardCode == loginKey,
                 u => u.Department);
             
             if (user == null)

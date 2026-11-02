@@ -106,10 +106,10 @@ export const ApprovalHistoryModal: React.FC<ApprovalHistoryModalProps> = ({
         <div className="history-modal-header">
           <div>
             <h3 className="history-modal-title" id="approval-history-title">
-              Lịch sử duyệt đơn
+              Lịch sử duyệt đặt phòng
             </h3>
             <p className="history-modal-subtitle">
-              Đơn đặt #{bookingId} {activityName ? `• ${activityName}` : ""}
+              Đặt phòng #{bookingId} {activityName ? `• ${activityName}` : ""}
             </p>
           </div>
           <button
@@ -137,8 +137,8 @@ export const ApprovalHistoryModal: React.FC<ApprovalHistoryModalProps> = ({
               <div className="history-empty-icon" aria-hidden="true">
                 <ClipboardListIcon size={26} />
               </div>
-              <p>Chưa có lịch sử duyệt nào cho đơn đặt phòng này.</p>
-              <small>Hệ thống tự động ghi nhận khi cán bộ quản trị hoặc nhân sự xử lý đơn.</small>
+              <p>Chưa có lịch sử duyệt nào cho yêu cầu đặt phòng này.</p>
+              <small>Hệ thống tự động ghi nhận khi cán bộ quản trị hoặc nhân sự xử lý duyệt đặt phòng.</small>
             </div>
           )}
 

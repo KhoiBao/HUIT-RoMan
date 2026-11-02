@@ -236,7 +236,12 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
             </thead>
             <tbody>
               {filteredTypes.map((t) => (
-                <tr key={t.id}>
+                <tr
+                  key={t.id}
+                  className="admin-clickable-row"
+                  onClick={() => openEditModal(t)}
+                  title="Bấm vào dòng để chỉnh sửa loại phòng này"
+                >
                   <td>
                     <span className="code-tag">#{t.id}</span>
                   </td>
@@ -256,7 +261,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
                       </span>
                     )}
                   </td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <div className="table-action-btns">
                       <button
                         type="button"

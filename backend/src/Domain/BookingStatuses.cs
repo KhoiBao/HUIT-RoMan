@@ -1,6 +1,6 @@
 namespace HUIT_RoMan.Domain;
 
-/// <summary>Canonical values persisted for the shared-room booking workflow.</summary>
+// Các ttrang thái của booking, phòng và phiên sử dụng.
 public static class BookingStatuses
 {
     public const string Pending = "Chờ duyệt";
@@ -12,6 +12,7 @@ public static class BookingStatuses
     public const string Completed = "Hoàn thành";
 }
 
+// các trạng thái của phòng
 public static class RoomStatuses
 {
     public const string Available = "Trống";
@@ -24,6 +25,7 @@ public static class RoomStatuses
         !string.IsNullOrWhiteSpace(status) && Array.IndexOf(All, status) >= 0;
 }
 
+// các trâng thái của phiên sử dụng
 public static class UsageSessionStatuses
 {
     public const string PendingCheckIn = "Chờ nhận phòng";

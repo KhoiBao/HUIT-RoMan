@@ -4,9 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
     /// Đánh giá, phản hồi sau khi sử dụng phòng.
-    /// </summary>
     [Table("Feedbacks")]
     public class Feedback : Common.BaseEntity
     {
@@ -14,7 +12,7 @@ namespace HUIT_RoMan.Domain.Entities
         public int Id { get; set; }
 
         public int Rating { get; set; } // Số sao (1-5)
-        public string Comment { get; set; }
+        public string Comment { get; set; } = string.Empty;
 
         [ForeignKey("User")]
         public int UserId { get; set; }

@@ -143,15 +143,15 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
     return Math.max(1, maxVal);
   }, [bookingReport]);
 
-  // Chưa có đơn nào được duyệt / chưa có dữ liệu → không hiển thị 0% gây hiểu sai
+  // Chưa có lượt đặt nào được duyệt / chưa có dữ liệu → không hiển thị 0% gây hiểu sai
   const totalBookingsInRange = overview?.totalBookings ?? 0;
   const approvedBookingsInRange = overview?.approvedBookings ?? 0;
   const hasBookingData = bookingReport?.timeSeries.some((p) => p.total > 0) ?? false;
   const approvalCaption =
     totalBookingsInRange === 0
-      ? "Chưa có đơn nào trong kỳ"
+      ? "Chưa có lượt đặt nào trong kỳ"
       : approvedBookingsInRange === 0
-      ? `0/${totalBookingsInRange} đơn đã duyệt`
+      ? `0/${totalBookingsInRange} lượt đặt đã duyệt`
       : null;
 
   return (
@@ -169,7 +169,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
               {approvalCaption ?? (
                 <>
                   Đã duyệt: <strong>{overview?.approvalRate ?? 0}%</strong> ·{" "}
-                  {approvedBookingsInRange} đơn
+                  {approvedBookingsInRange} lượt đặt
                 </>
               )}
             </span>
@@ -362,7 +362,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
               <div>
                 <h3 style={{ fontSize: "16px", fontWeight: 800, color: "var(--rp-title)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                   <TrendingUpIcon size={18} />
-                  <span>XU HƯỚNG SỐ LƯỢNG ĐƠN MƯỢN THEO NGÀY</span>
+                  <span>XU HƯỚNG SỐ LƯỢNG ĐẶT PHÒNG THEO NGÀY</span>
                 </h3>
                 <span style={{ fontSize: "12.5px", color: "var(--rp-muted)" }}>
                   Biến động số lượng yêu cầu đặt phòng và tình hình xét duyệt qua các mốc thời gian.
@@ -392,7 +392,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                 <strong style={{ display: "block", color: "var(--rp-text)", marginBottom: "4px" }}>
                   Chưa có lượt mượn phòng nào trong kỳ
                 </strong>
-                Biểu đồ sẽ hiển thị khi có đơn đặt phòng trong khoảng thời gian đã chọn.
+                Biểu đồ sẽ hiển thị khi có dữ liệu đặt phòng trong khoảng thời gian đã chọn.
               </div>
             ) : (
               <div style={{ overflowX: "auto", paddingBottom: "10px" }}>
@@ -418,7 +418,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                     ];
                     const barBase = Math.max(1, pt.total);
                     const barBreakdown =
-                      `Ngày ${pt.label}: Tổng ${pt.total} đơn (Đã duyệt: ${pt.approved}, ` +
+                      `Ngày ${pt.label}: Tổng ${pt.total} lượt đặt (Đã duyệt: ${pt.approved}, ` +
                       `Chờ duyệt: ${pt.pending ?? 0}, Hoàn thành: ${pt.completed ?? 0}, ` +
                       `Từ chối: ${pt.rejected}, Đã hủy: ${pt.cancelled})`;
 
@@ -501,7 +501,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
             >
               <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--rp-title)", marginBottom: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <PieChartIcon size={17} />
-                <span>TỶ LỆ PHÂN BỐ TRẠNG THÁI ĐƠN MƯỢN</span>
+                <span>TỶ LỆ PHÂN BỐ TRẠNG THÁI ĐẶT PHÒNG</span>
               </h4>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {bookingReport?.statusDistribution.map((item) => (
@@ -509,7 +509,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
                       <span style={{ fontWeight: 600, color: "var(--rp-text)" }}>{item.name}</span>
                       <span style={{ fontWeight: 700, color: "var(--rp-title)" }}>
-                        {item.count} đơn ({item.percentage}%)
+                        {item.count} lượt ({item.percentage}%)
                       </span>
                     </div>
                     <div style={{ width: "100%", height: "8px", background: "var(--rp-track)", borderRadius: "4px", overflow: "hidden" }}>
@@ -647,7 +647,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
               </div>
               <div style={{ background: "var(--rp-track)", border: "1px dashed var(--rp-border-strong)", borderRadius: "10px", padding: "12px 14px" }}>
                 <div style={{ fontSize: "12px", color: "var(--rp-muted)", fontWeight: 700, marginBottom: "4px" }}>
-                  Đơn cũ chưa rõ lý do
+                  Lịch cũ chưa rõ lý do
                 </div>
                 <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--rp-muted)" }}>
                   {bookingReport?.overview?.cancelledUnknownSource ?? 0}
@@ -677,7 +677,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                         flexShrink: 0,
                       }}
                     >
-                      {item.count} đơn ({item.percentage}%)
+                      {item.count} lượt ({item.percentage}%)
                     </span>
                   </div>
                 ))}
@@ -703,7 +703,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
               <thead>
                 <tr>
                   <th>Tên Khoa / Đơn vị</th>
-                  <th style={{ width: "140px", textAlign: "center" }}>Tổng đơn đặt</th>
+                  <th style={{ width: "140px", textAlign: "center" }}>Tổng lượt đặt</th>
                   <th style={{ width: "140px", textAlign: "center" }}>Đã duyệt</th>
                   <th style={{ width: "140px", textAlign: "center" }}>Tỷ lệ duyệt (%)</th>
                   <th style={{ width: "160px", textAlign: "right" }}>Tổng giờ sử dụng</th>

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace HUIT_RoMan.Application.Modules.Booking.DTOs
 {
-    // ===================== BOOKING DTOs =====================
+
 
     public class BookingDetailItemDto
     {
@@ -13,15 +13,15 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
         public int? StartPeriodId { get; set; }
         public int? EndPeriodId { get; set; }
         public int GuestCount { get; set; }
-        public string Purpose { get; set; }
+        public string Purpose { get; set; } = string.Empty;
     }
 
     public class CreateBookingDto
     {
-        public string ActivityName { get; set; }
-        public string Purpose { get; set; }
+        public string ActivityName { get; set; } = string.Empty;
+        public string Purpose { get; set; } = string.Empty;
         public int GuestCount { get; set; }
-        public string Note { get; set; }
+        public string Note { get; set; } = string.Empty;
         public int? UserId { get; set; }
         public bool? AutoApprove { get; set; }
         public List<BookingDetailItemDto> Details { get; set; } = new();
@@ -31,37 +31,37 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
     {
         public int Id { get; set; }
         public int RoomId { get; set; }
-        public string RoomName { get; set; }
-        public string RoomCode { get; set; }
+        public string RoomName { get; set; } = string.Empty;
+        public string RoomCode { get; set; } = string.Empty;
         public DateTime StartAt { get; set; }
         public DateTime EndAt { get; set; }
         public int? StartPeriodId { get; set; }
-        public string StartPeriodName { get; set; }
+        public string StartPeriodName { get; set; } = string.Empty;
         public int? EndPeriodId { get; set; }
-        public string EndPeriodName { get; set; }
+        public string EndPeriodName { get; set; } = string.Empty;
         public int GuestCount { get; set; }
-        public string Purpose { get; set; }
-        public string Status { get; set; }
-        public string RejectionReason { get; set; }
+        public string Purpose { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string RejectionReason { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
-        /// <summary>Tài khoản quyết định duyệt chi tiết này. NULL = chưa duyệt.</summary>
+        // Tài khoản quyết định duyệt chi tiết này. NULL = chưa duyệt
         public int? ApprovedByUserId { get; set; }
-        /// <summary>Tên hiển thị người duyệt (tài khoản hệ thống có tên riêng).</summary>
+        // Tên hiển thị người duyệt (tài khoản hệ thống có tên riêng).
         public string? ApprovedByName { get; set; }
         public DateTime? ApprovedAt { get; set; }
-        /// <summary>MANUAL | AUTO. NULL = chưa duyệt.</summary>
+
         public string? ApprovalMode { get; set; }
     }
 
     public class BookingResponseDto
     {
         public int Id { get; set; }
-        public string ActivityName { get; set; }
-        public string Purpose { get; set; }
-        public int GuestCount { get; set; }
-        public string Status { get; set; }
-        public string RejectionReason { get; set; }
-        public string Note { get; set; }
+        public string ActivityName { get; set; } = string.Empty;
+        public string Purpose { get; set; } = string.Empty;
+        public int GuestCount { get; set; } 
+        public string Status { get; set; } = string.Empty;
+        public string RejectionReason { get; set; } = string.Empty;
+        public string Note { get; set; } = string.Empty;
         public DateTime RequestedAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public int UserId { get; set; }

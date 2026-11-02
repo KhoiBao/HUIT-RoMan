@@ -4,9 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Đại diện cho một phòng ban trong hệ thống.
-    /// </summary>
+
+    // Đại diện cho một phòng ban trong hệ thống.
     [Table("Departments")]
     public class Department : Common.BaseEntity
     {
@@ -15,12 +14,12 @@ namespace HUIT_RoMan.Domain.Entities
 
         [Required]
         [StringLength(255)]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [StringLength(100)]
-        public string Type { get; set; }
+        public string Type { get; set; } = string.Empty; // Loại phòng ban (VD: Khoa, Phòng thí nghiệm)
 
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         // Navigation properties
         public virtual ICollection<User> Users { get; set; } = new List<User>();

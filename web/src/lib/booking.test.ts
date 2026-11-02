@@ -520,13 +520,13 @@ describe("check-in window & cancellation rules (mirror backend policy)", () => {
     expect(info.message).toBe("Đã quá hạn nhận phòng");
   });
 
-  it("canCancelBookingOnline: đơn chưa duyệt → không cho hủy", () => {
+  it("canCancelBookingOnline: yêu cầu chưa duyệt → không cho hủy", () => {
     const booking = makeBooking({ status: "Chờ duyệt" });
     const res = canCancelBookingOnline(booking, new Date("2026-10-26T01:00:00.000Z"));
     expect(res.allowed).toBe(false);
   });
 
-  it("canCancelBookingOnline: đơn đã check-in → không cho hủy", () => {
+  it("canCancelBookingOnline: đã nhận phòng → không cho hủy", () => {
     const booking = makeBooking({ checkedInAt: "2026-10-27T02:50:00.000Z" });
     const res = canCancelBookingOnline(booking, new Date("2026-10-26T01:00:00.000Z"));
     expect(res.allowed).toBe(false);
@@ -572,7 +572,7 @@ describe("check-in window & cancellation rules (mirror backend policy)", () => {
     expect(getBookingStartAt(booking)?.toISOString()).toBe("2026-10-27T03:00:00.000Z");
   });
 
-  it("describeCancelReason: đơn cũ không có lý do → hiển thị an toàn", () => {
+  it("describeCancelReason: lịch cũ không có lý do → hiển thị an toàn", () => {
     const booking = makeBooking({ status: "Đã hủy", cancelReason: null });
     expect(describeCancelReason(booking)).toBe("Chưa có thông tin lý do hủy");
   });

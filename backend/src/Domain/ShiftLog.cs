@@ -4,9 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Nhật ký hoạt động trong ca làm việc.
-    /// </summary>
+    // Nhật ký hoạt động trong ca làm việc.
+
     [Table("ShiftLogs")]
     public class ShiftLog : Common.BaseEntity
     {
@@ -16,7 +15,7 @@ namespace HUIT_RoMan.Domain.Entities
         public DateTime LogTime { get; set; } = DateTime.UtcNow;
 
         [Required]
-        public string Content { get; set; }
+        public string Content { get; set; } = string.Empty;
 
         public int Type { get; set; }
 

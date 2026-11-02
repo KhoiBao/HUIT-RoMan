@@ -16,6 +16,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
 
         // ── Violation Records ─────────────────────────────────────────────
         Task<ApiResponse<IEnumerable<ViolationRecordDto>>> GetViolationRecordsAsync(ViolationFilterDto filter);
+        Task<ApiResponse<IEnumerable<ViolationRecordDto>>> GetMyViolationRecordsAsync(int userId);
         Task<ApiResponse<ViolationRecordDto>> GetViolationRecordByIdAsync(int id);
         Task<ApiResponse<ViolationRecordDto>> RecordViolationAsync(RecordViolationDto request);
         Task<ApiResponse<ViolationRecordDto>> UpdateViolationRecordAsync(int id, UpdateViolationRecordDto request);

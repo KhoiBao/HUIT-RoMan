@@ -18,6 +18,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         private readonly IRepository<Domain.Entities.Shift> _shiftRepo;
         private readonly IRepository<Employee> _employeeRepo;
         private readonly IRepository<Domain.Entities.Room> _roomRepo;
+        private readonly IRepository<Domain.Entities.Department> _departmentRepo;
         private readonly UserManager<User> _userManager;
 
         public ChatService(
@@ -30,6 +31,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
             _shiftRepo = _unitOfWork.Repository<Domain.Entities.Shift>();
             _employeeRepo = _unitOfWork.Repository<Employee>();
             _roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
+            _departmentRepo = _unitOfWork.Repository<Domain.Entities.Department>();
             _userManager = userManager;
         }
 
@@ -103,13 +105,20 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                 return ApiResponse<ChatConversationDto>.ErrorResponse("Người dùng không tồn tại.");
             }
 
-            // Đóng tất cả phiên chat đang mở cũ của user nếu có
+            // Đóng tất cả phiên chat đang mở cũ của user nếu có và đánh dấu đã đọc
             var openConversations = await _conversationRepo.FindAsync(c => c.UserId == userId && c.Status == "Open");
             foreach (var conv in openConversations)
             {
                 conv.Status = "Closed";
                 conv.EndTime = DateTime.UtcNow;
                 _conversationRepo.Update(conv);
+
+                var unreadOld = await _messageRepo.FindAsync(m => m.ChatConversationId == conv.Id && !m.IsRead);
+                foreach (var m in unreadOld)
+                {
+                    m.IsRead = true;
+                    _messageRepo.Update(m);
+                }
             }
 
             var newConversation = new ChatConversation
@@ -164,8 +173,15 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
 
             var query = conversations.AsEnumerable();
 
-            // Nếu người xem là Manager hoặc Employee có DepartmentId, lọc theo đơn vị phụ trách
-            if ((role == "Manager" || role == "Employee") && departmentId.HasValue)
+            // Thư viện HUIT và Quản trị viên (Admin) phụ trách hỗ trợ toàn trường (mọi sinh viên, giảng viên)
+            var staffDept = departmentId.HasValue ? await _departmentRepo.GetByIdAsync(departmentId.Value) : null;
+            bool isLibraryOrAdmin = role == "Admin" || (staffDept != null && (
+                (staffDept.Type != null && staffDept.Type.Equals("Library", StringComparison.OrdinalIgnoreCase)) ||
+                (staffDept.Name != null && staffDept.Name.Contains("Thư viện", StringComparison.OrdinalIgnoreCase))
+            ));
+
+            // Chỉ các đơn vị quản lý phòng chuyên trách khác (không phải Thư viện/Admin) mới lọc theo người dùng thuộc đơn vị đó nếu cần
+            if (!isLibraryOrAdmin && (role == "Manager" || role == "Employee") && departmentId.HasValue)
             {
                 query = query.Where(c => c.User?.DepartmentId == departmentId.Value);
             }
@@ -270,6 +286,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
 
             var senderUser = await _userManager.FindByIdAsync(senderUserId.ToString());
             var roles = senderUser != null ? await _userManager.GetRolesAsync(senderUser) : new List<string>();
+            var primaryRole = ResolvePrimaryRole(roles);
             var isStaff = roles.Any(r => r.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
                                          r.Equals("Manager", StringComparison.OrdinalIgnoreCase) ||
                                          r.Equals("Employee", StringComparison.OrdinalIgnoreCase));
@@ -281,7 +298,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                 UserId = senderUserId,
                 SenderName = senderUser?.FullName ?? "Người dùng",
                 SenderCardCode = senderUser?.CardCode ?? "",
-                SenderRole = roles.FirstOrDefault() ?? "User",
+                SenderRole = primaryRole,
                 IsFromStaff = isStaff,
                 Content = message.Content,
                 SentAt = message.SentAt,
@@ -310,6 +327,15 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
             conv.Status = "Closed";
             conv.EndTime = DateTime.UtcNow;
             _conversationRepo.Update(conv);
+
+            // Tự động đánh dấu tất cả tin nhắn trong phiên đã đóng là đã đọc
+            var unreadMessages = await _messageRepo.FindAsync(m => m.ChatConversationId == conversationId && !m.IsRead);
+            foreach (var m in unreadMessages)
+            {
+                m.IsRead = true;
+                _messageRepo.Update(m);
+            }
+
             await _unitOfWork.SaveChangesAsync();
 
             return ApiResponse<bool>.SuccessResponse(true, "Đã đóng cuộc hội thoại.");
@@ -501,6 +527,12 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                 }
             }
 
+            var allDepartments = await _departmentRepo.GetAllAsync();
+            var libraryDept = allDepartments.FirstOrDefault(d =>
+                (d.Type != null && d.Type.Equals("Library", StringComparison.OrdinalIgnoreCase)) ||
+                (d.Name != null && d.Name.Contains("Thư viện", StringComparison.OrdinalIgnoreCase)));
+            int? libraryDeptId = libraryDept?.Id;
+
             var shifts = await _shiftRepo.GetAllAsync(s => s.Employees);
             var todayShifts = shifts
                 .Where(s => s.Date.Date == today && s.Status != "Hủy")
@@ -529,7 +561,13 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                         }
 
                         var roles = await _userManager.GetRolesAsync(emp.User);
-                        var primaryRole = roles.FirstOrDefault() ?? "Employee";
+                        var primaryRole = ResolvePrimaryRole(roles);
+                        bool isLibraryStaff = (libraryDeptId.HasValue && emp.User.DepartmentId == libraryDeptId.Value) ||
+                                              (emp.User.Department?.Name?.Contains("Thư viện", StringComparison.OrdinalIgnoreCase) == true);
+
+                        string defaultPosition = isLibraryStaff
+                            ? (primaryRole == "Manager" ? "Quản lý Thư viện" : "Thủ thư")
+                            : (primaryRole == "Manager" ? "Quản lý đơn vị" : "Nhân viên trực ban");
 
                         result.Add(new OnDutyStaffDto
                         {
@@ -537,7 +575,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                             UserId = emp.UserId,
                             Code = emp.Code,
                             FullName = emp.User.FullName,
-                            Position = emp.Position ?? (primaryRole == "Manager" ? "Quản lý đơn vị" : "Nhân viên trực ban"),
+                            Position = !string.IsNullOrWhiteSpace(emp.Position) ? emp.Position : defaultPosition,
                             DepartmentId = emp.User.DepartmentId,
                             DepartmentName = emp.User.Department?.Name ?? (targetDepartmentId.HasValue ? "Đơn vị quản lý phòng" : "Thư viện HUIT"),
                             Role = primaryRole,
@@ -552,26 +590,56 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
 
             // Ưu tiên:
             // 1. Đang trong ca trực hiện tại (IsActiveShift == true)
-            // 2. Vai trò Quản lý đơn vị (Manager)
-            // 3. Nhân viên trực ban
-            result = result
-                .OrderByDescending(s => s.IsActiveShift)
-                .ThenByDescending(s => s.Role == "Manager")
-                .ToList();
+            // 2. Nhân sự thuộc Thư viện HUIT (nếu người dùng không chỉ định phòng/đơn vị cụ thể)
+            // 3. Thủ thư / Nhân viên trực ban
+            // 4. Quản lý đơn vị
+            if (!targetDepartmentId.HasValue && libraryDeptId.HasValue)
+            {
+                result = result
+                    .OrderByDescending(s => s.IsActiveShift)
+                    .ThenByDescending(s => s.DepartmentId == libraryDeptId.Value)
+                    .ThenByDescending(s => s.Position == "Thủ thư" || s.Role == "Employee")
+                    .ThenByDescending(s => s.Role == "Manager")
+                    .ToList();
+            }
+            else
+            {
+                result = result
+                    .OrderByDescending(s => s.IsActiveShift)
+                    .ThenByDescending(s => s.Role == "Manager")
+                    .ToList();
+            }
 
-            // Nếu hôm nay đơn vị chưa có ca trực cụ thể, tự động lấy Cán bộ / Quản lý thuộc đơn vị đó
+            // Nếu hôm nay đơn vị chưa có ca trực cụ thể, tự động lấy Cán bộ / Thủ thư phụ trách
             if (!result.Any())
             {
-                var departmentStaff = allEmployees
-                    .Where(e => e.User != null && e.Status != "Nghỉ việc")
-                    .Where(e => !targetDepartmentId.HasValue || e.User.DepartmentId == targetDepartmentId.Value)
-                    .Take(4)
-                    .ToList();
+                var departmentStaffQuery = allEmployees
+                    .Where(e => e.User != null && e.Status != "Nghỉ việc");
+
+                if (targetDepartmentId.HasValue)
+                {
+                    departmentStaffQuery = departmentStaffQuery.Where(e => e.User.DepartmentId == targetDepartmentId.Value);
+                }
+                else if (libraryDeptId.HasValue)
+                {
+                    // Ưu tiên nhân sự Thư viện khi người dùng không chọn phòng cụ thể
+                    departmentStaffQuery = departmentStaffQuery
+                        .OrderByDescending(e => e.User.DepartmentId == libraryDeptId.Value)
+                        .ThenByDescending(e => e.Position == "Thủ thư" || e.Position == "Quản lý Thư viện");
+                }
+
+                var departmentStaff = departmentStaffQuery.Take(4).ToList();
 
                 foreach (var emp in departmentStaff)
                 {
                     var roles = await _userManager.GetRolesAsync(emp.User);
-                    var primaryRole = roles.FirstOrDefault() ?? "Employee";
+                    var primaryRole = ResolvePrimaryRole(roles);
+                    bool isLibraryStaff = (libraryDeptId.HasValue && emp.User.DepartmentId == libraryDeptId.Value) ||
+                                          (emp.User.Department?.Name?.Contains("Thư viện", StringComparison.OrdinalIgnoreCase) == true);
+
+                    string defaultPosition = isLibraryStaff
+                        ? (primaryRole == "Manager" ? "Quản lý Thư viện" : "Thủ thư")
+                        : (primaryRole == "Manager" ? "Quản lý đơn vị" : "Nhân viên");
 
                     result.Add(new OnDutyStaffDto
                     {
@@ -579,9 +647,9 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                         UserId = emp.UserId,
                         Code = emp.Code,
                         FullName = emp.User.FullName,
-                        Position = emp.Position ?? (primaryRole == "Manager" ? "Quản lý đơn vị" : "Nhân viên"),
+                        Position = !string.IsNullOrWhiteSpace(emp.Position) ? emp.Position : defaultPosition,
                         DepartmentId = emp.User.DepartmentId,
-                        DepartmentName = emp.User.Department?.Name ?? "Đơn vị quản lý",
+                        DepartmentName = emp.User.Department?.Name ?? (isLibraryStaff ? "Thư viện HUIT" : "Đơn vị quản lý"),
                         Role = primaryRole,
                         ShiftName = "Hỗ trợ thường trực",
                         ShiftTimeRange = "07:00 - 21:00",
@@ -600,6 +668,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         private async Task<ChatConversationDto> MapConversationDtoAsync(ChatConversation conv)
         {
             var userRoles = conv.User != null ? await _userManager.GetRolesAsync(conv.User) : new List<string>();
+            var userPrimaryRole = ResolvePrimaryRole(userRoles);
 
             // Lấy toàn bộ tin nhắn chưa bị xóa mềm, đã sắp xếp
             var rawMessages = (conv.ChatMessages ?? new List<ChatMessage>())
@@ -620,7 +689,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                     bool isStaff = r.Any(x => x.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
                                               x.Equals("Manager", StringComparison.OrdinalIgnoreCase) ||
                                               x.Equals("Employee", StringComparison.OrdinalIgnoreCase));
-                    userMap[uid] = (u.FullName, u.CardCode, r.FirstOrDefault() ?? "User", isStaff);
+                    userMap[uid] = (u.FullName, u.CardCode, ResolvePrimaryRole(r), isStaff);
                 }
             }
 
@@ -643,7 +712,12 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
             }).ToList();
 
             var lastMessage = orderedMessages.LastOrDefault();
-            var unreadCount = orderedMessages.Count(m => m.UserId == conv.UserId && !m.IsRead);
+            var isClosed = string.Equals(conv.Status, "Closed", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(conv.Status, "Ended", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(conv.Status, "Đã đóng", StringComparison.OrdinalIgnoreCase);
+            var unreadCount = isClosed
+                ? 0
+                : orderedMessages.Count(m => m.UserId == conv.UserId && !m.IsRead);
 
             return new ChatConversationDto
             {
@@ -653,7 +727,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                 UserCardCode = conv.User?.CardCode ?? "",
                 UserEmail = conv.User?.Email ?? "",
                 DepartmentName = conv.User?.Department?.Name,
-                UserRole = userRoles.FirstOrDefault() ?? "User",
+                UserRole = userPrimaryRole,
                 StartTime = conv.StartTime,
                 EndTime = conv.EndTime,
                 Status = conv.Status ?? "Open",
@@ -662,6 +736,17 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
                 UnreadCount = unreadCount,
                 Messages = messageDtos
             };
+        }
+
+        private static string ResolvePrimaryRole(IList<string>? roles)
+        {
+            if (roles == null || roles.Count == 0) return "User";
+            if (roles.Contains("Admin", StringComparer.OrdinalIgnoreCase)) return "Admin";
+            if (roles.Contains("Manager", StringComparer.OrdinalIgnoreCase)) return "Manager";
+            if (roles.Contains("Employee", StringComparer.OrdinalIgnoreCase)) return "Employee";
+            if (roles.Contains("Lecturer", StringComparer.OrdinalIgnoreCase)) return "Lecturer";
+            if (roles.Contains("Student", StringComparer.OrdinalIgnoreCase)) return "Student";
+            return roles.FirstOrDefault() ?? "User";
         }
     }
 }

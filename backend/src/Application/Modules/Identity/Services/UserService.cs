@@ -23,9 +23,6 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             _unitOfWork = unitOfWork;
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // GET ALL
-        // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<IEnumerable<UserDto>>> GetAllAsync()
         {
             var users = await _userManager.Users
@@ -38,9 +35,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<IEnumerable<UserDto>>.SuccessResponse(dtos);
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // GET BY ID
-        // ─────────────────────────────────────────────────────────────────
+
         public async Task<ApiResponse<UserDto>> GetByIdAsync(int id)
         {
             var u = await _userManager.Users
@@ -52,9 +47,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<UserDto>.SuccessResponse(await MapUserDtoAsync(u));
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // GET STUDENTS / LECTURERS
-        // ─────────────────────────────────────────────────────────────────
+
         public async Task<ApiResponse<IEnumerable<UserDto>>> GetStudentsAsync()
         {
             var users = await _userManager.GetUsersInRoleAsync("Student");
@@ -73,9 +66,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<IEnumerable<UserDto>>.SuccessResponse(dtos);
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // CREATE
-        // ─────────────────────────────────────────────────────────────────
+
         public async Task<ApiResponse<CreatedUserDto>> CreateAsync(CreateUserDto request)
         {
             if (request == null)
@@ -87,9 +78,9 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             var role = request.Role?.Trim();
 
             if (string.IsNullOrWhiteSpace(cardCode))
-                return ApiResponse<CreatedUserDto>.ErrorResponse("Mã thẻ / MSSV không được để trống.");
-            if (cardCode.Length > 50)
-                return ApiResponse<CreatedUserDto>.ErrorResponse("Mã thẻ / MSSV tối đa 50 ký tự.");
+                return ApiResponse<CreatedUserDto>.ErrorResponse("MSSV không được để trống.");
+            if (cardCode.Length > 10)
+                return ApiResponse<CreatedUserDto>.ErrorResponse("MSSV tối đa 10 ký tự.");
             if (string.IsNullOrWhiteSpace(fullName))
                 return ApiResponse<CreatedUserDto>.ErrorResponse("Họ và tên không được để trống.");
             if (string.IsNullOrWhiteSpace(email) || !EmailPattern.IsMatch(email))
@@ -177,9 +168,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
                 $"Đã tạo tài khoản {fullName} ({cardCode}).");
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // UPDATE
-        // ─────────────────────────────────────────────────────────────────
+
         public async Task<ApiResponse<bool>> UpdateAsync(int id, UpdateUserDto request)
         {
             var u = await _userManager.FindByIdAsync(id.ToString());
@@ -205,41 +194,22 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<bool>.SuccessResponse(true, "Cập nhật thông tin người dùng thành công.");
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // CHANGE ROLE
-        // ─────────────────────────────────────────────────────────────────
+
         public async Task<ApiResponse<bool>> ChangeRoleAsync(int id, ChangeUserRoleDto request)
         {
             if (string.IsNullOrWhiteSpace(request?.Role))
                 return ApiResponse<bool>.ErrorResponse("Role không được để trống.");
 
-            var normalizedRole = request.Role.Trim();
-            if (string.Equals(normalizedRole, "quan-ly", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(normalizedRole, "quản lý", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(normalizedRole, "quản lý đơn vị", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(normalizedRole, "departmentmanager", StringComparison.OrdinalIgnoreCase))
+            var inputRole = request.Role.Trim();
+            var normalizedRole = inputRole.ToLowerInvariant() switch
             {
-                normalizedRole = "Manager";
-            }
-            else if (string.Equals(normalizedRole, "nhan-su", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(normalizedRole, "nhân viên", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(normalizedRole, "thủ thư", StringComparison.OrdinalIgnoreCase))
-            {
-                normalizedRole = "Employee";
-            }
-            else if (string.Equals(normalizedRole, "quan-tri", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(normalizedRole, "quản trị viên", StringComparison.OrdinalIgnoreCase))
-            {
-                normalizedRole = "Admin";
-            }
-            else if (string.Equals(normalizedRole, "giảng viên", StringComparison.OrdinalIgnoreCase))
-            {
-                normalizedRole = "Lecturer";
-            }
-            else if (string.Equals(normalizedRole, "sinh viên", StringComparison.OrdinalIgnoreCase))
-            {
-                normalizedRole = "Student";
-            }
+                "quan-ly" or "quản lý" or "quản lý đơn vị" or "departmentmanager" => "Manager",
+                "nhan-su" or "nhân viên" or "thủ thư" => "Employee",
+                "quan-tri" or "quản trị viên" => "Admin",
+                "giảng viên" => "Lecturer",
+                "sinh viên" => "Student",
+                _ => inputRole // Giữ nguyên hoặc xử lý lỗi
+            };
 
             var allowedRoles = new[] { "Student", "Lecturer", "Employee", "Manager", "Admin" };
             var matchedRole = allowedRoles.FirstOrDefault(r => string.Equals(r, normalizedRole, StringComparison.OrdinalIgnoreCase));
@@ -292,9 +262,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<bool>.SuccessResponse(true, $"Đã đổi Role thành '{matchedRole}'.");
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // SET STATUS (Active / Inactive / Suspended)
-        // ─────────────────────────────────────────────────────────────────
+
         public async Task<ApiResponse<bool>> SetStatusAsync(int id, string status)
         {
             if (status == "Active") status = "Hoạt động";
@@ -367,9 +335,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
             return ApiResponse<IEnumerable<UserDto>>.SuccessResponse(dtos);
         }
 
-        // ─────────────────────────────────────────────────────────────────
-        // ADMIN RESET PASSWORD
-        // ─────────────────────────────────────────────────────────────────
+
         public async Task<ApiResponse<string>> AdminResetPasswordAsync(int id, string? newPassword)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());

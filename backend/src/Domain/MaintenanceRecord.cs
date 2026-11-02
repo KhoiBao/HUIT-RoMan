@@ -4,9 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Hồ sơ bảo trì thiết bị.
-    /// </summary>
+
+    // Hồ sơ bảo trì thiết bị.
     [Table("MaintenanceRecords")]
     public class MaintenanceRecord : Common.BaseEntity
     {
@@ -14,13 +13,13 @@ namespace HUIT_RoMan.Domain.Entities
         public int Id { get; set; }
 
         [StringLength(100)]
-        public string IssueType { get; set; }
+        public string IssueType { get; set; } = string.Empty;
 
-        public string IssueDescription { get; set; }
+        public string IssueDescription { get; set; } = string.Empty;
         public DateTime DetectedDate { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? CompletionDate { get; set; }
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         [ForeignKey("Equipment")]
         public int EquipmentId { get; set; }

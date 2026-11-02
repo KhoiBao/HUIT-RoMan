@@ -5,9 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Đơn đặt phòng tổng thể.
-    /// </summary>
+    //Đơn đặt phòng tổng thể.
     [Table("Bookings")]
     public class Booking : Common.BaseEntity
     {
@@ -15,39 +13,37 @@ namespace HUIT_RoMan.Domain.Entities
         public int Id { get; set; }
 
         [StringLength(255)]
-        public string ActivityName { get; set; } // Tên hoạt động
+        public string ActivityName { get; set; } = string.Empty; // Tên hoạt động
 
-        public string Purpose { get; set; } // Mục đích mượn
+        public string Purpose { get; set; } = string.Empty; // Mục đích mượn
         
         public int GuestCount { get; set; } // Số lượng khách dự kiến
 
         public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
         
-        public string Status { get; set; } // Trạng thái đơn (Chờ duyệt, Đã duyệt, Đã hủy,...)
+        public string Status { get; set; } = string.Empty; // Trạng thái đơn (Chờ duyệt, Đã duyệt, Đã hủy,...)
         
-        public string RejectionReason { get; set; }
+        public string RejectionReason { get; set; } = string.Empty;
         
-        public string Note { get; set; }
+        public string Note { get; set; } = string.Empty;
 
-        // ── Nhận phòng (Check-in) ─────────────────────────────────────
-        /// <summary>Thời điểm sinh viên nhận phòng (UTC). NULL = chưa nhận phòng.</summary>
+        // Nhận phòng (Check-in)
+        //Thời điểm sinh viên nhận phòng (UTC). NULL = chưa nhận phòng.
         public DateTime? CheckedInAt { get; set; }
 
-        // ── Lý do hủy đơn (không dùng chung với RejectionReason) ──────
-        /// <summary>Mã lý do hủy: CHANGE_PLAN | NO_LONGER_NEEDED | OTHER | NO_SHOW. NULL = đơn cũ chưa có dữ liệu.</summary>
+        // Lý do hủy đơn 
         [StringLength(50)]
         public string? CancelReason { get; set; }
 
-        /// <summary>Nội dung bổ sung khi CancelReason = OTHER. NULL nếu không phải OTHER.</summary>
+        // Nội dung bổ sung khi CancelReason = OTHER. NULL nếu không phải OTHER.</summary>
         [StringLength(1000)]
         public string? CancelReasonDetail { get; set; }
 
-        /// <summary>Nguồn hủy: STUDENT (sinh viên tự hủy) | AUTO (tự động hết hạn không nhận phòng) | STAFF (quản trị/nhân sự).</summary>
+        // Nguồn hủy: STUDENT (sinh viên tự hủy) | AUTO (tự động hết hạn không nhận phòng) | STAFF (quản trị/nhân sự)
         [StringLength(20)]
         public string? CancelSource { get; set; }
 
-        // ── Người quyết định đơn ──────────────────────────────────────
-        /// <summary>Tài khoản đã duyệt đơn. AUTO duyệt thì là tài khoản hệ thống.</summary>
+        // Người quyết định đơn
         public int? ApprovedByUserId { get; set; }
 
         [ForeignKey(nameof(ApprovedByUserId))]
@@ -55,7 +51,7 @@ namespace HUIT_RoMan.Domain.Entities
 
         public DateTime? ApprovedAt { get; set; }
 
-        /// <summary>MANUAL (người thật duyệt) | AUTO (chế độ tự động duyệt).</summary>
+        // MANUAL (người thật duyệt) | AUTO (chế độ tự động duyệt)
         [StringLength(10)]
         public string? ApprovalMode { get; set; }
 

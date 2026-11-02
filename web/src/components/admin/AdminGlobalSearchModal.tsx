@@ -218,7 +218,7 @@ export default function AdminGlobalSearchModal({
               <h4>Tra cứu tập trung toàn hệ thống</h4>
               <p>
                 Nhập tên phòng (VD: <em>A101</em>), tên sinh viên/MSSV (VD:{" "}
-                <em>200123456</em>), mã đơn phiếu mượn (VD: <em>#1</em>), hoặc mã
+                <em>200123456</em>), mã đặt phòng (VD: <em>#1</em>), hoặc mã
                 biên bản vi phạm (VD: <em>VP-</em>).
               </p>
             </div>
@@ -350,7 +350,7 @@ export default function AdminGlobalSearchModal({
                           onClose();
                         }}
                       >
-                        Đến Duyệt đơn &rarr;
+                        Đến Duyệt đặt phòng &rarr;
                       </button>
                     </div>
                     <div className="search-grid-items">

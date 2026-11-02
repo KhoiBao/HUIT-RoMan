@@ -4,9 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Đại diện cho một phòng cụ thể.
-    /// </summary>
+    // Đại diện cho một phòng cụ thể.
     [Table("Rooms")]
     public class Room : Common.BaseEntity
     {
@@ -15,24 +13,24 @@ namespace HUIT_RoMan.Domain.Entities
 
         [Required]
         [StringLength(255)]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [Required]
         [StringLength(50)]
-        public string RoomCode { get; set; }
+        public string RoomCode { get; set; } = string.Empty;
 
         [StringLength(50)]
-        public string Floor { get; set; }
+        public string Floor { get; set; } = string.Empty;
 
         [StringLength(100)]
-        public string Building { get; set; }
+        public string Building { get; set; } = string.Empty;
 
         [StringLength(50)]
-        public string RoomNumber { get; set; }
+        public string RoomNumber { get; set; } = string.Empty;
 
         public int Capacity { get; set; }
-        public string Status { get; set; }
-        public string Description { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
 
         [ForeignKey("RoomType")]
         public int RoomTypeId { get; set; }

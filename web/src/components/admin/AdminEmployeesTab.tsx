@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { api } from "../../lib/api";
 import { formatRole } from "../../lib/auth";
 import { useAuth } from "../../auth/AuthContext";
@@ -12,6 +12,7 @@ import {
   CheckIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
+import AdminPagination from "../common/AdminPagination";
 
 export interface EmployeeItem {
   id: number;
@@ -54,11 +55,24 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
   const isAdmin = normalizedRole === "admin" || normalizedRole === "quan-tri" || normalizedRole === "quản trị viên";
   const isManager = normalizedRole === "manager" || normalizedRole === "quan-ly" || normalizedRole === "quản lý" || normalizedRole === "quản lý đơn vị" || normalizedRole === "departmentmanager";
 
+  const userDeptIdStr = user?.departmentId ? String(user.departmentId) : "";
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [allUsers, setAllUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [deptFilter, setDeptFilter] = useState<string>(!isAdmin && userDeptIdStr ? userDeptIdStr : "ALL");
+  const [roleFilter, setRoleFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [sortBy, setSortBy] = useState<"name_asc" | "name_desc" | "dept">("name_asc");
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  useEffect(() => {
+    if (!isAdmin && userDeptIdStr) {
+      setDeptFilter(userDeptIdStr);
+    }
+  }, [isAdmin, userDeptIdStr]);
 
   // Modal create
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
@@ -99,18 +113,73 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
     fetchEmployees();
   }, []);
 
-  const filteredEmployees = employees.filter((e) => {
-    if (!searchTerm.trim()) return true;
-    const q = searchTerm.toLowerCase().trim();
-    return (
-      (e.code || "").toLowerCase().includes(q) ||
-      (e.fullName || "").toLowerCase().includes(q) ||
-      (e.email || "").toLowerCase().includes(q) ||
-      (e.position || "").toLowerCase().includes(q) ||
-      (formatRole(e.role) || "").toLowerCase().includes(q) ||
-      (e.departmentName || "").toLowerCase().includes(q)
-    );
-  });
+  const filteredEmployees = useMemo(() => {
+    const list = employees.filter((e) => {
+      // Nếu không phải Admin, chỉ hiển thị nhân sự thuộc đúng đơn vị của mình
+      if (!isAdmin) {
+        if (userDeptIdStr && String(e.departmentId) !== userDeptIdStr) return false;
+        if (!userDeptIdStr && user?.departmentName && e.departmentName !== user.departmentName) return false;
+      } else {
+        if (deptFilter !== "ALL" && String(e.departmentId) !== deptFilter) return false;
+      }
+
+      if (roleFilter !== "ALL" && e.role !== roleFilter) return false;
+      if (statusFilter !== "ALL") {
+        const isWorking =
+          e.status === "Active" ||
+          e.status === "Hoạt động" ||
+          e.status === "Đang làm việc" ||
+          !e.status;
+        if (statusFilter === "active" && !isWorking) return false;
+        if (statusFilter === "inactive" && isWorking) return false;
+      }
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase().trim();
+        const matchCode = (e.code || "").toLowerCase().includes(q);
+        const matchName = (e.fullName || "").toLowerCase().includes(q) || (e.userName || "").toLowerCase().includes(q);
+        const matchEmail = (e.email || "").toLowerCase().includes(q);
+        const matchPos = (e.position || "").toLowerCase().includes(q);
+        const matchRole = (formatRole(e.role) || "").toLowerCase().includes(q);
+        const matchDept = (e.departmentName || "").toLowerCase().includes(q);
+        if (!matchCode && !matchName && !matchEmail && !matchPos && !matchRole && !matchDept) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    return list.sort((a, b) => {
+      if (sortBy === "name_desc") {
+        return (b.fullName || b.userName).localeCompare(a.fullName || a.userName);
+      }
+      if (sortBy === "dept") {
+        return (a.departmentName || "").localeCompare(b.departmentName || "");
+      }
+      // default: name_asc (A-Z)
+      return (a.fullName || a.userName).localeCompare(b.fullName || b.userName);
+    });
+  }, [employees, isAdmin, userDeptIdStr, user?.departmentName, deptFilter, roleFilter, statusFilter, searchTerm, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredEmployees.length / pageSize));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pagedEmployees = filteredEmployees.slice(pageStart, pageStart + pageSize);
+
+  const resetAllFilters = () => {
+    setSearchTerm("");
+    if (isAdmin) setDeptFilter("ALL");
+    setRoleFilter("ALL");
+    setStatusFilter("ALL");
+    setSortBy("name_asc");
+    setPage(1);
+  };
+
+  const hasActiveFilters =
+    Boolean(searchTerm) ||
+    (isAdmin && deptFilter !== "ALL") ||
+    roleFilter !== "ALL" ||
+    statusFilter !== "ALL" ||
+    sortBy !== "name_asc";
 
   // Open Create Modal
   const openCreate = () => {
@@ -259,16 +328,112 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
         </div>
       </div>
 
-      <div className="admin-filter-bar">
-        <div className="admin-search-box max-w-400">
+      <div className="admin-filter-bar flex-wrap align-center gap-2">
+        <div className="admin-search-box max-w-350">
           <SearchIcon size={18} className="search-icon-muted" />
           <input
             type="text"
-            placeholder="Tìm theo Mã nhân viên, Họ tên, Email, Chức vụ, Vai trò..."
+            placeholder="Tìm theo Mã nhân viên, Họ tên, Email, Chức vụ..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
+
+        {departments.length > 0 && (
+          <select
+            className="admin-select-filter"
+            value={deptFilter}
+            onChange={(e) => {
+              if (isAdmin) {
+                setDeptFilter(e.target.value);
+                setPage(1);
+              }
+            }}
+            disabled={!isAdmin}
+            style={!isAdmin ? { backgroundColor: "#f8fafc", cursor: "not-allowed", color: "#475569" } : {}}
+            title={!isAdmin ? `Đơn vị của bạn: ${user?.departmentName || "Được phân công"} (chỉ quản trị viên mới có thể chuyển đơn vị)` : "Lọc theo Đơn vị công tác"}
+          >
+            {isAdmin && <option value="ALL">-- Tất cả đơn vị --</option>}
+            {departments
+              .filter((d) => isAdmin || String(d.id) === userDeptIdStr || d.name === user?.departmentName)
+              .map((d) => (
+                <option key={d.id} value={String(d.id)}>
+                  {d.name} {!isAdmin ? "(Đơn vị của bạn)" : ""}
+                </option>
+              ))}
+          </select>
+        )}
+
+        <select
+          className="admin-select-filter"
+          value={roleFilter}
+          onChange={(e) => {
+            setRoleFilter(e.target.value);
+            setPage(1);
+          }}
+          title="Lọc theo Vai trò phân quyền"
+        >
+          <option value="ALL">-- Tất cả vai trò --</option>
+          <option value="Employee">Thủ thư / Nhân viên trực</option>
+          <option value="Manager">Quản lý đơn vị</option>
+          <option value="Admin">Quản trị viên hệ thống</option>
+        </select>
+
+        <select
+          className="admin-select-filter"
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          title="Lọc theo Trạng thái công tác"
+        >
+          <option value="ALL">-- Tất cả trạng thái --</option>
+          <option value="active">Đang làm việc</option>
+          <option value="inactive">Tạm nghỉ / Đã nghỉ</option>
+        </select>
+
+        <select
+          className="admin-select-filter"
+          value={sortBy}
+          onChange={(e) => {
+            setSortBy(e.target.value as any);
+            setPage(1);
+          }}
+          title="Sắp xếp danh sách nhân sự"
+        >
+          <option value="name_asc">Họ tên A-Z</option>
+          <option value="name_desc">Họ tên Z-A</option>
+          <option value="dept">Đơn vị công tác</option>
+        </select>
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            className="btn-table-action"
+            onClick={resetAllFilters}
+            title="Xóa tất cả bộ lọc về mặc định"
+            style={{
+              backgroundColor: "#fef2f2",
+              color: "#dc2626",
+              borderColor: "#fecaca",
+              height: "38px",
+              padding: "0 10px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              fontSize: "12px",
+              fontWeight: 600,
+              borderRadius: "8px",
+            }}
+          >
+            <XIcon size={13} />
+            <span>Xóa lọc</span>
+          </button>
+        )}
       </div>
 
       {(user?.role === "Employee" || user?.role === "Manager") && (
@@ -310,7 +475,8 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
           <p className="empty-title">Không tìm thấy nhân viên nào</p>
         </div>
       ) : (
-        <div className="admin-table-responsive">
+        <>
+          <div className="admin-table-responsive">
           <table className="admin-data-table">
             <thead>
               <tr>
@@ -325,8 +491,13 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map((e) => (
-                <tr key={e.id}>
+              {pagedEmployees.map((e) => (
+                <tr
+                  key={e.id}
+                  className="admin-clickable-row"
+                  onClick={() => openEdit(e)}
+                  title="Bấm vào dòng để chỉnh sửa thông tin nhân viên"
+                >
                   <td>
                     <span className="code-tag">{e.code || `#${e.id}`}</span>
                   </td>
@@ -388,7 +559,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                       );
                     })()}
                   </td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <div className="table-action-btns">
                       <button
                         type="button"
@@ -411,6 +582,16 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
             </tbody>
           </table>
         </div>
+
+          <AdminPagination
+            currentPage={currentPage}
+            totalItems={filteredEmployees.length}
+            pageSize={pageSize}
+            onPageChange={(p) => setPage(p)}
+            onPageSizeChange={(sz) => setPageSize(sz)}
+            itemLabel="nhân sự"
+          />
+        </>
       )}
 
       {/* Modal Create Employee */}

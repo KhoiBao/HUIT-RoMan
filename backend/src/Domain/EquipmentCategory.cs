@@ -4,9 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Danh mục trang thiết bị.
-    /// </summary>
+    // Danh mục trang thiết bị.
     [Table("EquipmentCategories")]
     public class EquipmentCategory : Common.BaseEntity
     {
@@ -15,9 +13,9 @@ namespace HUIT_RoMan.Domain.Entities
 
         [Required]
         [StringLength(255)]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
-        public string Description { get; set; }
+        public string Description { get; set; } = string.Empty;
 
         // Navigation properties
         public virtual ICollection<Equipment> Equipments { get; set; } = new List<Equipment>();

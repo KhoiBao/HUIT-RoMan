@@ -57,6 +57,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Khởi tạo một phiên trò chuyện mới (đóng phiên cũ nếu có)
         /// </summary>
         [HttpPost("new-conversation")]
+        [HttpPost("start-new")]
         [Authorize]
         public async Task<IActionResult> StartNewConversation([FromBody] StartChatRequest? request)
         {

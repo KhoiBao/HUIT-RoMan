@@ -939,7 +939,7 @@
 .rh-session-toast {
   position: fixed;
   right: 24px;
-  bottom: 24px;
+  bottom: 84px;
   z-index: 1200;
   display: flex;
   align-items: center;
@@ -990,11 +990,11 @@
   color: #173b5c;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .rh-session-toast {
     left: 16px;
     right: 16px;
-    bottom: 16px;
+    bottom: 80px;
     max-width: none;
   }
 }
@@ -1039,6 +1039,7 @@
 
 .rh-session-action {
   flex: 0 0 auto;
+  white-space: nowrap;
   padding: 9px 12px;
   border: 1px solid #9bc8ed;
   border-radius: 8px;
@@ -5860,4 +5861,360 @@
 .admin-workspace-layout.dark-mode .btn-modal-cancel:hover {
   background: var(--rp-track);
   color: var(--rp-title);
+}
+
+/* ── REMINDER SYSTEM (RULE OF 3 WARNINGS) ─────────────────────────────────── */
+.btn-action-remind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-action-remind:hover {
+  background-color: #fde68a;
+  color: #78350f;
+  border-color: #fcd34d;
+}
+.btn-action-remind.btn-remind-active {
+  background-color: #ffedd5;
+  color: #c2410c;
+  border-color: #fed7aa;
+}
+.btn-action-remind.btn-remind-active:hover {
+  background-color: #fed7aa;
+  color: #9a3412;
+}
+.btn-action-remind.btn-remind-danger {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+  animation: pulse-border 1.5s infinite;
+}
+.btn-action-remind.btn-remind-danger:hover {
+  background-color: #fecaca;
+  color: #991b1b;
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.reminder-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.reminder-tag-badge:hover {
+  filter: brightness(0.95);
+  transform: translateY(-1px);
+}
+.reminder-tag-light {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+.reminder-tag-warn {
+  background-color: #fff7ed;
+  color: #c2410c;
+  border-color: #fed7aa;
+}
+.reminder-tag-max {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+  font-weight: 700;
+}
+.reminder-tag-violation {
+  background-color: #450a0a;
+  color: #fecaca;
+  border-color: #991b1b;
+  font-weight: 700;
+}
+
+/* Modal Stepper: Rule of 3 */
+.reminder-stepper-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  margin: 16px 0 22px;
+  padding: 0 10px;
+}
+.reminder-stepper-track {
+  position: absolute;
+  top: 16px;
+  left: 30px;
+  right: 30px;
+  height: 3px;
+  background-color: #e2e8f0;
+  z-index: 1;
+}
+.reminder-stepper-track-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #f59e0b 66%, #ef4444 100%);
+  transition: width 0.3s ease;
+}
+.reminder-step-node {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 70px;
+  text-align: center;
+}
+.reminder-step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  border: 2px solid #cbd5e1;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+.reminder-step-node.completed .reminder-step-circle {
+  background-color: #10b981;
+  border-color: #059669;
+  color: #ffffff;
+}
+.reminder-step-node.current .reminder-step-circle {
+  background-color: #f59e0b;
+  border-color: #d97706;
+  color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25);
+}
+.reminder-step-node.escalated .reminder-step-circle {
+  background-color: #ef4444;
+  border-color: #dc2626;
+  color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.25);
+}
+.reminder-step-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.reminder-step-node.current .reminder-step-label {
+  color: #b45309;
+  font-weight: 700;
+}
+.reminder-step-node.escalated .reminder-step-label {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+/* Escalation Banner */
+.reminder-escalation-banner {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 1.5px solid #f87171;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.escalation-banner-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background-color: #ef4444;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.escalation-banner-content h4 {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #991b1b;
+}
+.escalation-banner-content p {
+  margin: 0;
+  font-size: 12px;
+  color: #7f1d1d;
+  line-height: 1.45;
+}
+
+/* Quick Reason Chips */
+.quick-reason-chips-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.quick-reason-chip {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.quick-reason-chip:hover {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+}
+.quick-reason-chip.selected {
+  background-color: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+/* Timeline in History Modal */
+.reminder-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+.reminder-timeline-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  position: relative;
+}
+.reminder-timeline-item.is-escalated {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+}
+.timeline-level-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.timeline-level-1 { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.timeline-level-2 { background-color: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+.timeline-level-3 { background-color: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.timeline-level-escalated { background-color: #ef4444; color: #ffffff; }
+
+.timeline-content-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.timeline-header-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.timeline-reason-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+.timeline-time-meta {
+  font-size: 11px;
+  color: #64748b;
+}
+.timeline-note-text {
+  font-size: 12px;
+  color: #475569;
+  background: #ffffff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px dashed #cbd5e1;
+  margin-top: 4px;
+}
+.timeline-staff-line {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+.reminder-escalated-pill {
+  display: inline-block;
+  background-color: #7c3aed;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
+/* UserProfileModal dark-mode enhancements */
+.admin-workspace-layout.dark-mode .user-profile-body {
+  background: var(--rp-surface);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .profile-section-card {
+  background: var(--rp-soft);
+  border-color: var(--rp-border);
+}
+.admin-workspace-layout.dark-mode .profile-card-title {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .item-value {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .user-profile-footer {
+  background: var(--rp-soft);
+  border-top-color: var(--rp-border);
+}
+.admin-workspace-layout.dark-mode .user-violation-item {
+  background: var(--rp-surface);
+  border-color: var(--rp-border);
+}
+.admin-workspace-layout.dark-mode .violation-item-code {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .violation-item-body {
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .empty-violations-box {
+  background: rgba(22, 101, 52, 0.15);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+
+
+/* ── Clickable Table Rows ────────────────────────────────────────── */
+.admin-data-table tbody tr.admin-clickable-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.admin-data-table tbody tr.admin-clickable-row:hover {
+  background-color: #f1f5f9 !important;
+}
+.admin-workspace-layout.dark-mode .admin-data-table tbody tr.admin-clickable-row:hover {
+  background-color: #27354f !important;
 }

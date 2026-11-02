@@ -182,6 +182,17 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(res);
         }
 
+        /// <summary>Lấy danh sách biên bản vi phạm của chính người dùng đang đăng nhập</summary>
+        [HttpGet("my-violations")]
+        public async Task<IActionResult> GetMyViolations()
+        {
+            if (_currentUserService.UserId == null)
+                return Unauthorized(new { message = "Bạn chưa đăng nhập." });
+
+            var res = await _violationService.GetMyViolationRecordsAsync(_currentUserService.UserId.Value);
+            return Ok(res);
+        }
+
         // ─────────────────────────────────────────────────────────────────
         // STATISTICS & GLOBAL SEARCH
         // ─────────────────────────────────────────────────────────────────

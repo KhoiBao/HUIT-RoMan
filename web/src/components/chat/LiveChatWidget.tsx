@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import { useConfirm } from "../../context/ConfirmContext";
-import { api } from "../../lib/api";
+import { isStaffRole } from "../../lib/auth";
 import { PlusIcon } from "../Icon";
 import type {
   ChatMessageItem,
@@ -34,14 +34,14 @@ export function LiveChatWidget() {
   const [isStaffTyping, setIsStaffTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
-  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
-  const [rooms, setRooms] = useState<Array<{ id: number; name: string; roomCode: string }>>([]);
-
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isStaff =
-    user?.role === "Admin" || user?.role === "Employee" || user?.role === "Manager";
+    isStaffRole(user?.role) ||
+    (typeof window !== "undefined" &&
+      (window.location.pathname.startsWith("/admin") ||
+        window.location.pathname.startsWith("/staff")));
   const isOpenRef = useRef(isOpen);
   isOpenRef.current = isOpen;
 
@@ -52,34 +52,16 @@ export function LiveChatWidget() {
     });
   }, []);
 
-  // Tải danh sách phòng để người dùng có thể chọn phòng cần hỗ trợ
-  useEffect(() => {
-    if (!user || isStaff) return;
-    api
-      .get("/api/Rooms")
-      .then((res) => {
-        const list = res.data?.data || res.data || [];
-        setRooms(list);
-      })
-      .catch((err) => console.warn("Lỗi tải danh sách phòng:", err));
-
-    const params = new URLSearchParams(window.location.search);
-    const rid = params.get("roomId") || params.get("room_id");
-    if (rid && !isNaN(Number(rid))) {
-      setSelectedRoomId(Number(rid));
-    }
-  }, [user, isStaff]);
-
-  // Lấy nhân viên / quản lý trực ban của đơn vị quản lý phòng đó trong thời gian hiện tại
+  // Lấy nhân viên / quản lý trực ban đang có ca trực hiện tại
   useEffect(() => {
     if (!user || isStaff) {
       setOnDutyStaff([]);
       return;
     }
-    fetchOnDutyStaff(selectedRoomId ?? undefined)
+    fetchOnDutyStaff()
       .then((data) => setOnDutyStaff(data))
       .catch((err) => console.warn("Lỗi tải nhân viên trực:", err));
-  }, [user, isStaff, selectedRoomId]);
+  }, [user, isStaff]);
 
   // Kết nối SignalR khi đã đăng nhập
   useEffect(() => {
@@ -183,13 +165,31 @@ export function LiveChatWidget() {
     };
   }, [user?.id, isStaff, scrollToBottom]);
 
-  // Tự động cuộn khi mở widget hoặc có tin mới
+  // Tự động tải lại hội thoại và cuộn khi mở widget hoặc có tin mới
   useEffect(() => {
     if (isOpen) {
       setUnreadCount(0);
+      fetchMyActiveConversation()
+        .then((conv) => {
+          if (conv) {
+            setConversation(conv);
+            if (conv.messages && conv.messages.length > 0) {
+              setMessages(conv.messages);
+            }
+            joinConversationGroup(conv.id).catch(() => {});
+          }
+        })
+        .catch((err) => console.warn("Lỗi tải lại tin nhắn khi mở widget:", err));
       setTimeout(() => scrollToBottom(false), 100);
     }
-  }, [isOpen, messages.length, scrollToBottom]);
+  }, [isOpen, scrollToBottom]);
+
+  // Tự động cuộn xuống khi có tin nhắn mới hoặc nhân viên đang gõ
+  useEffect(() => {
+    if (isOpen) {
+      scrollToBottom(true);
+    }
+  }, [messages.length, isStaffTyping, isOpen, scrollToBottom]);
 
   // Xử lý gửi tin nhắn
   const handleSendMessage = async (customText?: string) => {
@@ -231,15 +231,21 @@ export function LiveChatWidget() {
       if (!convId) {
         const newConv = await createNewConversation({
           initialMessage: textToSend,
-          roomId: selectedRoomId ?? undefined,
         });
         setConversation(newConv);
         setMessages(newConv.messages || []);
         await joinConversationGroup(newConv.id);
+        scrollToBottom();
         return;
       }
 
-      await sendHubMessage(convId, textToSend);
+      const sentMsg = await sendHubMessage(convId, textToSend);
+      if (sentMsg) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === sentMsg.id)) return prev;
+          return [...prev, sentMsg];
+        });
+      }
       scrollToBottom();
     } catch (err) {
       console.error("Gửi tin nhắn thất bại:", err);
@@ -250,20 +256,31 @@ export function LiveChatWidget() {
 
   // Khởi tạo phiên hỗ trợ mới
   const handleStartNewConversation = async () => {
+    if (isSending) return;
     try {
       setIsSending(true);
       if (conversation?.id) {
         await leaveConversationGroup(conversation.id).catch(() => { });
       }
-      const newConv = await createNewConversation({
-        roomId: selectedRoomId ?? undefined,
-      });
-      setConversation(newConv);
-      setMessages(newConv.messages || []);
-      await joinConversationGroup(newConv.id);
-      setTimeout(() => scrollToBottom(false), 80);
+      const newConv = await createNewConversation();
+      if (newConv && newConv.id) {
+        setConversation(newConv);
+        setMessages(newConv.messages || []);
+        await joinConversationGroup(newConv.id).catch(() => { });
+        setTimeout(() => scrollToBottom(false), 80);
+      }
     } catch (err) {
       console.error("Lỗi bắt đầu phiên chat mới:", err);
+      try {
+        const fallbackConv = await fetchMyActiveConversation();
+        if (fallbackConv) {
+          setConversation(fallbackConv);
+          setMessages(fallbackConv.messages || []);
+          joinConversationGroup(fallbackConv.id).catch(() => { });
+        }
+      } catch (fallbackErr) {
+        console.error("Lỗi fallback hội thoại:", fallbackErr);
+      }
     } finally {
       setIsSending(false);
     }
@@ -489,7 +506,7 @@ export function LiveChatWidget() {
                 >
                   {activeStaff?.departmentName
                     ? `${activeStaff.departmentName} - Trực ban`
-                    : "HUIT - Trực ban hỗ trợ"}
+                    : "Thư viện HUIT - Trực ban hỗ trợ"}
                 </div>
                 <div
                   style={{
@@ -506,7 +523,7 @@ export function LiveChatWidget() {
                 >
                   <span>
                     {activeStaff
-                      ? `${activeStaff.fullName} • ${activeStaff.position || "Cán bộ"} (${activeStaff.shiftTimeRange || activeStaff.shiftName})`
+                      ? `${activeStaff.fullName} • ${activeStaff.position || (activeStaff.role === "Manager" ? "Quản lý Thư viện" : "Thủ thư")} (${activeStaff.shiftTimeRange || activeStaff.shiftName})`
                       : "Sẵn sàng hỗ trợ bạn"}
                   </span>
                 </div>
@@ -610,69 +627,6 @@ export function LiveChatWidget() {
                 <span style={{ color: "#2563eb", fontWeight: 600 }}>
                   {user ? `${user.fullName || user.cardCode}` : "Chưa đăng nhập"}
                 </span>
-              </div>
-
-              {/* THANH CHỌN PHÒNG ĐỂ ĐIỀU HƯỚNG ĐÚNG ĐƠN VỊ & CÁN BỘ CÓ CA TRỰC */}
-              <div
-                style={{
-                  backgroundColor: "#f1f5f9",
-                  padding: "6px 12px",
-                  borderBottom: "1px solid #e2e8f0",
-                  fontSize: "11px",
-                  color: "#334155",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "8px",
-                }}
-              >
-                <span
-                  style={{
-                    fontWeight: 600,
-                    whiteSpace: "nowrap",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <path d="M3 9h18M9 21V9" />
-                  </svg>
-                  Phòng hỏi:
-                </span>
-                <select
-                  value={selectedRoomId ?? ""}
-                  onChange={(e) => {
-                    const val = e.target.value ? Number(e.target.value) : null;
-                    setSelectedRoomId(val);
-                  }}
-                  style={{
-                    flex: 1,
-                    fontSize: "11px",
-                    padding: "3px 6px",
-                    borderRadius: "6px",
-                    border: "1px solid #cbd5e1",
-                    backgroundColor: "#ffffff",
-                    color: "#0f172a",
-                    outline: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  <option value="">(Tất cả / Đơn vị quản lý chung)</option>
-                  {rooms.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.roomCode} - {r.name}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               {/* KHU VỰC HIỂN THỊ TIN NHẮN */}
@@ -792,7 +746,7 @@ export function LiveChatWidget() {
 
                 {/* Danh sách tin nhắn */}
                 {messages.map((msg) => {
-                  const isMe = user && msg.userId === user.id;
+                  const isMe = user && (Number(msg.userId) === Number(user.id) || (!msg.isFromStaff && user.cardCode === msg.senderCardCode));
 
                   return (
                     <div
@@ -827,7 +781,11 @@ export function LiveChatWidget() {
                                 fontSize: "9px",
                               }}
                             >
-                              Cán bộ trực
+                              {msg.senderRole === "Manager"
+                                ? "Quản lý Thư viện"
+                                : msg.senderRole === "Admin"
+                                ? "Quản trị viên"
+                                : "Thủ thư trực"}
                             </span>
                           )}
                           {msg.senderName}

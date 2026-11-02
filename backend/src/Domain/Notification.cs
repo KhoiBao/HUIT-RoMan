@@ -4,9 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Thông báo gửi đến người dùng.
-    /// </summary>
+    // Thông báo gửi đến người dùng.
+
     [Table("Notifications")]
     public class Notification : Common.BaseEntity
     {
@@ -15,9 +14,9 @@ namespace HUIT_RoMan.Domain.Entities
 
         [Required]
         [StringLength(255)]
-        public string Title { get; set; }
+        public string Title { get; set; } = string.Empty;
 
-        public string Content { get; set; }
+        public string Content { get; set; } = string.Empty;
         public int Type { get; set; } // Loại thông báo
         public bool IsRead { get; set; } = false;
         

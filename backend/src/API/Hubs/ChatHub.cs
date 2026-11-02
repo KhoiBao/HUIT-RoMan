@@ -92,7 +92,7 @@ namespace HUIT_RoMan.API.Hubs
         /// <summary>
         /// Gửi tin nhắn realtime
         /// </summary>
-        public async Task SendMessage(int conversationId, string content)
+        public async Task<ChatMessageDto?> SendMessage(int conversationId, string content)
         {
             var userId = GetUserId();
             var isStaff = IsStaffUser();
@@ -101,34 +101,33 @@ namespace HUIT_RoMan.API.Hubs
             if (!sendResult.Success)
             {
                 await Clients.Caller.SendAsync("ErrorMessage", sendResult.Message);
-                return;
+                return null;
             }
 
             var messageDto = sendResult.Data;
             var groupName = $"Conversation_{conversationId}";
 
+            // Đảm bảo người gửi thuộc nhóm hội thoại
+            await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+
             // Gửi tin nhắn tức thời đến tất cả thành viên trong nhóm hội thoại
             await Clients.Group(groupName).SendAsync("ReceiveMessage", messageDto);
 
-            // Nếu người gửi là Sinh viên/Giảng viên (không phải staff), gửi tín hiệu chuông/thông báo đến toàn bộ nhóm nhân sự trực ban
+            // Nếu người gửi là Sinh viên/Giảng viên (không phải staff), gửi chuông đến toàn bộ nhóm nhân sự trực ban
             if (!isStaff)
             {
                 var convRes = await _chatService.GetConversationByIdAsync(conversationId, userId, true);
-                await Clients.Group(StaffGroupName).SendAsync("NewSupportMessage", new
-                {
-                    Conversation = convRes.Data,
-                    Message = messageDto
-                });
-            }
-            else
-            {
-                // Nếu nhân viên gửi, đảm bảo User nhận được cả khi họ chưa bấm mở group
-                var convRes = await _chatService.GetConversationByIdAsync(conversationId, userId, true);
                 if (convRes.Success && convRes.Data != null)
                 {
-                    await Clients.Group($"User_{convRes.Data.UserId}").SendAsync("ReceiveMessage", messageDto);
+                    await Clients.Group(StaffGroupName).SendAsync("NewSupportMessage", new
+                    {
+                        Conversation = convRes.Data,
+                        Message = messageDto
+                    });
                 }
             }
+
+            return messageDto;
         }
 
         /// <summary>

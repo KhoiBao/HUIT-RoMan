@@ -4,9 +4,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HUIT_RoMan.Domain.Entities
 {
-    /// <summary>
-    /// Liên kết giữa Phòng và Thiết bị (Phòng có những thiết bị gì).
-    /// </summary>
+    // Liên kết giữa Phòng và Thiết bị (Phòng có những thiết bị gì).
     [Table("RoomEquipments")]
     public class RoomEquipment : Common.BaseEntity
     {
@@ -24,6 +22,6 @@ namespace HUIT_RoMan.Domain.Entities
         public DateTime? RemovedDate { get; set; }
         
         public int Quantity { get; set; }
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
     }
 }
