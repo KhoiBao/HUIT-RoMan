@@ -12,17 +12,18 @@
 
 ## Cấu hình API
 
-Địa chỉ API truyền lúc build/run qua `--dart-define=API_BASE_URL`, mặc định `http://10.0.2.2:5056` (địa chỉ host của Android emulator).
+App **tự dò địa chỉ API** lúc khởi động — chỉ cần `flutter run`, dùng được cho cả Android emulator và máy thật.
+Thứ tự thử (từng cái một bằng `GET /api/health`): `127.0.0.1:5056` (tunnel `adb reverse` qua USB) →
+`10.0.2.2:5056` (Android emulator) → `192.168.1.7:5056` (máy dev qua Wi-Fi; sửa trong
+`lib/core/network/api_base_url.dart` nếu máy chạy backend đổi IP).
+
+Muốn chỉ định cứng, vẫn truyền tay được:
 
 ```bash
-# Emulator (backend chạy trên máy host, cổng 5056)
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5056
-
-# Điện thoại thật trong cùng mạng LAN (thay bằng IP máy chạy backend)
-flutter run --dart-define=API_BASE_URL=http://192.168.1.20:5056
+flutter run --dart-define=API_BASE_URL=http://<IP-máy-chạy-backend>:5056
 ```
 
-SignalR dùng cùng host với `API_BASE_URL`, hub `/hubs/chat`. Manifest đã bật `INTERNET` và `usesCleartextTraffic` cho backend HTTP khi phát triển.
+SignalR dùng cùng base URL đã dò, hub `/hubs/chat`. Manifest đã bật `INTERNET` và `usesCleartextTraffic` cho backend HTTP khi phát triển.
 
 ## Lệnh thường dùng
 

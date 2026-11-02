@@ -1,8 +1,7 @@
 import 'package:dio/dio.dart';
-import '../config/app_config.dart';
 
-Dio buildDio() => Dio(BaseOptions(
-      baseUrl: AppConfig.apiBaseUrl,
+Dio buildDio(String baseUrl) => Dio(BaseOptions(
+      baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 30),
       sendTimeout: const Duration(seconds: 20),
