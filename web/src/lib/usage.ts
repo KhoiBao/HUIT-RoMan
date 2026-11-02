@@ -144,3 +144,51 @@ export async function cancelNoShow(
   const res = await api.patch(`/api/UsageSessions/${id}/no-show${query}`);
   return Boolean(res.data?.success ?? true);
 }
+
+/**
+ * Đánh giá điều kiện nhận phòng (check-in) theo quy định của hệ thống:
+ * - Trạng thái phiên phải là "Chờ nhận phòng".
+ * - Chỉ được nhận phòng từ 15 phút trước giờ bắt đầu (T - 15 phút) đến trước khi ca mượn kết thúc (EndAt).
+ * - Trước T - 15 phút: Chưa đến giờ mở nhận phòng.
+ * - Sau EndAt: Đã quá giờ kết thúc của ca mượn phòng.
+ */
+export interface CheckInStatusResult {
+  allowed: boolean;
+  reason?: string;
+  isTooEarly?: boolean;
+  isExpired?: boolean;
+}
+
+export function getCheckInStatus(session: Partial<UsageSessionItem>, now: Date = new Date()): CheckInStatusResult {
+  if (session.status !== "Chờ nhận phòng") {
+    return { allowed: false, reason: "Phiên không ở trạng thái chờ nhận phòng." };
+  }
+  if (!session.startAt || !session.endAt) {
+    return { allowed: true };
+  }
+  const start = new Date(session.startAt).getTime();
+  const end = new Date(session.endAt).getTime();
+  if (isNaN(start) || isNaN(end)) {
+    return { allowed: true };
+  }
+  const currentTime = now.getTime();
+  const openTime = start - 15 * 60 * 1000; // 15 phút trước giờ bắt đầu
+
+  if (currentTime < openTime) {
+    return {
+      allowed: false,
+      isTooEarly: true,
+      reason: "Chưa đến thời điểm nhận phòng theo quy định (chỉ được check-in trước giờ bắt đầu tối đa 15 phút).",
+    };
+  }
+
+  if (currentTime > end) {
+    return {
+      allowed: false,
+      isExpired: true,
+      reason: "Đã quá thời gian ca mượn phòng kết thúc theo lịch, không thể nhận phòng.",
+    };
+  }
+
+  return { allowed: true };
+}

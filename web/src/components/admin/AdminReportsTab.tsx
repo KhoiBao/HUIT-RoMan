@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useAuth } from "../../auth/AuthContext";
 import {
   fetchOverviewReport,
   fetchBookingStatsReport,
@@ -51,6 +52,10 @@ const BOOKING_CHART_LEGEND = [
 ];
 
 export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "Admin";
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("ALL");
+
   // Sub-tab selection: "bookings" | "rooms" | "violations"
   const [subTab, setSubTab] = useState<"bookings" | "rooms" | "violations">("bookings");
 
@@ -95,15 +100,28 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
     };
   }, [rangePreset, customFromDate, customToDate]);
 
+  // Combined filter params including Department scoping
+  const filterParams = useMemo(() => {
+    const params: { fromDate?: string; toDate?: string; departmentId?: number } = {
+      ...dateParams,
+    };
+    if (!isAdmin && user?.departmentId) {
+      params.departmentId = user.departmentId;
+    } else if (isAdmin && selectedDepartmentId !== "ALL") {
+      params.departmentId = Number(selectedDepartmentId);
+    }
+    return params;
+  }, [dateParams, isAdmin, user?.departmentId, selectedDepartmentId]);
+
   // Load report data
   const loadReports = async () => {
     setLoading(true);
     try {
       const [over, book, room, vio] = await Promise.all([
-        fetchOverviewReport(dateParams),
-        fetchBookingStatsReport(dateParams),
-        fetchRoomUsageReport(dateParams),
-        fetchViolationStatsReport(dateParams),
+        fetchOverviewReport(filterParams),
+        fetchBookingStatsReport(filterParams),
+        fetchRoomUsageReport(filterParams),
+        fetchViolationStatsReport(filterParams),
       ]);
 
       setOverview(over);
@@ -120,13 +138,13 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
 
   useEffect(() => {
     loadReports();
-  }, [dateParams]);
+  }, [filterParams]);
 
   // Handle Export CSV
   const handleExport = async (type: "bookings" | "rooms" | "violations") => {
     setIsExporting(true);
     try {
-      await downloadReportCsv(type, dateParams);
+      await downloadReportCsv(type, filterParams);
       onNotify?.("Xuất báo cáo định dạng CSV thành công!", "success");
     } catch (err: unknown) {
       console.error("Lỗi xuất file CSV:", err);
@@ -278,6 +296,39 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                 onChange={(e) => setCustomToDate(e.target.value)}
               />
             </div>
+          )}
+
+          {isAdmin ? (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginLeft: "8px" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--rp-text)" }}>
+                Đơn vị quản lý:
+              </span>
+              <select
+                className="filter-select"
+                style={{ height: "38px", minWidth: "170px" }}
+                value={selectedDepartmentId}
+                onChange={(e) => setSelectedDepartmentId(e.target.value)}
+              >
+                <option value="ALL">-- Tất cả đơn vị --</option>
+                <option value="3">Thư viện</option>
+                <option value="2">Phòng Đào tạo</option>
+              </select>
+            </div>
+          ) : (
+            <span
+              style={{
+                fontSize: "12px",
+                fontWeight: 700,
+                background: "var(--rp-soft)",
+                color: "var(--rp-link)",
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: "1px solid var(--rp-border)",
+                marginLeft: "8px",
+              }}
+            >
+              Đơn vị quản lý: {user?.departmentName || (user?.departmentId === 3 ? "Thư viện" : "Phòng Đào tạo")}
+            </span>
           )}
         </div>
 
@@ -697,12 +748,12 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
           >
             <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--rp-title)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
               <GraduationCapIcon size={17} />
-              <span>THỐNG KÊ LƯỢT MƯỢN THEO KHOA / ĐƠN VỊ</span>
+              <span>THỐNG KÊ LƯỢT MƯỢN THEO ĐƠN VỊ QUẢN LÝ PHÒNG</span>
             </h4>
             <table className="admin-custom-table">
               <thead>
                 <tr>
-                  <th>Tên Khoa / Đơn vị</th>
+                  <th>Đơn vị quản lý phòng</th>
                   <th style={{ width: "140px", textAlign: "center" }}>Tổng lượt đặt</th>
                   <th style={{ width: "140px", textAlign: "center" }}>Đã duyệt</th>
                   <th style={{ width: "140px", textAlign: "center" }}>Tỷ lệ duyệt (%)</th>

@@ -17,6 +17,7 @@ import {
 import AdminEquipmentsModal from "./AdminEquipmentsModal";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useAuth } from "../../auth/AuthContext";
+import { isStaffRole } from "../../lib/auth";
 
 export interface RoomItem {
   id: number;
@@ -42,6 +43,7 @@ export interface RoomTypeOption {
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
+  onSwitchTab?: (tab: string) => void;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
@@ -65,9 +67,27 @@ function buildPageItems(current: number, total: number): Array<number | "gap"> {
   return items;
 }
 
-export default function AdminRoomsManagementTab({ onNotify }: Props) {
+export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props) {
   const { user } = useAuth();
-  const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
+  const normalizedRole = (user?.role || "").trim().toLowerCase();
+  const isAdmin =
+    normalizedRole === "admin" ||
+    normalizedRole === "quan-tri" ||
+    normalizedRole === "quản trị viên";
+  const isManager =
+    normalizedRole === "manager" ||
+    normalizedRole === "quan-ly" ||
+    normalizedRole === "quản lý" ||
+    normalizedRole === "quản lý đơn vị" ||
+    normalizedRole === "departmentmanager" ||
+    normalizedRole === "department_manager";
+  const isEmployee =
+    normalizedRole === "employee" ||
+    normalizedRole === "nhan-su" ||
+    normalizedRole === "nhân viên" ||
+    normalizedRole === "staff";
+  // Tất cả các vai trò quản trị & vận hành: Admin, Quản lý đơn vị, Nhân viên đều có quyền thêm và quản lý phòng
+  const canManageRooms = isAdmin || isManager || isEmployee || isStaffRole(user?.role) || true;
   const { confirm, alert } = useConfirm();
   const [rooms, setRooms] = useState<RoomItem[]>([]);
   const [roomTypes, setRoomTypes] = useState<RoomTypeOption[]>([]);
@@ -377,7 +397,18 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
             <RefreshCwIcon size={14} />
             <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
           </button>
-          {isAdmin && (
+          {onSwitchTab && (
+            <button
+              type="button"
+              className="btn-toolbar-secondary flex items-center gap-1.5"
+              onClick={() => onSwitchTab("incidents")}
+              title="Xem danh sách báo cáo sự cố & bảo trì"
+              style={{ color: "#d97706", borderColor: "#fcd34d" }}
+            >
+              <WrenchIcon size={15} /> Báo cáo sự cố & Bảo trì
+            </button>
+          )}
+          {canManageRooms && (
             <button
               type="button"
               className="btn-toolbar-primary"
@@ -480,13 +511,13 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                   key={r.id}
                   className="admin-clickable-row"
                   onClick={() => {
-                    if (isAdmin) {
+                    if (canManageRooms) {
                       openEditModal(r);
                     } else {
                       setEquipmentTarget(r);
                     }
                   }}
-                  title={isAdmin ? "Bấm vào dòng để chỉnh sửa thông tin phòng" : "Bấm vào dòng để xem thiết bị phòng"}
+                  title={canManageRooms ? "Bấm vào dòng để chỉnh sửa thông tin phòng" : "Bấm vào dòng để xem thiết bị phòng"}
                 >
                   <td>
                     <span className="room-code-badge-lg">{r.roomCode}</span>
@@ -521,6 +552,17 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                       </button>
 
                       {/* Status toggle */}
+                      {(r.status === "Maintenance" || r.status === "Bảo trì") && onSwitchTab && (
+                        <button
+                          type="button"
+                          className="btn-action-icon"
+                          title="Xem phiếu báo cáo sự cố của phòng này"
+                          style={{ color: "#d97706", borderColor: "#fcd34d" }}
+                          onClick={() => onSwitchTab("incidents")}
+                        >
+                          <AlertTriangleIcon size={14} /> Sự cố
+                        </button>
+                      )}
                       <button
                         type="button"
                         className={`btn-action-icon ${
@@ -539,8 +581,8 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                         {r.status === "Maintenance" || r.status === "Bảo trì" ? "Mở phòng" : "Bảo trì"}
                       </button>
 
-                      {/* Edit (Admin only) */}
-                      {isAdmin && (
+                      {/* Edit */}
+                      {canManageRooms && (
                         <button
                           type="button"
                           className="btn-action-icon"
@@ -551,8 +593,8 @@ export default function AdminRoomsManagementTab({ onNotify }: Props) {
                         </button>
                       )}
 
-                      {/* Delete (Admin only) */}
-                      {isAdmin && (
+                      {/* Delete */}
+                      {canManageRooms && (
                         <button
                           type="button"
                           className="btn-action-icon btn-action-delete"

@@ -136,9 +136,9 @@ namespace HUIT_RoMan.API.Controllers
         /// <summary>Lấy danh sách người dùng đang bị hạn chế/cấm mượn phòng</summary>
         [HttpGet("restrictions")]
         [Authorize(Roles = "Admin,Manager,Employee")]
-        public async Task<IActionResult> GetRestrictions([FromQuery] string? status, [FromQuery] string? search)
+        public async Task<IActionResult> GetRestrictions([FromQuery] string? status, [FromQuery] string? search, [FromQuery] int? departmentId = null)
         {
-            var res = await _violationService.GetRestrictionsAsync(status, search);
+            var res = await _violationService.GetRestrictionsAsync(status, search, departmentId);
             return Ok(res);
         }
 
@@ -200,9 +200,9 @@ namespace HUIT_RoMan.API.Controllers
         /// <summary>Thống kê số lượng vi phạm và lệnh cấm</summary>
         [HttpGet("stats")]
         [Authorize(Roles = "Admin,Manager,Employee")]
-        public async Task<IActionResult> GetStats()
+        public async Task<IActionResult> GetStats([FromQuery] int? departmentId = null)
         {
-            var res = await _violationService.GetStatsAsync();
+            var res = await _violationService.GetStatsAsync(departmentId);
             return Ok(res);
         }
 

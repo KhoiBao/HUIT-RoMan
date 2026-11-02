@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ClockIcon, RefreshCwIcon, AlertTriangleIcon } from "../Icon";
+import { TimeSelect24h } from "../common/TimeSelect24h";
 import {
   WEEKDAY_LABELS,
   WEEK_DISPLAY_ORDER,
@@ -134,24 +135,28 @@ export default function AdminWorkingHoursTab({ onNotify }: Props) {
                     </label>
                   </td>
                   <td>
-                    <input
-                      type="time"
+                    <TimeSelect24h
                       className="admin-input"
                       value={day.openTime}
                       disabled={day.isClosed}
-                      onChange={(e) =>
-                        patchDay(day.dayOfWeek, { openTime: e.target.value })
+                      minTime="06:00"
+                      maxTime="12:00"
+                      stepMinutes={15}
+                      onChange={(val) =>
+                        patchDay(day.dayOfWeek, { openTime: val })
                       }
                     />
                   </td>
                   <td>
-                    <input
-                      type="time"
+                    <TimeSelect24h
                       className="admin-input"
                       value={day.closeTime}
                       disabled={day.isClosed}
-                      onChange={(e) =>
-                        patchDay(day.dayOfWeek, { closeTime: e.target.value })
+                      minTime="12:00"
+                      maxTime="23:00"
+                      stepMinutes={15}
+                      onChange={(val) =>
+                        patchDay(day.dayOfWeek, { closeTime: val })
                       }
                     />
                   </td>

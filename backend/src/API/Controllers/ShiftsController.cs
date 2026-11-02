@@ -30,9 +30,9 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Thống kê số lượng ca trực và nhân sự</summary>
         [HttpGet("stats")]
-        public async Task<IActionResult> GetShiftStats()
+        public async Task<IActionResult> GetShiftStats([FromQuery] int? departmentId = null)
         {
-            var res = await _shiftService.GetShiftStatsAsync();
+            var res = await _shiftService.GetShiftStatsAsync(departmentId);
             return Ok(res);
         }
 
@@ -112,9 +112,10 @@ namespace HUIT_RoMan.API.Controllers
         public async Task<IActionResult> GetShiftLogs(
             [FromQuery] int? employeeId,
             [FromQuery] DateTime? fromDate,
-            [FromQuery] DateTime? toDate)
+            [FromQuery] DateTime? toDate,
+            [FromQuery] int? departmentId = null)
         {
-            var res = await _shiftService.GetShiftLogsAsync(employeeId, fromDate, toDate);
+            var res = await _shiftService.GetShiftLogsAsync(employeeId, fromDate, toDate, departmentId);
             return Ok(res);
         }
 

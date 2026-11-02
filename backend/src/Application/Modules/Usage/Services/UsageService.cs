@@ -379,7 +379,11 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                 if (policyBooking != null && policyBooking.Status == "Đã hủy")
                     return ApiResponse<UsageSessionDto>.ErrorResponse("Đơn đặt phòng đã bị hủy, không thể nhận phòng.");
 
+                var checkTime = request.ActualCheckIn ?? DateTime.UtcNow;
+                var startAt = session.BookingDetail.StartAt;
+                var endAt = session.BookingDetail.EndAt;
                 var isStaffForPolicy = _currentUser.IsAdmin || (_currentUser.Role == "Employee" || _currentUser.Role == "Manager");
+
                 if (!isStaffForPolicy && policyBooking != null)
                 {
                     // Không nhận phòng lần hai: đơn đã được nhận (trừ khi chính phiên này đang dùng).
@@ -389,9 +393,29 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                         return ApiResponse<UsageSessionDto>.ErrorResponse("Đơn đặt phòng này đã được nhận phòng trước đó.");
 
                     // Sinh viên chỉ được nhận phòng trong cửa sổ [T - 15 phút, T).
-                    var windowError = BookingCheckInPolicy.ValidateWindow(session.BookingDetail.StartAt, DateTime.UtcNow);
+                    var windowError = BookingCheckInPolicy.ValidateWindow(startAt, checkTime);
                     if (windowError != null)
                         return ApiResponse<UsageSessionDto>.ErrorResponse(windowError);
+                }
+                else
+                {
+                    // Quản trị viên / Thủ thư chỉ được check-in theo quy định:
+                    // 1. Không được nhận phòng trước giờ bắt đầu quá 15 phút (trước T - 15 phút).
+                    if (checkTime < startAt.Add(-BookingCheckInPolicy.OpenBeforeStart))
+                    {
+                        var openTimeVn = startAt.AddHours(7).Add(-BookingCheckInPolicy.OpenBeforeStart).ToString("HH:mm (dd/MM/yyyy)");
+                        return ApiResponse<UsageSessionDto>.ErrorResponse(
+                            $"Chưa đến thời điểm nhận phòng theo quy định. Bạn chỉ có thể check-in từ {openTimeVn} (trước giờ bắt đầu {BookingCheckInPolicy.OpenBeforeStart.TotalMinutes} phút)."
+                        );
+                    }
+
+                    // 2. Không được nhận phòng khi ca sử dụng đã kết thúc (sau endAt).
+                    if (checkTime > endAt)
+                    {
+                        return ApiResponse<UsageSessionDto>.ErrorResponse(
+                            "Ca sử dụng phòng đã kết thúc theo lịch đăng ký, không thể nhận phòng."
+                        );
+                    }
                 }
             }
 
@@ -705,6 +729,9 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
 
             if (session.Status != "Chờ nhận phòng")
                 return ApiResponse<bool>.ErrorResponse("Chỉ có thể hủy No-show cho phiên đang ở trạng thái 'Chờ nhận phòng'.");
+
+            if (session.BookingDetail != null && DateTime.UtcNow < session.BookingDetail.StartAt)
+                return ApiResponse<bool>.ErrorResponse("Chưa đến thời gian bắt đầu ca sử dụng, không thể hủy do không đến nhận phòng (No-show).");
 
             session.Status = "Đã hủy";
             _usageRepo.Update(session);

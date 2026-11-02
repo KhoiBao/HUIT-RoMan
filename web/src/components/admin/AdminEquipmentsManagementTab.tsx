@@ -17,6 +17,7 @@ import {
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useAuth } from "../../auth/AuthContext";
+import { isStaffRole } from "../../lib/auth";
 import AdminPagination from "../common/AdminPagination";
 
 export interface WarehouseEquipment {
@@ -278,11 +279,14 @@ function RoomEquipStatusDropdown({
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
+  onSwitchTab?: (tab: string) => void;
 }
 
-export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
+export default function AdminEquipmentsManagementTab({ onNotify, onSwitchTab }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === "Admin" || user?.role === "quan-tri" || user?.role === "Quản trị viên";
+  const isStaff = isStaffRole(user?.role);
+  const canManage = isAdmin || isStaff;
   const { confirm, alert } = useConfirm();
   const [subView, setSubView] = useState<"warehouse" | "byRoom" | "categories">("warehouse");
   const [equipments, setEquipments] = useState<WarehouseEquipment[]>([]);
@@ -922,7 +926,7 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
             <RefreshCwIcon size={14} />
             <span>{loading ? "Đang tải..." : "Làm mới dữ liệu"}</span>
           </button>
-          {subView === "warehouse" && isAdmin && (
+          {subView === "warehouse" && canManage && (
             <button
               type="button"
               className="btn-toolbar-primary"
@@ -982,6 +986,17 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
           >
             Danh mục loại thiết bị ({categories.length})
           </button>
+          {onSwitchTab && (
+            <button
+              type="button"
+              className="filter-pill-btn flex items-center gap-1"
+              style={{ color: "#d97706", borderColor: "#fcd34d" }}
+              onClick={() => onSwitchTab("incidents")}
+              title="Chuyển sang Quản lý Báo cáo sự cố & Lịch sử bảo trì"
+            >
+              <WrenchIcon size={14} /> Sự cố & Bảo trì
+            </button>
+          )}
         </div>
 
         {subView === "warehouse" && (
@@ -1171,6 +1186,17 @@ export default function AdminEquipmentsManagementTab({ onNotify }: Props) {
             <div className="admin-empty-state">
               <AlertTriangleIcon size={36} className="text-muted" />
               <p className="empty-title">Không tìm thấy thiết bị nào trong kho</p>
+              {canManage && (
+                <div style={{ marginTop: "12px" }}>
+                  <button
+                    type="button"
+                    className="btn-toolbar-primary"
+                    onClick={() => setShowAddModal(true)}
+                  >
+                    <PlusIcon size={14} /> Thêm thiết bị mới
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <>

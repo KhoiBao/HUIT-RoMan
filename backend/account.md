@@ -28,7 +28,7 @@ Nhân viên Phòng Đào tạo:
 
 Sinh viên (Khoa CNTT):
 
-- 200123456@huit.edu.vn / Huit@123
+- 2001230399@huit.edu.vn / Huit@123
 - 200123457@huit.edu.vn / Huit@123
 - 200123458@huit.edu.vn / Huit@123
 - 200123459@huit.edu.vn / Huit@123

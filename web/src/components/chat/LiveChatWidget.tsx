@@ -3,6 +3,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { useConfirm } from "../../context/ConfirmContext";
 import { isStaffRole } from "../../lib/auth";
 import { PlusIcon } from "../Icon";
+import { formatTime24h } from "../../lib/dateTimeFormat";
 import type {
   ChatMessageItem,
   ChatConversationItem,
@@ -822,10 +823,7 @@ export function LiveChatWidget() {
                           margin: "0 4px",
                         }}
                       >
-                        {new Date(msg.sentAt).toLocaleTimeString("vi-VN", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatTime24h(msg.sentAt)}
                       </span>
                     </div>
                   );

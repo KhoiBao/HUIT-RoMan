@@ -16,9 +16,11 @@ import AdminViolationsTab from "../components/admin/AdminViolationsTab";
 import AdminShiftsTab from "../components/admin/AdminShiftsTab";
 import AdminReportsTab from "../components/admin/AdminReportsTab";
 import AdminChatTab from "../components/admin/AdminChatTab";
+import AdminIncidentsTab from "../components/admin/AdminIncidentsTab";
 import AdminGlobalSearchModal from "../components/admin/AdminGlobalSearchModal";
 import NotificationCenter from "../components/NotificationCenter";
 import SchedulePage from "./SchedulePage";
+import { TimeSelect24h } from "../components/common/TimeSelect24h";
 import {
   fetchPeriodsApi,
   formatPeriodLabel,
@@ -28,6 +30,7 @@ import {
   fetchAvailableRoomsApi,
   groupPeriodsByRoomType,
 } from "../lib/booking";
+import { getIncidentStats } from "../lib/incidents";
 
 import {
   ClockIcon,
@@ -52,6 +55,7 @@ import {
   MoonIcon,
   SidebarIcon,
   LogOutIcon,
+  WrenchIcon,
 } from "../components/Icon";
 
 export type AdminTabType =
@@ -63,6 +67,7 @@ export type AdminTabType =
   | "reports"
   | "chat"
   | "rooms"
+  | "incidents"
   | "equipments"
   | "roomTypes"
   | "workingHours"
@@ -197,6 +202,7 @@ export default function AdminDashboardPage() {
   const [showManualModal, setShowManualModal] = useState<boolean>(false);
   const [showGlobalSearchModal, setShowGlobalSearchModal] = useState<boolean>(false);
   const [pendingViolationsCount, setPendingViolationsCount] = useState<number>(0);
+  const [activeIncidentsCount, setActiveIncidentsCount] = useState<number>(0);
 
   // Keyboard shortcut Ctrl+K to open Global Search
   useEffect(() => {
@@ -210,9 +216,9 @@ export default function AdminDashboardPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Fetch pending violations count
+  // Fetch pending violations count & active incidents count
   useEffect(() => {
-    const fetchViolationsCount = async () => {
+    const fetchCounts = async () => {
       try {
         const res = await api.get("/api/Violations/stats");
         if (res.data?.data) {
@@ -221,9 +227,15 @@ export default function AdminDashboardPage() {
       } catch {
         // ignore
       }
+      try {
+        const stats = getIncidentStats();
+        setActiveIncidentsCount(stats.pending + stats.inMaintenance);
+      } catch {
+        // ignore
+      }
     };
-    fetchViolationsCount();
-    const interval = setInterval(fetchViolationsCount, 20000);
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 20000);
     return () => clearInterval(interval);
   }, []);
 
@@ -236,6 +248,26 @@ export default function AdminDashboardPage() {
   const [availableRoomIds, setAvailableRoomIds] = useState<Set<number> | null>(null);
   const [isLoadingAvailableRooms, setIsLoadingAvailableRooms] = useState<boolean>(false);
 
+  const getInitialManualSlot = () => {
+    const now = new Date();
+    const isPastEvening = now.getHours() >= 18;
+    const targetDate = isPastEvening
+      ? new Date(Date.now() + 86400000)
+      : now;
+    const dateStr = targetDate.toISOString().split("T")[0];
+
+    let start = "08:00";
+    let end = "10:00";
+    if (!isPastEvening && now.getHours() >= 7 && now.getHours() < 17) {
+      const nextHour = now.getHours() + 1;
+      start = `${String(nextHour).padStart(2, "0")}:00`;
+      end = `${String(Math.min(nextHour + 2, 20)).padStart(2, "0")}:00`;
+    }
+    return { date: dateStr, startTime: start, endTime: end };
+  };
+
+  const initialSlot = getInitialManualSlot();
+
   const [manualForm, setManualForm] = useState({
     roomId: 0,
     roomCode: "",
@@ -244,9 +276,9 @@ export default function AdminDashboardPage() {
     unit: "",
     email: "",
     phone: "",
-    bookingDate: new Date().toISOString().split("T")[0],
-    startTime: "13:30",
-    endTime: "15:30",
+    bookingDate: initialSlot.date,
+    startTime: initialSlot.startTime,
+    endTime: initialSlot.endTime,
     guestCount: 6,
     purpose: "",
   });
@@ -375,7 +407,8 @@ export default function AdminDashboardPage() {
       setAvailableRoomIds(idSet);
     } catch (err) {
       console.warn("Could not fetch available rooms for slot:", err);
-      setAvailableRoomIds(new Set());
+      // Fallback: If API returns error (e.g. past window validation), keep null so all rooms remain visible
+      setAvailableRoomIds(null);
     } finally {
       setIsLoadingAvailableRooms(false);
     }
@@ -407,6 +440,11 @@ export default function AdminDashboardPage() {
         }
       }
 
+      // Ẩn phòng đang bảo trì
+      if (r.status === "Bảo trì" || r.status === "Maintenance") {
+        return false;
+      }
+
       // 1. Phân loại theo hình thức mượn (tiết vs giờ)
       if (manualBookingMode === "period") {
         if (!r.isBookingByPeriod) return false;
@@ -415,10 +453,16 @@ export default function AdminDashboardPage() {
           return false;
         }
       } else {
-        if (r.isBookingByPeriod) return false;
+        // Trong chế độ theo giờ:
+        // - Ưu tiên các phòng theo giờ (Thư viện / Hội trường)
+        // - Với Quản trị viên (Admin), cho phép đặt tất cả các phòng kể cả phòng học nếu cần
+        const hasTimeRooms = availableDbRooms.some((rm) => !rm.isBookingByPeriod);
+        if (hasTimeRooms && r.isBookingByPeriod && !isAdmin) {
+          return false;
+        }
       }
 
-      // 2. Ẩn phòng đã có lịch đặt trùng hoặc bảo trì trong khung giờ đã chọn
+      // 2. Ẩn phòng đã có lịch đặt trùng trong khung giờ đã chọn
       if (availableRoomIds !== null) {
         if (!availableRoomIds.has(r.id)) return false;
       }
@@ -558,6 +602,14 @@ export default function AdminDashboardPage() {
   }, [canBookByPeriod, canBookByTime, manualBookingMode]);
 
   const handleOpenManualModal = () => {
+    const freshSlot = getInitialManualSlot();
+    setManualForm((prev) => ({
+      ...prev,
+      bookingDate: freshSlot.date,
+      startTime: freshSlot.startTime,
+      endTime: freshSlot.endTime,
+    }));
+
     if (!canBookByPeriod) {
       setManualBookingMode("time");
     } else if (!canBookByTime) {
@@ -778,6 +830,14 @@ export default function AdminDashboardPage() {
       icon: DoorIcon,
     },
     {
+      id: "incidents" as AdminTabType,
+      label: "Báo cáo sự cố",
+      title: "Quản lý Báo cáo sự cố & Lịch sử bảo trì",
+      icon: WrenchIcon,
+      badge: activeIncidentsCount > 0 ? activeIncidentsCount : undefined,
+      badgeVariant: "danger" as const,
+    },
+    {
       id: "equipments" as AdminTabType,
       label: "Thiết bị",
       title: "Quản lý thiết bị & Tài sản",
@@ -851,7 +911,7 @@ export default function AdminDashboardPage() {
     }
 
     return list;
-  }, [pendingCount, pendingViolationsCount, isAdmin, isManager]);
+  }, [pendingCount, pendingViolationsCount, activeIncidentsCount, isAdmin, isManager]);
 
   useEffect(() => {
     const forbiddenTabs = isManager
@@ -1176,11 +1236,18 @@ export default function AdminDashboardPage() {
         )}
 
         {activeTab === "rooms" && (
-          <AdminRoomsManagementTab onNotify={showToast} />
+          <AdminRoomsManagementTab onNotify={showToast} onSwitchTab={(tab) => setActiveTab(tab as AdminTabType)} />
+        )}
+
+        {activeTab === "incidents" && (
+          <AdminIncidentsTab
+            onNotify={showToast}
+            onSwitchTab={(tab) => setActiveTab(tab as AdminTabType)}
+          />
         )}
 
         {activeTab === "equipments" && (
-          <AdminEquipmentsManagementTab onNotify={showToast} />
+          <AdminEquipmentsManagementTab onNotify={showToast} onSwitchTab={(tab) => setActiveTab(tab as AdminTabType)} />
         )}
 
         {activeTab === "roomTypes" && isAdmin && (
@@ -1465,14 +1532,16 @@ export default function AdminDashboardPage() {
                   <>
                     <div className="form-field">
                       <label>Giờ bắt đầu (*):</label>
-                      <input
-                        type="time"
+                      <TimeSelect24h
                         required
                         value={manualForm.startTime}
-                        onChange={(e) =>
+                        minTime="06:30"
+                        maxTime="22:00"
+                        stepMinutes={15}
+                        onChange={(val) =>
                           setManualForm({
                             ...manualForm,
-                            startTime: e.target.value,
+                            startTime: val,
                           })
                         }
                       />
@@ -1480,12 +1549,14 @@ export default function AdminDashboardPage() {
 
                     <div className="form-field">
                       <label>Giờ kết thúc (*):</label>
-                      <input
-                        type="time"
+                      <TimeSelect24h
                         required
                         value={manualForm.endTime}
-                        onChange={(e) =>
-                          setManualForm({ ...manualForm, endTime: e.target.value })
+                        minTime={manualForm.startTime || "07:00"}
+                        maxTime="22:00"
+                        stepMinutes={15}
+                        onChange={(val) =>
+                          setManualForm({ ...manualForm, endTime: val })
                         }
                       />
                     </div>

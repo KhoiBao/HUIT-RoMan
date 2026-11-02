@@ -23,7 +23,7 @@ export function validateLoginInput(
   if (!id) {
     return {
       valid: false,
-      identifier: "Vui lòng nhập MSSV/Mã CBVC hoặc email HUIT",
+      identifier: "Vui lòng nhập MSSV",
     };
   }
   if (id.includes("@")) {

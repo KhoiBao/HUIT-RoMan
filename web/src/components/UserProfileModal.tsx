@@ -21,6 +21,7 @@ import {
   type UserEligibility,
   type ViolationRecordItem,
 } from "../lib/violations";
+import { formatDateTime24h } from "../lib/dateTimeFormat";
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -282,7 +283,7 @@ export default function UserProfileModal({
             className={`auth-modal-alert ${
               toastMsg.type === "success" ? "alert-success" : "alert-error"
             }`}
-            style={{ margin: "14px 20px 0" }}
+            style={{ margin: "14px 20px 0", flexShrink: 0 }}
           >
             {toastMsg.type === "success" ? (
               <CheckCircleIcon size={16} />
@@ -474,7 +475,7 @@ export default function UserProfileModal({
               <div className="profile-section-card">
                 <div className="flex-between">
                   <h4 className="profile-card-title">
-                    <AlertTriangleIcon size={16} /> LỊCH SỬ VI PHẠM &amp; CHẾ TÀI ({myViolations.length})
+                    <AlertTriangleIcon size={16} /> LỊCH SỬ VI PHẠM &amp; CHẾ TÀI
                   </h4>
                   <button
                     type="button"
@@ -497,24 +498,29 @@ export default function UserProfileModal({
                           <span className="violation-item-code">
                             {eligibility.restrictionType || "LỆNH CẤM MƯỢN PHÒNG"}
                           </span>
-                          <span className="violation-status-badge status-pending">
+                          <span className="violation-status-badge status-restricted">
                             <BanIcon size={11} /> Đang hiệu lực
                           </span>
                         </div>
                         <div className="violation-item-body">
-                          <strong>Lý do:</strong>{" "}
-                          {eligibility.reason || "Vi phạm quy chế mượn phòng thư viện"}
+                          <div className="violation-desc-text">
+                            <span className="violation-desc-label">Lý do:</span>{" "}
+                            {eligibility.reason || "Vi phạm quy chế mượn phòng thư viện"}
+                          </div>
                         </div>
                         {eligibility.endAt && (
                           <div className="violation-item-meta">
-                            <span>
-                              <ClockIcon size={12} className="inline-block" style={{ marginRight: 4 }} />
-                              Thời hạn đến: {new Date(eligibility.endAt).toLocaleDateString("vi-VN")}
-                            </span>
+                            <div className="violation-meta-left">
+                              <span className="violation-meta-field">
+                                <ClockIcon size={12} />
+                                Thời hạn đến: {new Date(eligibility.endAt).toLocaleDateString("vi-VN")}
+                              </span>
+                            </div>
                             {eligibility.remainingDays ? (
-                              <strong style={{ color: "#b91c1c" }}>
-                                (Còn {eligibility.remainingDays} ngày)
-                              </strong>
+                              <div className="violation-restriction-badge">
+                                <AlertTriangleIcon size={12} />
+                                <span>Còn {eligibility.remainingDays} ngày</span>
+                              </div>
                             ) : null}
                           </div>
                         )}
@@ -560,54 +566,54 @@ export default function UserProfileModal({
                           </div>
 
                           <div className="violation-item-body">
-                            <div>
-                              <strong>Loại:</strong> {v.violationTypeName || "Quy chế sử dụng phòng"}
+                            <div className="violation-type-row">
+                              <span className="violation-type-label">
+                                {v.violationTypeName || "Quy chế sử dụng phòng"}
+                              </span>
                               {v.severity && (
-                                <span
-                                  style={{
-                                    marginLeft: "8px",
-                                    color: "#64748b",
-                                    fontSize: "12px",
-                                  }}
-                                >
-                                  ({v.severityText || `Mức ${v.severity}`})
+                                <span className={`violation-severity-tag severity-${v.severity}`}>
+                                  {v.severityText || `Mức ${v.severity}`}
                                 </span>
                               )}
                             </div>
-                            <div style={{ marginTop: "4px" }}>
-                              <strong>Nội dung:</strong> {v.description}
-                            </div>
+
+                            {v.description && (
+                              <div className="violation-desc-text">
+                                <span className="violation-desc-label">Nội dung:</span> {v.description}
+                              </div>
+                            )}
                           </div>
 
                           {v.penaltyApplied && (
                             <div className="violation-penalty-pill">
-                              <BanIcon size={11} /> {v.penaltyApplied}
+                              <div className="violation-penalty-tag">
+                                <BanIcon size={12} />
+                                <span>Hình phạt:</span>
+                              </div>
+                              <span className="violation-penalty-value">{v.penaltyApplied}</span>
                             </div>
                           )}
 
                           <div className="violation-item-meta">
-                            {v.incidentTime && (
-                              <span>
-                                <ClockIcon size={12} className="inline-block" style={{ marginRight: 4 }} />
-                                {new Date(v.incidentTime).toLocaleString("vi-VN", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                })}
-                              </span>
-                            )}
-                            {v.roomCode && (
-                              <span>
-                                <DoorIcon size={12} className="inline-block" style={{ marginRight: 4 }} />
-                                {v.roomCode} {v.roomName ? `(${v.roomName})` : ""}
-                              </span>
-                            )}
+                            <div className="violation-meta-left">
+                              {v.incidentTime && (
+                                <span className="violation-meta-field">
+                                  <ClockIcon size={12} />
+                                  {formatDateTime24h(v.incidentTime)}
+                                </span>
+                              )}
+                              {v.roomCode && (
+                                <span className="violation-meta-field">
+                                  <DoorIcon size={12} />
+                                  {v.roomCode} {v.roomName ? `(${v.roomName})` : ""}
+                                </span>
+                              )}
+                            </div>
                             {v.isRestricted && v.restrictDays > 0 && (
-                              <span style={{ color: "#b91c1c", fontWeight: 700 }}>
-                                Cấm mượn: còn {v.restrictDays} ngày
-                              </span>
+                              <div className="violation-restriction-badge">
+                                <BanIcon size={12} />
+                                <span>Cấm mượn: còn {v.restrictDays} ngày</span>
+                              </div>
                             )}
                           </div>
                         </div>

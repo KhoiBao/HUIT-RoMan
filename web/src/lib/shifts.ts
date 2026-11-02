@@ -7,6 +7,7 @@ export interface AssignedEmployee {
   email: string;
   phoneNumber?: string;
   position: string;
+  departmentId?: number;
   departmentName?: string;
 }
 
@@ -116,6 +117,7 @@ export async function fetchShiftLogs(params?: {
   employeeId?: number;
   fromDate?: string;
   toDate?: string;
+  departmentId?: number;
 }): Promise<ShiftLogItem[]> {
   const res = await api.get("/api/Shifts/logs", { params });
   return res.data?.data || res.data || [];
@@ -134,8 +136,10 @@ export async function fetchMyShifts(params?: {
   return res.data?.data || res.data || [];
 }
 
-export async function fetchShiftStats(): Promise<ShiftStats> {
-  const res = await api.get("/api/Shifts/stats");
+export async function fetchShiftStats(departmentId?: number): Promise<ShiftStats> {
+  const res = await api.get("/api/Shifts/stats", {
+    params: departmentId ? { departmentId } : undefined,
+  });
   return (
     res.data?.data || {
       totalShifts: 0,

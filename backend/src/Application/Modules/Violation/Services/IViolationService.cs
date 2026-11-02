@@ -23,13 +23,13 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
         Task<ApiResponse<bool>> DeleteViolationRecordAsync(int id);
 
         // ── User Restrictions (Cấm / Hạn chế mượn phòng) ─────────────────
-        Task<ApiResponse<IEnumerable<UserRestrictionDto>>> GetRestrictionsAsync(string? status = null, string? search = null);
+        Task<ApiResponse<IEnumerable<UserRestrictionDto>>> GetRestrictionsAsync(string? status = null, string? search = null, int? departmentId = null);
         Task<ApiResponse<UserRestrictionDto>> CreateRestrictionAsync(CreateUserRestrictionDto request);
         Task<ApiResponse<bool>> LiftRestrictionAsync(int restrictionId, string? reason = null);
         Task<ApiResponse<UserEligibilityDto>> CheckUserEligibilityAsync(int userId);
 
         // ── Statistics & Unified Search ───────────────────────────────────
-        Task<ApiResponse<ViolationStatsDto>> GetStatsAsync();
+        Task<ApiResponse<ViolationStatsDto>> GetStatsAsync(int? departmentId = null);
         Task<ApiResponse<GlobalSearchResultDto>> GlobalSearchAsync(string query);
     }
 }

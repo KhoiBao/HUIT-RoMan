@@ -340,6 +340,11 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
 
                 bookings = bookings
                     .Where(b => b.BookingDetails != null && b.BookingDetails.Any(bd => deptRoomIds.Contains(bd.RoomId)))
+                    .Select(b =>
+                    {
+                        b.BookingDetails = b.BookingDetails.Where(bd => deptRoomIds.Contains(bd.RoomId)).ToList();
+                        return b;
+                    })
                     .ToList();
             }
 
@@ -648,9 +653,26 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             string? reasonCode = null;
             string? reasonDetail = null;
             string cancelSource;
+            HashSet<int>? deptRoomIds = null;
 
             if (isStaff && !isOwner)
             {
+                // Kiểm tra phạm vi đơn vị quản lý đối với Nhân sự / Quản lý
+                if (!_currentUser.IsAdmin && (_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
+                {
+                    var rooms = await _roomRepo.GetAllAsync(r => r.RoomType);
+                    deptRoomIds = rooms
+                        .Where(r => r.RoomType?.DepartmentId == _currentUser.DepartmentId.Value)
+                        .Select(r => r.Id)
+                        .ToHashSet();
+
+                    var hasDeptRoom = booking.BookingDetails != null && booking.BookingDetails.Any(bd => deptRoomIds.Contains(bd.RoomId));
+                    if (!hasDeptRoom)
+                    {
+                        return ApiResponse<bool>.ErrorResponse("Đơn này không có phòng nào thuộc đơn vị bạn quản lý.");
+                    }
+                }
+
                 // Quản trị viên / nhân sự hủy đơn: lý do là tùy chọn (giữ nguyên hành vi cũ).
                 cancelSource = BookingCancelPolicy.SourceStaff;
                 reasonCode = string.IsNullOrWhiteSpace(request?.Reason) ? null : request!.Reason!.Trim().ToUpperInvariant();
@@ -699,17 +721,30 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 return ApiResponse<bool>.ErrorResponse("Không thể hủy đơn: đơn đã được xử lý bởi thao tác khác (đã hủy hoặc đã nhận phòng).");
 
             // Đồng bộ entity đang theo dõi với kết quả claim rồi hủy các chi tiết (giải phóng khung giờ).
-            booking.Status = "Đã hủy";
             booking.CancelReason = reasonCode;
             booking.CancelReasonDetail = reasonDetail;
             booking.CancelSource = cancelSource;
 
-            foreach (var detail in booking.BookingDetails)
+            var detailsToCancel = (deptRoomIds != null)
+                ? booking.BookingDetails.Where(d => deptRoomIds.Contains(d.RoomId)).ToList()
+                : booking.BookingDetails.ToList();
+
+            foreach (var detail in detailsToCancel)
                 detail.Status = "Đã hủy";
 
-            // Phiên nhận phòng chưa check-in phải hủy theo đơn, nếu không phiên sẽ
-            // "mồ côi" và vẫn hiện trên banner/lịch nhân sự dù đơn đã bị hủy.
-            var cancelledDetailIds = booking.BookingDetails.Select(d => d.Id).ToList();
+            var allDetails = booking.BookingDetails.ToList();
+            if (allDetails.All(d => d.Status == "Đã hủy"))
+            {
+                booking.Status = "Đã hủy";
+            }
+            else
+            {
+                booking.Status = "Duyệt một phần";
+            }
+
+            // Phiên nhận phòng chưa check-in phải hủy theo chi tiết bị hủy, nếu không phiên sẽ
+            // "mồ côi" và vẫn hiện trên banner/lịch nhân sự dù chi tiết đã bị hủy.
+            var cancelledDetailIds = detailsToCancel.Select(d => d.Id).ToList();
             if (cancelledDetailIds.Count > 0)
             {
                 var pendingSessions = await _usageRepo.FindAsync(

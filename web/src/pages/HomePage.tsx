@@ -15,6 +15,7 @@ import { evaluateCheckInWindow } from "../lib/booking";
 import { fetchMyUsageSessions, type UsageSessionItem } from "../lib/usage";
 import { useAuth } from "../auth/AuthContext";
 import { XIcon } from "../components/Icon";
+import { formatTime24h } from "../lib/dateTimeFormat";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -122,12 +123,7 @@ export default function HomePage() {
   }, [sessionToast?.id, sessionToast?.status]);
 
   const dateLabel = formatVietnameseDate(toISODateString(now));
-  const updatedLabel = updatedAt
-    ? updatedAt.toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
+  const updatedLabel = updatedAt ? formatTime24h(updatedAt) : null;
 
   return (
     <div className="rh-page">
