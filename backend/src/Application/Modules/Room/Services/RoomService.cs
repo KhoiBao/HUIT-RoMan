@@ -41,9 +41,17 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 rooms = rooms.Where(r => StudentBookingPolicy.IsBookableRoomType(r.RoomType?.Name)).ToList();
             }
 
+            var allRoomEquips = await _unitOfWork.Repository<RoomEquipment>().FindAsync(re => !re.IsDeleted, re => re.Equipment);
+            var equipByRoom = allRoomEquips.GroupBy(re => re.RoomId).ToDictionary(g => g.Key, g => g.ToList());
+
             foreach (var r in rooms)
             {
-                var resolved = ResolveRoomStatus(r);
+                var equips = equipByRoom.TryGetValue(r.Id, out var eqList) ? eqList : new List<RoomEquipment>();
+                var hasMaintEquip = equips.Any(re =>
+                    RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
+                    (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status)));
+
+                var resolved = hasMaintEquip ? RoomStatuses.Maintenance : ResolveRoomStatus(r);
                 if (!string.Equals(r.Status, resolved, System.StringComparison.OrdinalIgnoreCase))
                 {
                     r.Status = resolved;
@@ -52,24 +60,35 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             }
             await _unitOfWork.SaveChangesAsync();
 
-            var dtos = rooms.Select(r => new RoomDto
+            var dtos = rooms.Select(r =>
             {
-                Id = r.Id,
-                Name = r.Name,
-                RoomCode = r.RoomCode,
-                Building = r.Building,
-                Floor = r.Floor,
-                RoomNumber = r.RoomNumber,
-                Capacity = r.Capacity,
-                Status = ResolveRoomStatus(r),
-                Description = r.Description,
-                RoomTypeId = r.RoomTypeId,
-                RoomTypeName = r.RoomType?.Name,
-                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+                var equips = equipByRoom.TryGetValue(r.Id, out var eqList) ? eqList : new List<RoomEquipment>();
+                var maintEquips = equips.Where(re =>
+                    RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
+                    (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status))
+                ).ToList();
+                var hasMaintEquip = maintEquips.Any();
+                var maintNames = maintEquips.Select(re => re.Equipment?.Name ?? "Thiết bị").Distinct().ToList();
 
-                DepartmentId = r.RoomType?.DepartmentId,
-
-                DepartmentName = r.RoomType?.Department?.Name
+                return new RoomDto
+                {
+                    Id = r.Id,
+                    Name = r.Name,
+                    RoomCode = r.RoomCode,
+                    Building = r.Building,
+                    Floor = r.Floor,
+                    RoomNumber = r.RoomNumber,
+                    Capacity = r.Capacity,
+                    Status = hasMaintEquip ? RoomStatuses.Maintenance : ResolveRoomStatus(r),
+                    Description = r.Description,
+                    RoomTypeId = r.RoomTypeId,
+                    RoomTypeName = r.RoomType?.Name,
+                    IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+                    DepartmentId = r.RoomType?.DepartmentId,
+                    DepartmentName = r.RoomType?.Department?.Name,
+                    HasMaintenanceEquipment = hasMaintEquip,
+                    MaintenanceEquipments = maintNames,
+                };
             }).ToList();
             
             return ApiResponse<IEnumerable<RoomDto>>.SuccessResponse(dtos);
@@ -89,7 +108,15 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 }
             }
 
-            var resolvedStatus = ResolveRoomStatus(r);
+            var roomEquips = await _unitOfWork.Repository<RoomEquipment>().FindAsync(re => re.RoomId == id && !re.IsDeleted, re => re.Equipment);
+            var maintEquips = roomEquips.Where(re =>
+                RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
+                (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status))
+            ).ToList();
+            var hasMaintEquip = maintEquips.Any();
+            var maintNames = maintEquips.Select(re => re.Equipment?.Name ?? "Thiết bị").Distinct().ToList();
+
+            var resolvedStatus = hasMaintEquip ? RoomStatuses.Maintenance : ResolveRoomStatus(r);
             if (!string.Equals(r.Status, resolvedStatus, System.StringComparison.OrdinalIgnoreCase))
             {
                 r.Status = resolvedStatus;
@@ -111,10 +138,10 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 RoomTypeId = r.RoomTypeId,
                 RoomTypeName = r.RoomType?.Name,
                 IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
-
                 DepartmentId = r.RoomType?.DepartmentId,
-
-                DepartmentName = r.RoomType?.Department?.Name
+                DepartmentName = r.RoomType?.Department?.Name,
+                HasMaintenanceEquipment = hasMaintEquip,
+                MaintenanceEquipments = maintNames,
             };
             
             return ApiResponse<RoomDto>.SuccessResponse(dto);
@@ -169,6 +196,25 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             };
             if (normalizedStatus == null)
                 return ApiResponse<bool>.ErrorResponse("Trạng thái phòng không hợp lệ.");
+
+            if (normalizedStatus == RoomStatuses.Available || normalizedStatus == RoomStatuses.InUse)
+            {
+                var roomEquips = await _unitOfWork.Repository<RoomEquipment>().FindAsync(
+                    re => re.RoomId == id && !re.IsDeleted,
+                    re => re.Equipment
+                );
+                var maintEquips = roomEquips.Where(re =>
+                    RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
+                    (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status))
+                ).ToList();
+
+                if (maintEquips.Any())
+                {
+                    var names = string.Join(", ", maintEquips.Select(e => e.Equipment?.Name ?? "Thiết bị").Distinct());
+                    return ApiResponse<bool>.ErrorResponse(
+                        $"Không thể chuyển phòng sang trạng thái Sẵn sàng vì phòng đang có thiết bị bảo trì/hỏng hóc ({names}). Vui lòng sửa chữa hoặc thu hồi thiết bị trước khi mở lại phòng.");
+                }
+            }
             var r = await _roomRepo.GetByIdAsync(id, r => r.RoomType, r => r.RoomType.Department);
             if (r == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy phòng");
 
@@ -264,24 +310,38 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             if (minCapacity.HasValue && minCapacity.Value > 0)
                 query = query.Where(r => r.Capacity >= minCapacity.Value);
 
-            var dtos = query.Select(r => new RoomDto
+            var allRoomEquips = await _unitOfWork.Repository<RoomEquipment>().FindAsync(re => !re.IsDeleted, re => re.Equipment);
+            var equipByRoom = allRoomEquips.GroupBy(re => re.RoomId).ToDictionary(g => g.Key, g => g.ToList());
+
+            var dtos = query.Select(r =>
             {
-                Id = r.Id,
-                Name = r.Name,
-                RoomCode = r.RoomCode,
-                Building = r.Building,
-                Floor = r.Floor,
-                RoomNumber = r.RoomNumber,
-                Capacity = r.Capacity,
-                Status = r.Status,
-                Description = r.Description,
-                RoomTypeId = r.RoomTypeId,
-                RoomTypeName = r.RoomType?.Name,
-                IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+                var equips = equipByRoom.TryGetValue(r.Id, out var eqList) ? eqList : new List<RoomEquipment>();
+                var maintEquips = equips.Where(re =>
+                    RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
+                    (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status))
+                ).ToList();
+                var hasMaint = maintEquips.Any();
+                var maintNames = maintEquips.Select(re => re.Equipment?.Name ?? "Thiết bị").Distinct().ToList();
 
-                DepartmentId = r.RoomType?.DepartmentId,
-
-                DepartmentName = r.RoomType?.Department?.Name
+                return new RoomDto
+                {
+                    Id = r.Id,
+                    Name = r.Name,
+                    RoomCode = r.RoomCode,
+                    Building = r.Building,
+                    Floor = r.Floor,
+                    RoomNumber = r.RoomNumber,
+                    Capacity = r.Capacity,
+                    Status = hasMaint ? RoomStatuses.Maintenance : ResolveRoomStatus(r),
+                    Description = r.Description,
+                    RoomTypeId = r.RoomTypeId,
+                    RoomTypeName = r.RoomType?.Name,
+                    IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+                    DepartmentId = r.RoomType?.DepartmentId,
+                    DepartmentName = r.RoomType?.Department?.Name,
+                    HasMaintenanceEquipment = hasMaint,
+                    MaintenanceEquipments = maintNames,
+                };
             }).ToList();
 
             return ApiResponse<IEnumerable<RoomDto>>.SuccessResponse(dtos);
@@ -388,27 +448,41 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 : (int)System.Math.Ceiling(totalItems / (double)pageSize);
             if (totalPages > 0 && page > totalPages) page = totalPages;
 
+            var allRoomEquipsPaged = await _unitOfWork.Repository<RoomEquipment>().FindAsync(re => !re.IsDeleted, re => re.Equipment);
+            var equipByRoomPaged = allRoomEquipsPaged.GroupBy(re => re.RoomId).ToDictionary(g => g.Key, g => g.ToList());
+
             var items = ordered
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(r => new RoomDto
+                .Select(r =>
                 {
-                    Id = r.Id,
-                    Name = r.Name,
-                    RoomCode = r.RoomCode,
-                    Building = r.Building,
-                    Floor = r.Floor,
-                    RoomNumber = r.RoomNumber,
-                    Capacity = r.Capacity,
-                    Status = ResolveRoomStatus(r),
-                    Description = r.Description,
-                    RoomTypeId = r.RoomTypeId,
-                    RoomTypeName = r.RoomType?.Name,
-                    IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+                    var equips = equipByRoomPaged.TryGetValue(r.Id, out var eqList) ? eqList : new List<RoomEquipment>();
+                    var maintEquips = equips.Where(re =>
+                        RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
+                        (re.Equipment != null && EquipmentService.IsUnderMaintenance(re.Equipment.Status))
+                    ).ToList();
+                    var hasMaint = maintEquips.Any();
+                    var maintNames = maintEquips.Select(re => re.Equipment?.Name ?? "Thiết bị").Distinct().ToList();
 
-                DepartmentId = r.RoomType?.DepartmentId,
-
-                DepartmentName = r.RoomType?.Department?.Name
+                    return new RoomDto
+                    {
+                        Id = r.Id,
+                        Name = r.Name,
+                        RoomCode = r.RoomCode,
+                        Building = r.Building,
+                        Floor = r.Floor,
+                        RoomNumber = r.RoomNumber,
+                        Capacity = r.Capacity,
+                        Status = hasMaint ? RoomStatuses.Maintenance : ResolveRoomStatus(r),
+                        Description = r.Description,
+                        RoomTypeId = r.RoomTypeId,
+                        RoomTypeName = r.RoomType?.Name,
+                        IsBookingByPeriod = r.RoomType?.IsBookingByPeriod ?? false,
+                        DepartmentId = r.RoomType?.DepartmentId,
+                        DepartmentName = r.RoomType?.Department?.Name,
+                        HasMaintenanceEquipment = hasMaint,
+                        MaintenanceEquipments = maintNames,
+                    };
                 })
                 .ToList();
 

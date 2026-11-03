@@ -40,6 +40,8 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public bool IsBookingByPeriod { get; set; }
         public int? DepartmentId { get; set; }
         public string? DepartmentName { get; set; }
+        public bool HasMaintenanceEquipment { get; set; }
+        public List<string> MaintenanceEquipments { get; set; } = new();
     }
 
     /// <summary>Bộ lọc + phân trang danh mục phòng cho trang lịch sử dụng phòng.</summary>

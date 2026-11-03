@@ -32,6 +32,10 @@ export interface RoomItem {
   roomTypeId: number;
   roomTypeName: string;
   isBookingByPeriod: boolean;
+  departmentId?: number;
+  departmentName?: string;
+  hasMaintenanceEquipment?: boolean;
+  maintenanceEquipments?: string[];
 }
 
 export interface RoomTypeOption {
@@ -249,6 +253,23 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
           onNotify(`Đã tạo phòng ${formData.roomCode} thành công!`, "success");
         }
       } else if (modalMode === "edit" && editingRoomId) {
+        const editingRoom = rooms.find((r) => r.id === editingRoomId);
+        const hasMaintEquip = Boolean(
+          editingRoom?.hasMaintenanceEquipment ||
+          (editingRoom?.maintenanceEquipments && editingRoom.maintenanceEquipments.length > 0)
+        );
+        if ((formData.status === "Trống" || formData.status === "Available") && hasMaintEquip) {
+          const equipNames = editingRoom?.maintenanceEquipments?.join(", ") || "thiết bị";
+          await alert({
+            title: "Không thể chuyển sang Sẵn sàng",
+            message: `Phòng ${formData.roomCode} hiện đang có thiết bị trong tình trạng bảo trì/hỏng hóc (${equipNames}).`,
+            subMessage: "Quy tắc: Khi trong phòng có thiết bị bảo trì, phòng bắt buộc phải ở trạng thái Bảo trì. Vui lòng bấm vào mục \"Thiết bị\" để chuyển tình trạng thiết bị về \"Hoạt động tốt\" (hoặc thu hồi thiết bị) trước khi đổi phòng sang Sẵn sàng.",
+            type: "warning",
+          });
+          setSubmitting(false);
+          return;
+        }
+
         const payload = {
           name: formData.name.trim(),
           roomCode: formData.roomCode.trim(),
@@ -261,9 +282,12 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
           roomTypeId: Number(formData.roomTypeId),
         };
         const res = await api.put(`/api/Rooms/${editingRoomId}`, payload);
-        if (res.data?.success) {
-          onNotify(`Đã cập nhật phòng ${formData.roomCode} thành công!`, "success");
+        if (res.data?.success === false) {
+          onNotify(res.data?.message || "Lỗi cập nhật phòng từ máy chủ.", "warning");
+          setSubmitting(false);
+          return;
         }
+        onNotify(`Đã cập nhật phòng ${formData.roomCode} thành công!`, "success");
       }
       setModalMode(null);
       await fetchData();
@@ -280,9 +304,39 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
   // Toggle Room Status: Trống <=> Bảo trì
   const handleToggleStatus = async (r: RoomItem) => {
     const isUnderMaintenance = r.status === "Bảo trì" || r.status === "Maintenance";
+
+    // Nếu phòng đang bảo trì và có thiết bị hỏng/đang bảo trì bên trong:
+    if (isUnderMaintenance && (r.hasMaintenanceEquipment || (r.maintenanceEquipments && r.maintenanceEquipments.length > 0))) {
+      const equipNames = r.maintenanceEquipments && r.maintenanceEquipments.length > 0
+        ? r.maintenanceEquipments.join(", ")
+        : "thiết bị";
+      await alert({
+        title: "Không thể mở lại phòng",
+        message: `Phòng ${r.roomCode} hiện có thiết bị đang trong tình trạng bảo trì/hỏng hóc (${equipNames}).`,
+        subMessage: "Quy tắc: Khi trong phòng có thiết bị bảo trì, phòng bắt buộc phải ở trạng thái Bảo trì. Vui lòng bấm vào nút \"Thiết bị\" để chuyển tình trạng thiết bị về \"Hoạt động tốt\" (hoặc thu hồi thiết bị) trước khi mở lại phòng.",
+        type: "warning",
+      });
+      return;
+    }
+
+
+    // Nếu phòng đang bảo trì và có thiết bị hỏng/đang bảo trì bên trong:
+    if (isUnderMaintenance && (r.hasMaintenanceEquipment || (r.maintenanceEquipments && r.maintenanceEquipments.length > 0))) {
+      const equipNames = r.maintenanceEquipments && r.maintenanceEquipments.length > 0
+        ? r.maintenanceEquipments.join(", ")
+        : "thiết bị";
+      await alert({
+        title: "Không thể mở lại phòng",
+        message: `Phòng ${r.roomCode} hiện có thiết bị đang trong tình trạng bảo trì/hỏng hóc (${equipNames}).`,
+        subMessage: "Quy tắc: Khi trong phòng có thiết bị bảo trì, phòng bắt buộc phải ở trạng thái Bảo trì. Vui lòng bấm vào nút \"Thiết bị\" để chuyển tình trạng thiết bị về \"Hoạt động tốt\" (hoặc thu hồi thiết bị) trước khi mở lại phòng.",
+        type: "warning",
+      });
+      return;
+    }
+
     const nextStatus = isUnderMaintenance ? "Trống" : "Bảo trì";
     const statusLabel = isUnderMaintenance ? "Sẵn sàng" : "Bảo trì";
-    
+
     const isConfirmed = await confirm({
       title: "Chuyển trạng thái phòng",
       message: `Bạn có muốn chuyển trạng thái phòng ${r.roomCode} sang "${statusLabel}"?`,
@@ -302,14 +356,18 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
     if (!isConfirmed) return;
 
     try {
-      await api.patch(`/api/Rooms/${r.id}/status`, { 
+      const res = await api.patch(`/api/Rooms/${r.id}/status`, {
         status: nextStatus,
         reason: nextStatus === "Bảo trì" ? "Chuyển sang bảo trì" : "Phòng sẵn sàng hoạt động"
       });
+      if (res.data?.success === false) {
+        onNotify(res.data?.message || "Không thể cập nhật trạng thái phòng.", "warning");
+        return;
+      }
       onNotify(`Đã cập nhật phòng ${r.roomCode} sang "${statusLabel}"!`, "success");
       await fetchData();
     } catch (err: any) {
-      const msg = err.response?.data?.message 
+      const msg = err.response?.data?.message
         || (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(", ") : null)
         || "Lỗi khi cập nhật trạng thái phòng.";
       onNotify(msg, "warning");
@@ -348,13 +406,33 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, room?: RoomItem) => {
     const s = (status || "").trim().toLowerCase();
     if (s === "maintenance" || s === "bảo trì" || s === "đang bảo trì") {
+      const hasEquipMaint = Boolean(
+        room?.hasMaintenanceEquipment ||
+        (room?.maintenanceEquipments && room.maintenanceEquipments.length > 0)
+      );
       return (
-        <span className="admin-status-pill pill-maintenance">
-          <WrenchIcon size={12} className="mr-1 inline-block" /> Đang bảo trì
-        </span>
+        <div>
+          <span className="admin-status-pill pill-maintenance">
+            <WrenchIcon size={12} className="mr-1 inline-block" /> Đang bảo trì
+          </span>
+          {hasEquipMaint && (
+            <div
+              style={{
+                fontSize: "0.72rem",
+                color: "#d97706",
+                marginTop: "3px",
+                fontWeight: 600,
+                lineHeight: "1.2",
+              }}
+              title={room?.maintenanceEquipments?.join(", ")}
+            >
+
+            </div>
+          )}
+        </div>
       );
     }
     if (s === "inuse" || s === "đang sử dụng") {
@@ -493,123 +571,127 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
         <>
           <div className="admin-table-responsive">
             <table className="admin-data-table admin-rooms-table">
-            <thead>
-              <tr>
-                <th>Mã phòng</th>
-                <th>Tên phòng</th>
-                <th>Loại phòng</th>
-                <th>Vị trí</th>
-                <th>Sức chứa</th>
-                <th>Trạng thái</th>
-                <th>Quy cách mượn</th>
-                <th>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedRooms.map((r) => (
-                <tr
-                  key={r.id}
-                  className="admin-clickable-row"
-                  onClick={() => {
-                    if (canManageRooms) {
-                      openEditModal(r);
-                    } else {
-                      setEquipmentTarget(r);
-                    }
-                  }}
-                  title={canManageRooms ? "Bấm vào dòng để chỉnh sửa thông tin phòng" : "Bấm vào dòng để xem thiết bị phòng"}
-                >
-                  <td>
-                    <span className="room-code-badge-lg">{r.roomCode}</span>
-                  </td>
-                  <td className="font-semibold text-highlight">{r.name}</td>
-                  <td>
-                    <span className="tag-room-type">{r.roomTypeName}</span>
-                  </td>
-                  <td className="text-xs">
-                    {r.building ? `Tòa ${r.building} - ` : ""}
-                    {r.floor || "Khu học thuật"}
-                  </td>
-                  <td>
-                    <strong>{r.capacity}</strong> người
-                  </td>
-                  <td>{getStatusBadge(r.status)}</td>
-                  <td>
-                    <span className="text-xs text-muted">
-                      {r.isBookingByPeriod ? "Theo Tiết học" : "Theo Giờ tự do"}
-                    </span>
-                  </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <div className="table-action-btns">
-                      {/* Equipment button */}
-                      <button
-                        type="button"
-                        className="btn-action-icon btn-equip-glow"
-                        title="Quản lý thiết bị trong phòng"
-                        onClick={() => setEquipmentTarget(r)}
-                      >
-                        <TvIcon size={16} /> Thiết bị
-                      </button>
-
-                      {/* Status toggle */}
-                      {(r.status === "Maintenance" || r.status === "Bảo trì") && onSwitchTab && (
-                        <button
-                          type="button"
-                          className="btn-action-icon"
-                          title="Xem phiếu báo cáo sự cố của phòng này"
-                          style={{ color: "#d97706", borderColor: "#fcd34d" }}
-                          onClick={() => onSwitchTab("incidents")}
-                        >
-                          <AlertTriangleIcon size={14} /> Sự cố
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className={`btn-action-icon ${
-                          r.status === "Maintenance" || r.status === "Bảo trì"
-                            ? "btn-status-restore"
-                            : "btn-status-wrench"
-                        }`}
-                        title={
-                          r.status === "Maintenance" || r.status === "Bảo trì"
-                            ? "Mở lại phòng (Sẵn sàng)"
-                            : "Chuyển sang Bảo trì"
-                        }
-                        onClick={() => handleToggleStatus(r)}
-                      >
-                        <WrenchIcon size={14} />
-                        {r.status === "Maintenance" || r.status === "Bảo trì" ? "Mở phòng" : "Bảo trì"}
-                      </button>
-
-                      {/* Edit */}
-                      {canManageRooms && (
-                        <button
-                          type="button"
-                          className="btn-action-icon"
-                          title="Chỉnh sửa thông tin phòng"
-                          onClick={() => openEditModal(r)}
-                        >
-                          Sửa
-                        </button>
-                      )}
-
-                      {/* Delete */}
-                      {canManageRooms && (
-                        <button
-                          type="button"
-                          className="btn-action-icon btn-action-delete"
-                          title="Xóa mềm phòng"
-                          onClick={() => handleDeleteRoom(r)}
-                        >
-                          <XIcon size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+              <thead>
+                <tr>
+                  <th>Mã phòng</th>
+                  <th>Tên phòng</th>
+                  <th>Loại phòng</th>
+                  <th>Vị trí</th>
+                  <th>Sức chứa</th>
+                  <th>Trạng thái</th>
+                  <th>Quy cách mượn</th>
+                  <th>Thao tác</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pagedRooms.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="admin-clickable-row"
+                    onClick={() => {
+                      if (canManageRooms) {
+                        openEditModal(r);
+                      } else {
+                        setEquipmentTarget(r);
+                      }
+                    }}
+                    title={canManageRooms ? "Bấm vào dòng để chỉnh sửa thông tin phòng" : "Bấm vào dòng để xem thiết bị phòng"}
+                  >
+                    <td>
+                      <span className="room-code-badge-lg">{r.roomCode}</span>
+                    </td>
+                    <td className="font-semibold text-highlight">{r.name}</td>
+                    <td>
+                      <span className="tag-room-type">{r.roomTypeName}</span>
+                    </td>
+                    <td className="text-xs">
+                      {r.building ? `Tòa ${r.building} - ` : ""}
+                      {r.floor || "Khu học thuật"}
+                    </td>
+                    <td>
+                      <strong>{r.capacity}</strong> người
+                    </td>
+                    <td>{getStatusBadge(r.status, r)}</td>
+                    <td>
+                      <span className="text-xs text-muted">
+                        {r.isBookingByPeriod ? "Theo Tiết học" : "Theo Giờ tự do"}
+                      </span>
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div className="table-action-btns">
+                        {/* Equipment button */}
+                        <button
+                          type="button"
+                          className="btn-action-icon btn-equip-glow"
+                          title="Quản lý thiết bị trong phòng"
+                          onClick={() => setEquipmentTarget(r)}
+                        >
+                          <TvIcon size={16} /> Thiết bị
+                        </button>
+
+                        {/* Incidents button */}
+                        {(r.status === "Maintenance" || r.status === "Bảo trì") && onSwitchTab && (
+                          <button
+                            type="button"
+                            className="btn-action-icon"
+                            title="Xem phiếu báo cáo sự cố của phòng này"
+                            style={{ color: "#d97706", borderColor: "#fcd34d" }}
+                            onClick={() => onSwitchTab("incidents")}
+                          >
+                            <AlertTriangleIcon size={14} /> Sự cố
+                          </button>
+                        )}
+
+                        {/* Status toggle button */}
+                        <button
+                          type="button"
+                          className={`btn-action-icon ${
+                            r.status === "Maintenance" || r.status === "Bảo trì"
+                              ? "btn-status-restore"
+                              : "btn-status-wrench"
+                          }`}
+                          title={
+                            r.hasMaintenanceEquipment
+                              ? `Phòng có thiết bị bảo trì (${r.maintenanceEquipments?.join(", ") || ""})`
+                              : r.status === "Maintenance" || r.status === "Bảo trì"
+                              ? "Mở lại phòng (Sẵn sàng)"
+                              : "Chuyển sang Bảo trì"
+                          }
+                          onClick={() => handleToggleStatus(r)}
+                        >
+                          <WrenchIcon size={14} />
+                          {r.status === "Maintenance" || r.status === "Bảo trì" ? "Mở phòng" : "Bảo trì"}
+                        </button>
+
+                        {/* Edit */}
+                        {canManageRooms && (
+                          <button
+                            type="button"
+                            className="btn-action-icon"
+                            title="Chỉnh sửa thông tin phòng"
+                            onClick={() => openEditModal(r)}
+                          >
+                            Sửa
+                          </button>
+                        )}
+
+                        {/* Delete */}
+                        {canManageRooms && (
+                          <button
+                            type="button"
+                            className="btn-action-icon btn-action-delete"
+                            title="Xóa mềm phòng"
+                            onClick={() => handleDeleteRoom(r)}
+                          >
+                            <XIcon size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           <nav className="matrix-pagination" aria-label="Phân trang danh sách phòng">
@@ -837,22 +919,36 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
                   </div>
                 </div>
 
-                {modalMode === "edit" && (
-                  <div className="form-group-admin">
-                    <label>Trạng thái vận hành:</label>
-                    <select
-                      className="admin-input"
-                      value={formData.status}
-                      onChange={(e) =>
-                        setFormData({ ...formData, status: e.target.value })
-                      }
-                    >
-                      <option value="Trống">Sẵn sàng</option>
-                      <option value="Đang sử dụng">Đang sử dụng</option>
-                      <option value="Bảo trì">Đang bảo trì</option>
-                    </select>
-                  </div>
-                )}
+                {modalMode === "edit" && (() => {
+                  const editingRoom = rooms.find((r) => r.id === editingRoomId);
+                  const hasMaintEquip = Boolean(
+                    editingRoom?.hasMaintenanceEquipment ||
+                    (editingRoom?.maintenanceEquipments && editingRoom.maintenanceEquipments.length > 0)
+                  );
+                  return (
+                    <div className="form-group-admin">
+                      <label>Trạng thái vận hành:</label>
+                      <select
+                        className="admin-input"
+                        value={formData.status}
+                        onChange={(e) =>
+                          setFormData({ ...formData, status: e.target.value })
+                        }
+                      >
+                        <option value="Trống" disabled={hasMaintEquip}>
+                          Sẵn sàng {hasMaintEquip ? "(Đang có thiết bị bảo trì)" : ""}
+                        </option>
+                        <option value="Đang sử dụng">Đang sử dụng</option>
+                        <option value="Bảo trì">Đang bảo trì</option>
+                      </select>
+                      {hasMaintEquip && (
+                        <p style={{ fontSize: "0.8rem", color: "#d97706", marginTop: "4px" }}>
+                          Phòng đang có thiết bị hỏng/bảo trì ({editingRoom?.maintenanceEquipments?.join(", ")}). Vui lòng cập nhật thiết bị về &quot;Hoạt động tốt&quot; trong mục &quot;Thiết bị&quot; trước khi chuyển phòng sang Sẵn sàng.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="form-group-admin">
                   <label>Mô tả chi tiết / Ghi chú trang thiết bị:</label>

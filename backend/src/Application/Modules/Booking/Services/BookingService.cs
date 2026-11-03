@@ -1229,6 +1229,25 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 _ => RoomStatuses.Available
             };
 
+            if (standardizedStatus == RoomStatuses.Available || standardizedStatus == RoomStatuses.InUse)
+            {
+                var roomEquips = await _unitOfWork.Repository<RoomEquipment>().FindAsync(
+                    re => re.RoomId == roomId && !re.IsDeleted,
+                    re => re.Equipment
+                );
+                var maintEquips = roomEquips.Where(re =>
+                    HUIT_RoMan.Application.Modules.Room.Services.RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status) ||
+                    (re.Equipment != null && HUIT_RoMan.Application.Modules.Room.Services.EquipmentService.IsUnderMaintenance(re.Equipment.Status))
+                ).ToList();
+
+                if (maintEquips.Any())
+                {
+                    var names = string.Join(", ", maintEquips.Select(e => e.Equipment?.Name ?? "Thiết bị").Distinct());
+                    return ApiResponse<bool>.ErrorResponse(
+                        $"Không thể chuyển phòng sang trạng thái Sẵn sàng vì phòng đang có thiết bị bảo trì/hỏng hóc ({names}). Vui lòng sửa chữa hoặc thu hồi thiết bị trước khi mở lại phòng.");
+                }
+            }
+
             room.Status = standardizedStatus;
 
             _roomRepo.Update(room);
