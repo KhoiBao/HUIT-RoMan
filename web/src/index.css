@@ -60,6 +60,13 @@
   box-sizing: border-box;
 }
 
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 html,
 body {
   margin: 0;
@@ -9054,6 +9061,34 @@ button.admin-status-pill:disabled {
   100% { transform: scale(0.9); opacity: 0.8; }
 }
 
+.badge-overdue-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid #fecdd3;
+}
+
+.pulse-dot-red {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e11d48;
+  box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.3);
+  animation: pulseRed 1.6s infinite;
+}
+
+@keyframes pulseRed {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
 .completed-note-text {
   font-size: 11.5px;
   color: #64748b;
@@ -11529,58 +11564,12 @@ button.admin-status-pill:disabled {
   color: #64748b;
 }
 
-.table-code-col {
-  min-width: 160px;
-}
-
-.table-code-wrapper {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.table-code-val {
-  padding: 3px 8px;
-  background: #f1f5f9;
-  border: 1px dashed #94a3b8;
-  border-radius: 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-weight: 700;
-  font-size: 13px;
-  color: #0f172a;
-  letter-spacing: 0.5px;
-}
-
-.btn-copy-mini {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 6px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  border-radius: 4px;
-  color: #64748b;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-copy-mini:hover {
-  background: #f1f5f9;
-  color: var(--primary, #005a9e);
-  border-color: var(--primary, #005a9e);
-}
-
-.table-empty-code {
-  color: #94a3b8;
-  font-weight: 500;
-}
-
 .table-status-col {
   min-width: 140px;
 }
 
 .table-actions-col {
-  min-width: 250px;
+  min-width: 220px;
   text-align: right;
 }
 
@@ -11589,6 +11578,7 @@ button.admin-status-pill:disabled {
   align-items: center;
   gap: 6px;
   justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .btn-table-checkin {
@@ -11618,26 +11608,136 @@ button.admin-status-pill:disabled {
   cursor: not-allowed;
 }
 
-.btn-table-detail {
+/* Nút ⋮ mở menu chức năng của dòng */
+.btn-table-more {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  font-size: 12.5px;
-  font-weight: 600;
+  justify-content: center;
+  padding: 5px 8px;
   border-radius: 6px;
   background: #ffffff;
   color: #475569;
   border: 1px solid #cbd5e1;
   cursor: pointer;
-  white-space: nowrap;
   transition: all 0.15s ease;
 }
 
-.btn-table-detail:hover {
-  background: #f8fafc;
-  color: #1e293b;
+.btn-table-more:hover,
+.btn-table-more.active {
+  background: #e2e8f0;
+  color: #0f172a;
   border-color: #94a3b8;
+}
+
+/* Menu chức năng (render qua portal, position: fixed để không bị cắt bởi bảng) */
+.row-actions-menu {
+  position: fixed;
+  z-index: 1200;
+  width: 230px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row-actions-menu.open-up {
+  transform: translateY(-100%);
+}
+
+.row-actions-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+
+.row-actions-menu-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.row-actions-menu-item.danger {
+  color: #dc2626;
+}
+
+.row-actions-menu-item.danger:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.row-actions-menu-item.accent-blue {
+  color: #005a9e;
+}
+
+.row-actions-menu-item.accent-blue:hover {
+  background: #e0f2fe;
+  color: #004578;
+}
+
+.row-actions-menu-item.accent-indigo {
+  color: #4f46e5;
+}
+
+.row-actions-menu-item.accent-indigo:hover {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.row-actions-menu-item.accent-amber {
+  color: #d97706;
+}
+
+.row-actions-menu-item.accent-amber:hover {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* Khối đánh giá trong modal trả phòng */
+.checkout-rating-block {
+  margin: 14px 0 4px;
+}
+
+.checkout-stars-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.checkout-star-btn {
+  display: inline-flex;
+  padding: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #cbd5e1;
+}
+
+.checkout-star-btn.active {
+  color: #f59e0b;
+}
+
+.checkout-rating-clear {
+  margin-left: 10px;
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 /* Nút HỦY: Thiết kế viền đỏ phân biệt rõ ràng với hành động chính */
@@ -11672,18 +11772,30 @@ button.admin-status-pill:disabled {
   font-size: 12.5px;
   font-weight: 600;
   border-radius: 6px;
-  background: #059669;
+  background: #e11d48;
   color: #ffffff;
-  border: 1px solid #059669;
+  border: 1px solid #e11d48;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.15s ease;
 }
 
 .btn-table-checkout:hover {
-  background: #047857;
-  border-color: #047857;
-  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+  background: #be123c;
+  border-color: #be123c;
+  box-shadow: 0 2px 6px rgba(225, 29, 72, 0.25);
+}
+
+/* Chip chọn phút gia hạn nhanh */
+.extend-chip.active {
+  background: var(--primary, #005a9e);
+  border-color: var(--primary, #005a9e);
+  color: #ffffff;
+}
+
+.extend-chip.active:hover {
+  background: var(--primary-dark, #004a84);
+  color: #ffffff;
 }
 
 @media (max-width: 768px) {

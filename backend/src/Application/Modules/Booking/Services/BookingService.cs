@@ -97,6 +97,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 return ApiResponse<BookingResponseDto>.ErrorResponse("Số người tham dự phải lớn hơn 0.");
 
             // Validate rooms exist and are Available
+            var totalRoomCapacity = 0;
             foreach (var detail in request.Details)
             {
                 var room = await _roomRepo.GetByIdAsync(
@@ -113,10 +114,17 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 if (IsRoomUnderMaintenance(room.Status) || hasMaintenanceEquip)
                     return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng {room.Name} đang bảo trì thiết bị, không thể đặt.");
 
-                var guestCount = detail.GuestCount > 0 ? detail.GuestCount : request.GuestCount;
-                if (guestCount <= 0 || guestCount > room.Capacity)
-                    return ApiResponse<BookingResponseDto>.ErrorResponse(
-                        $"Số người cho phòng {room.Name} phải từ 1 đến {room.Capacity}.");
+                // Đặt nhiều phòng: sức chứa tối đa là TỔNG số chỗ của tất cả các phòng
+                // đã chọn (nhóm người được chia giữa các phòng), nên không chặn theo
+                // capacity từng phòng riêng và kiểm tổng sau vòng lặp.
+                if (request.Details.Count == 1)
+                {
+                    var guestCount = detail.GuestCount > 0 ? detail.GuestCount : request.GuestCount;
+                    if (guestCount <= 0 || guestCount > room.Capacity)
+                        return ApiResponse<BookingResponseDto>.ErrorResponse(
+                            $"Số người cho phòng {room.Name} phải từ 1 đến {room.Capacity}.");
+                }
+                totalRoomCapacity += room.Capacity;
 
                 // Ma trận quyền theo vai trò: vai trò lấy từ token ở server,
                 // không tin bất kỳ thông tin role nào do client gửi lên.
@@ -221,6 +229,11 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                         $"{roomLabel} đã có lịch đặt trùng trong khoảng thời gian này.");
                 }
             }
+
+            // nhiều phòng: giới hạn tối đa = tổng sức chứa của các phòng đã chọn
+            if (request.Details.Count > 1 && request.GuestCount > totalRoomCapacity)
+                return ApiResponse<BookingResponseDto>.ErrorResponse(
+                    $"Tổng sức chứa của {request.Details.Count} phòng đã chọn là {totalRoomCapacity} chỗ, không đủ cho {request.GuestCount} người. Vui lòng giảm số người hoặc chọn thêm phòng.");
 
             var isStaff = _currentUser.IsAdmin || _currentUser.Role == "Employee" || _currentUser.Role == "Manager";
 
@@ -794,6 +807,128 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             }
 
             return ApiResponse<bool>.SuccessResponse(true, "Hủy đơn thành công.");
+        }
+
+        /// <summary>
+        /// Sinh viên tự hủy TỪNG phòng trong đơn đặt nhiều phòng.
+        /// Áp cùng quy định hủy trực tuyến của chủ đơn: lý do bắt buộc theo hợp lệ,
+        /// còn hạn ≥ 3 giờ trước giờ bắt đầu của phòng đó, chưa nhận phòng.
+        /// Đơn còn phòng lẻ sau khi hủy sẽ chuyển sang "Duyệt một phần" thay vì "Đã hủy".
+        /// </summary>
+        public async Task<ApiResponse<bool>> CancelBookingDetailAsync(int detailId, CancelBookingRequest? request = null, DateTime? nowUtc = null)
+        {
+            var now = nowUtc ?? DateTime.UtcNow;
+
+            if (_currentUser.UserId == null)
+                return ApiResponse<bool>.ErrorResponse("Bạn cần đăng nhập để hủy phòng.");
+
+            var detail = await _bookingDetailRepo.GetByIdAsync(detailId, d => d.Booking);
+            if (detail == null)
+                return ApiResponse<bool>.ErrorResponse("Không tìm thấy phòng trong đơn đặt phòng.");
+
+            var booking = detail.Booking;
+            if (booking == null)
+                return ApiResponse<bool>.ErrorResponse("Không tìm thấy đơn đặt phòng tương ứng.");
+
+            if (booking.UserId != _currentUser.UserId)
+                return ApiResponse<bool>.ErrorResponse(
+                    "Bạn chỉ có thể hủy phòng trong đơn của chính mình. Vui lòng liên hệ quản lý thư viện nếu cần hỗ trợ.");
+
+            if (detail.Status == "Đã hủy")
+                return ApiResponse<bool>.ErrorResponse("Phòng này đã bị hủy trước đó.");
+
+            if (detail.Status == "Từ chối")
+                return ApiResponse<bool>.ErrorResponse("Phòng này đã bị từ chối duyệt, không thể hủy trực tuyến.");
+
+            if (booking.Status == "Đã hủy")
+                return ApiResponse<bool>.ErrorResponse("Đơn đã bị hủy trước đó.");
+
+            var bookingApproved = booking.Status == "Đã duyệt" || booking.Status == "Duyệt một phần";
+            if (!bookingApproved)
+                return ApiResponse<bool>.ErrorResponse(
+                    "Chỉ đơn đã được duyệt mới có thể hủy trực tuyến. Vui lòng liên hệ quản lý thư viện nếu cần hỗ trợ.");
+
+            if (booking.CheckedInAt != null)
+                return ApiResponse<bool>.ErrorResponse("Đơn đã được nhận phòng, không thể hủy trực tuyến.");
+
+            var reasonError = BookingCancelPolicy.ValidateReason(request?.Reason, request?.ReasonDetail);
+            if (reasonError != null)
+                return ApiResponse<bool>.ErrorResponse(reasonError);
+
+            var startAt = detail.StartAt.Kind == DateTimeKind.Utc
+                ? detail.StartAt
+                : DateTime.SpecifyKind(detail.StartAt, DateTimeKind.Utc);
+            if (!BookingCancelPolicy.IsWithinDeadline(startAt, now))
+            {
+                var deadlineLocal = startAt.AddHours(-BookingCancelPolicy.MinLeadTime.TotalHours).AddHours(7);
+                return ApiResponse<bool>.ErrorResponse(
+                    $"Đã quá hạn hủy trực tuyến phòng này (hạn cuối: {deadlineLocal:dd/MM/yyyy HH:mm}). Vui lòng liên hệ quản lý thư viện.");
+            }
+
+            var reasonCode = request!.Reason!.Trim().ToUpperInvariant();
+            var reasonDetail = string.IsNullOrWhiteSpace(request!.ReasonDetail) ? null : request!.ReasonDetail!.Trim();
+            var cancelNote = BuildDetailCancelNote(reasonCode, reasonDetail);
+
+            // Claim nguyên tử cho từng phòng: chỉ request đầu tiên hủy được chi tiết này.
+            var claimed = await _bookingDetailRepo.UpdateIfAsync(
+                d => d.Id == detailId && d.Status != "Đã hủy",
+                set => set
+                    .SetProperty(d => d.Status, "Đã hủy")
+                    .SetProperty(d => d.RejectionReason, cancelNote)
+                    .SetProperty(d => d.UpdatedAt, now));
+
+            if (claimed == 0)
+                return ApiResponse<bool>.ErrorResponse(
+                    "Không thể hủy phòng: phòng đã được xử lý bởi thao tác khác hoặc đã bị hủy.");
+
+            // Đồng bộ entity đang theo dõi với kết quả claim.
+            detail.Status = "Đã hủy";
+            detail.RejectionReason = cancelNote;
+            detail.UpdatedAt = now;
+
+            // Hủy phiên "Chờ nhận phòng" của phòng vừa hủy để giải phóng banner/lịch nhân sự.
+            var pendingSessions = await _usageRepo.FindAsync(
+                s => s.BookingDetailId == detailId && s.Status == "Chờ nhận phòng");
+            foreach (var session in pendingSessions)
+            {
+                session.Status = "Đã hủy";
+                session.UpdatedAt = now;
+                _usageRepo.Update(session);
+            }
+
+            // Tổng hợp lại trạng thái đơn sau khi bỏ một phòng.
+            var latestBooking = await _bookingRepo.GetByIdAsync(booking.Id, b => b.BookingDetails) ?? booking;
+            var allDetails = latestBooking.BookingDetails?.ToList() ?? new List<BookingDetail>();
+            var activeDetails = allDetails.Where(d => d.Status != "Đã hủy" && d.Status != "Từ chối").ToList();
+
+            if (activeDetails.Count == 0)
+            {
+                // Hủy cả nhóm phòng cuối cùng → đơn thành "Đã hủy".
+                latestBooking.Status = "Đã hủy";
+                latestBooking.CancelReason = reasonCode;
+                latestBooking.CancelReasonDetail = reasonDetail;
+                latestBooking.CancelSource = BookingCancelPolicy.SourceStudent;
+                _bookingRepo.Update(latestBooking);
+            }
+            else if (latestBooking.Status != "Chờ duyệt")
+            {
+                latestBooking.Status = "Duyệt một phần";
+                _bookingRepo.Update(latestBooking);
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+
+            return ApiResponse<bool>.SuccessResponse(
+                true,
+                activeDetails.Count == 0
+                    ? $"Đã hủy cả đơn #{booking.Id} (không còn phòng nào còn hiệu lực)."
+                    : $"Đã hủy 1 phòng trong đơn #{booking.Id}. Đơn còn {activeDetails.Count} phòng đang hiệu lực.");
+        }
+
+        private static string BuildDetailCancelNote(string reasonCode, string? reasonDetail)
+        {
+            var label = BookingCancelPolicy.GetReasonLabel(reasonCode);
+            return string.IsNullOrWhiteSpace(reasonDetail) ? label : $"{label}: {reasonDetail}";
         }
 
         // ─────────────────────────────────────────────────────────────────

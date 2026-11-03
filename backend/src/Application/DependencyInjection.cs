@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using HUIT_RoMan.Application.Modules.Identity.Services;
 using HUIT_RoMan.Application.Modules.Room.Services;
 using HUIT_RoMan.Application.Modules.Department.Services;
@@ -8,6 +8,7 @@ using HUIT_RoMan.Application.Modules.Violation.Services;
 using HUIT_RoMan.Application.Modules.Shift.Services;
 using HUIT_RoMan.Application.Modules.Report.Services;
 using HUIT_RoMan.Application.Modules.Chat.Services;
+using HUIT_RoMan.Application.Modules.Incidents.Services;
 using HUIT_RoMan.Application.Modules.Notification.Services;
 using HUIT_RoMan.Application.Modules.Feedback.Services;
 using HUIT_RoMan.Application.Modules.WorkingHours.Services;
@@ -46,6 +47,8 @@ public static class DependencyInjection
 
         // Usage Module (Quản lý phiên sử dụng & Trả phòng)
         services.AddScoped<IUsageService, UsageService>();
+        // Tác vụ nền tự đóng phiên "Đang sử dụng" quá hạn trả phòng
+        services.AddScoped<HUIT_RoMan.Application.Modules.Usage.Services.IOverdueSessionAutoCloseService, HUIT_RoMan.Application.Modules.Usage.Services.OverdueSessionAutoCloseService>();
 
         // Violation Module (Quản lý & xử lý vi phạm, cấm mượn phòng)
         services.AddScoped<IViolationService, ViolationService>();
@@ -58,6 +61,9 @@ public static class DependencyInjection
 
         // Chat Module (Chat realtime SignalR với nhân viên trực)
         services.AddScoped<IChatService, ChatService>();
+
+        // Incident Report Module (Báo cáo sự cố / hư hỏng thiết bị)
+        services.AddScoped<IIncidentReportService, IncidentReportService>();
 
         // Notification Module (Notification Center)
         services.AddScoped<INotificationService, NotificationService>();
@@ -72,3 +78,4 @@ public static class DependencyInjection
         return services;
     }
 }
+

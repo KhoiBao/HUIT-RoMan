@@ -45,7 +45,7 @@ export default function InfoFooter() {
                   <Link to="/lich-phong">Lịch phòng</Link>
                 </li>
                 <li>
-                  <Link to="/dat-phong">Đặt phòng</Link>
+                  <Link to="/dat-phong">Đăng ký mượn phòng</Link>
                 </li>
                 <li>
                   <Link to="/dat-phong?tab=my-bookings">

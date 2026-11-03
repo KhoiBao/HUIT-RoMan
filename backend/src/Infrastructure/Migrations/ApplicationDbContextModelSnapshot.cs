@@ -653,6 +653,73 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.ToTable("Feedbacks");
                 });
 
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.IncidentReport", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BookingDetailId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("ReportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ReportedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ResolvedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RoomId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StaffNote")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookingDetailId");
+
+                    b.HasIndex("ReportedByUserId");
+
+                    b.HasIndex("ResolvedByUserId");
+
+                    b.HasIndex("RoomId");
+
+                    b.ToTable("IncidentReports");
+                });
+
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.MaintenanceRecord", b =>
                 {
                     b.Property<int>("Id")
@@ -1844,6 +1911,39 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Navigation("UsageSession");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.IncidentReport", b =>
+                {
+                    b.HasOne("HUIT_RoMan.Domain.Entities.BookingDetail", "BookingDetail")
+                        .WithMany()
+                        .HasForeignKey("BookingDetailId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.User", "ReportedBy")
+                        .WithMany()
+                        .HasForeignKey("ReportedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.User", "ResolvedBy")
+                        .WithMany()
+                        .HasForeignKey("ResolvedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.Room", "Room")
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BookingDetail");
+
+                    b.Navigation("ReportedBy");
+
+                    b.Navigation("ResolvedBy");
+
+                    b.Navigation("Room");
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.MaintenanceRecord", b =>

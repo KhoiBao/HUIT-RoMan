@@ -41,6 +41,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
         public DbSet<BookingExtension> BookingExtensions { get; set; }
         public DbSet<WorkingHour> WorkingHours { get; set; }
         public DbSet<SystemSetting> SystemSettings { get; set; }
+        public DbSet<IncidentReport> IncidentReports { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

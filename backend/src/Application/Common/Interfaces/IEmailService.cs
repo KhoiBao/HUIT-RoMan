@@ -20,6 +20,19 @@ namespace HUIT_RoMan.Application.Common.Interfaces
             DateTime? endAt = null,
             string? checkInCode = null,
             CancellationToken cancellationToken = default);
+
+        Task<bool> SendViolationNotificationEmailAsync(
+            string toEmail,
+            string recipientName,
+            string violationCode,
+            string violationTypeName,
+            string description,
+            string severityText,
+            string penaltyApplied,
+            string? roomName = null,
+            DateTime? incidentTimeUtc = null,
+            bool autoRecorded = false,
+            CancellationToken cancellationToken = default);
     }
 }
 

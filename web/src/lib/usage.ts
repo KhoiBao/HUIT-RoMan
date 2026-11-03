@@ -136,6 +136,20 @@ export async function checkOutSession(payload: CheckOutPayload): Promise<UsageSe
   return (res.data?.data ?? res.data) as UsageSessionItem;
 }
 
+export interface ExtendSessionPayload {
+  usageSessionId: number;
+  newEndAt?: string;
+  newEndPeriodId?: number;
+  staffNote?: string;
+}
+
+/** Gia hạn thời gian sử dụng phòng khi phiên đang "Đang sử dụng" (backend tự chặn trùng lịch tiếp theo). */
+export async function extendSession(payload: ExtendSessionPayload): Promise<UsageSessionItem> {
+  const { usageSessionId, ...body } = payload;
+  const res = await api.post(`/api/UsageSessions/${usageSessionId}/extend`, body);
+  return (res.data?.data ?? res.data) as UsageSessionItem;
+}
+
 export async function cancelNoShow(
   id: number,
   reason?: string

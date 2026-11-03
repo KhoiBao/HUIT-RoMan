@@ -255,6 +255,147 @@ namespace HUIT_RoMan.Infrastructure.Services
 
       return await SendEmailAsync(toEmail, subject, sb.ToString(), cancellationToken);
     }
+
+    public async Task<bool> SendViolationNotificationEmailAsync(
+        string toEmail,
+        string recipientName,
+        string violationCode,
+        string violationTypeName,
+        string description,
+        string severityText,
+        string penaltyApplied,
+        string? roomName = null,
+        DateTime? incidentTimeUtc = null,
+        bool autoRecorded = false,
+        CancellationToken cancellationToken = default)
+    {
+      var subject = $"[HUIT] Biên bản vi phạm {violationCode} - {violationTypeName}";
+
+      int severityLevel = 1;
+      var firstDash = severityText.IndexOf('-');
+      if (int.TryParse(severityText.Substring(0, firstDash > 0 ? firstDash : severityText.Length).Trim(), out var parsed))
+        severityLevel = parsed;
+
+      var (badgeBg, badgeBorder, badgeText) = severityLevel switch
+      {
+        1 => ("#fffbeb", "#f59e0b", "#b45309"),
+        2 => ("#fff7ed", "#f97316", "#c2410c"),
+        _ => ("#fef2f2", "#ef4444", "#b91c1c"),
+      };
+
+      var incidentStr = incidentTimeUtc.HasValue
+        ? $"{incidentTimeUtc.Value.ToUniversalTime().AddHours(7):HH:mm dd/MM/yyyy} (Giờ Việt Nam)"
+        : "Không xác định";
+
+      var sb = new StringBuilder();
+      sb.Append($@"
+<!DOCTYPE html>
+<html lang=""vi"">
+<head>
+  <meta charset=""UTF-8"" />
+  <title>{subject}</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1e293b; background-color: #f1f5f9; margin: 0; padding: 24px; }}
+    .email-container {{ max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); border: 1px solid #e2e8f0; }}
+    .email-header {{ background: #003366; color: #ffffff; padding: 24px 28px; text-align: left; }}
+    .email-header h1 {{ margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }}
+    .email-header p {{ margin: 4px 0 0; font-size: 12px; color: #cbd5e1; }}
+    .email-body {{ padding: 28px; }}
+    .status-banner {{ background: {badgeBg}; border: 1.5px solid {badgeBorder}; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; text-align: center; }}
+    .status-banner-title {{ font-size: 16px; font-weight: 800; color: {badgeText}; margin: 0; text-transform: uppercase; letter-spacing: 0.03em; }}
+    .code-pill {{ font-family: 'Courier New', Courier, monospace; font-size: 15px; font-weight: 900; color: {badgeText}; background: #ffffff; padding: 2px 10px; border-radius: 6px; border: 1.5px dashed {badgeBorder}; letter-spacing: 1px; }}
+    .info-table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
+    .info-table td {{ padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13.5px; }}
+    .info-label {{ font-weight: 600; color: #64748b; width: 34%; vertical-align: top; }}
+    .info-val {{ color: #0f172a; font-weight: 500; }}
+    .notice-box {{ background: #f8fafc; border-left: 4px solid #0284c7; padding: 14px 16px; margin: 24px 0; border-radius: 0 6px 6px 0; font-size: 13px; color: #334155; }}
+    .notice-box strong {{ color: #0369a1; }}
+    .email-footer {{ background: #f8fafc; padding: 20px 28px; border-top: 1px solid #e2e8f0; font-size: 11.5px; color: #64748b; text-align: center; }}
+  </style>
+</head>
+<body>
+  <div class=""email-container"">
+    <div class=""email-header"">
+      <h1>TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG TP.HCM (HUIT)</h1>
+      <p>Hệ thống Quản lý Phòng Dùng Chung HUIT</p>
+    </div>
+
+    <div class=""email-body"">
+      <p>Xin chào <strong>{recipientName}</strong>,</p>
+      <p>Hệ thống xin thông báo một biên bản vi phạm quy định mượn phòng đã được lập đứng tên bạn:</p>
+
+      <div class=""status-banner"">
+        <h2 class=""status-banner-title"">BIÊN BẢN VI PHẠM {violationCode}</h2>
+      </div>
+
+      <table class=""info-table"">
+        <tr>
+          <td class=""info-label"">Số biên bản:</td>
+          <td class=""info-val""><span class=""code-pill"">{violationCode}</span></td>
+        </tr>
+        <tr>
+          <td class=""info-label"">Hành vi vi phạm:</td>
+          <td class=""info-val""><strong>{violationTypeName}</strong></td>
+        </tr>
+        <tr>
+          <td class=""info-label"">Mô tả sự việc:</td>
+          <td class=""info-val"">{description}</td>
+        </tr>
+        <tr>
+          <td class=""info-label"">Mức độ:</td>
+          <td class=""info-val"">{severityText}</td>
+        </tr>
+        <tr>
+          <td class=""info-label"">Hình thức xử lý:</td>
+          <td class=""info-val""><strong style=""color: {badgeText};"">{penaltyApplied}</strong></td>
+        </tr>");
+
+      if (!string.IsNullOrWhiteSpace(roomName))
+      {
+        sb.Append($@"
+        <tr>
+          <td class=""info-label"">Phòng / Khu vực:</td>
+          <td class=""info-val"">{roomName}</td>
+        </tr>");
+      }
+
+      sb.Append($@"
+        <tr>
+          <td class=""info-label"">Thời điểm ghi nhận:</td>
+          <td class=""info-val"">{incidentStr}</td>
+        </tr>
+        <tr>
+          <td class=""info-label"">Trạng thái:</td>
+          <td class=""info-val"">Chờ xử lý</td>
+        </tr>
+      </table>");
+
+      sb.Append(autoRecorded ? @"
+      <div class=""notice-box"">
+        <strong>Lưu ý:</strong><br />
+        • Biên bản này được hệ thống <strong>tự động ghi nhận</strong> do phiên mượn phòng quá giờ kết thúc mà không xác nhận trả phòng.<br />
+        • Vui lòng chấp hành hình thức xử lý nêu trên. Nếu bạn cho rằng biên bản lập nhầm, hãy liên hệ Ban Quản trị Phòng Dùng Chung &amp; Thiết bị Thư viện để được kiểm tra lại.
+      </div>" : @"
+      <div class=""notice-box"">
+        <strong>Lưu ý:</strong><br />
+        • Biên bản do cán bộ quản lý lập trực tiếp trên hệ thống và đang ở trạng thái <strong>Chờ xử lý</strong>.<br />
+        • Vui lòng chấp hành hình thức xử lý nêu trên. Nếu bạn cho rằng biên bản lập nhầm, hãy liên hệ Ban Quản trị Phòng Dùng Chung &amp; Thiết bị Thư viện để được kiểm tra lại.
+      </div>");
+
+      sb.Append(@"
+    </div>
+
+    <div class=""email-footer"">
+      <p style=""margin: 0 0 6px;""><strong>Ban Quản trị Phòng Dùng Chung & Thiết bị Thư viện HUIT</strong></p>
+      <p style=""margin: 0 0 4px;"">Địa chỉ: 140 Lê Trọng Tấn, P. Tây Thạnh, Q. Tân Phú, TP. Hồ Chí Minh</p>
+      <p style=""margin: 0;"">Email này được gửi tự động từ hệ thống quản lý phòng dùng chung HUIT. Vui lòng không trả lời trực tiếp email này.</p>
+    </div>
+  </div>
+</body>
+</html>");
+
+      return await SendEmailAsync(toEmail, subject, sb.ToString(), cancellationToken);
+    }
   }
 }
 

@@ -722,11 +722,13 @@ export interface CheckInWindowStateInfo {
   message: string;
 }
 
-function formatCountdown(totalSeconds: number): string {
+/** Đếm ngược dạng "5 phút 20 giây" — tránh hiểu "05:20" nhầm là giờ đồng hồ. */
+function formatCountdownVerbose(totalSeconds: number): string {
   const seconds = Math.max(0, totalSeconds);
   const mm = Math.floor(seconds / 60);
   const ss = seconds % 60;
-  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  if (mm <= 0) return `${ss} giây`;
+  return `${mm} phút ${ss} giây`;
 }
 
 /**
@@ -748,7 +750,7 @@ export function evaluateCheckInWindow(
     return {
       state: "not_open",
       remainingSeconds: remaining,
-      message: `Có thể nhận phòng sau ${formatCountdown(remaining)}`,
+      message: `Có thể nhận phòng sau ${formatCountdownVerbose(remaining)} (mở từ ${formatTime24h(opensAt)})`,
     };
   }
 
@@ -757,7 +759,7 @@ export function evaluateCheckInWindow(
     return {
       state: "open",
       remainingSeconds: remaining,
-      message: `Vui lòng nhận phòng trong ${formatCountdown(remaining)}`,
+      message: `Vui lòng nhận phòng trong ${formatCountdownVerbose(remaining)} (trước ${formatTime24h(startAt)})`,
     };
   }
 
@@ -827,6 +829,41 @@ export function canCancelBookingOnline(
     return {
       allowed: false,
       message: `Đã quá hạn hủy trực tuyến (hạn cuối ${formatDateTime24h(deadline)}). Vui lòng liên hệ quản lý thư viện.`,
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Điều kiện hủy TỪNG phòng trong đơn phía client (backend tự kiểm tra lại toàn bộ):
+ * phòng đã được duyệt (chưa hủy/từ chối) và now <= giờ bắt đầu của phòng - 3 giờ.
+ */
+export function canCancelBookingDetailOnline(
+  detail: BookingDetailItem,
+  now: Date = new Date()
+): { allowed: boolean; message?: string } {
+  const status = (detail.status || "").trim();
+  if (status === "Đã hủy") {
+    return { allowed: false, message: "Phòng này đã bị hủy trước đó." };
+  }
+  if (status !== "Đã duyệt") {
+    return {
+      allowed: false,
+      message: "Chỉ phòng đã được duyệt mới có thể hủy trực tuyến riêng lẻ.",
+    };
+  }
+
+  const startAt = new Date(detail.startAt).getTime();
+  if (!Number.isFinite(startAt)) {
+    return { allowed: false, message: "Không xác định được giờ bắt đầu của phòng." };
+  }
+
+  const deadline = startAt - CANCEL_LEAD_HOURS * 60 * 60 * 1000;
+  if (now.getTime() > deadline) {
+    return {
+      allowed: false,
+      message: `Đã quá hạn hủy trực tuyến phòng này (hạn cuối ${formatDateTime24h(deadline)}). Vui lòng liên hệ quản lý thư viện.`,
     };
   }
 
@@ -1039,6 +1076,18 @@ export async function cancelBookingApi(
   payload?: { reason?: string; reasonDetail?: string }
 ): Promise<boolean> {
   const res = await api.patch(`/api/Bookings/${bookingId}/cancel`, payload ?? {});
+  return Boolean(res.data?.success ?? true);
+}
+
+/** Hủy TỪNG phòng trong đơn (khi đặt nhiều phòng) */
+export async function cancelBookingDetailApi(
+  bookingDetailId: number,
+  payload?: { reason?: string; reasonDetail?: string }
+): Promise<boolean> {
+  const res = await api.patch(
+    `/api/Bookings/details/${bookingDetailId}/cancel`,
+    payload ?? {}
+  );
   return Boolean(res.data?.success ?? true);
 }
 

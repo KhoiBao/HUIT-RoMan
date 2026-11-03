@@ -3138,52 +3138,6 @@
   to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-/* ── Action Buttons in Bookings Table ─────────────────────────────────── */
-.btn-table-history {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #475569;
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.btn-table-history:hover {
-  background: #e2e8f0;
-  color: #1e293b;
-  border-color: #94a3b8;
-}
-
-.btn-table-feedback {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #b45309;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.btn-table-feedback:hover {
-  background: #fde68a;
-  color: #92400e;
-  border-color: #f59e0b;
-  transform: translateY(-1px);
-}
-
 /* ── Feedback Modal ───────────────────────────────────────────────────── */
 .feedback-modal-header {
   padding: 18px 22px;
