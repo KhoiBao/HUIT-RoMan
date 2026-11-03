@@ -28,8 +28,13 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
         private readonly IRepository<Domain.Entities.Notification> _notificationRepo;
         private readonly IRepository<ViolationType> _violationTypeRepo;
         private readonly IRepository<ViolationRecord> _violationRecordRepo;
+        private readonly IRepository<User> _userRepo;
+        private readonly IEmailService _emailService;
 
-        public OverdueSessionAutoCloseService(IUnitOfWork unitOfWork, ILogger<OverdueSessionAutoCloseService> logger)
+        public OverdueSessionAutoCloseService(
+            IUnitOfWork unitOfWork,
+            ILogger<OverdueSessionAutoCloseService> logger,
+            IEmailService emailService)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
@@ -40,6 +45,8 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             _notificationRepo = _unitOfWork.Repository<Domain.Entities.Notification>();
             _violationTypeRepo = _unitOfWork.Repository<ViolationType>();
             _violationRecordRepo = _unitOfWork.Repository<ViolationRecord>();
+            _userRepo = _unitOfWork.Repository<User>();
+            _emailService = emailService;
         }
 
         public async Task<int> CloseOverdueSessionsAsync(int graceMinutes = 15, CancellationToken cancellationToken = default)
@@ -113,6 +120,9 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                     await _unitOfWork.SaveChangesAsync();
                     closedCount++;
 
+                    if (violationCode != null)
+                        await SendLateCheckoutEmailAsync(session, detail, violationCode, now);
+
                     _logger.LogInformation("Auto-closed overdue session #{SessionId} at {NowUtc}.", sessionId, now);
                 }
                 catch (Exception ex)
@@ -129,6 +139,39 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             if (string.IsNullOrWhiteSpace(existingNote))
                 return AutoCloseMarker;
             return existingNote.Contains(AutoCloseMarker) ? existingNote : $"{existingNote} | {AutoCloseMarker}";
+        }
+
+        /// <summary>Gửi email thông báo biên bản VT01 cho sinh viên sau khi phiên bị tự đóng.</summary>
+        private async Task SendLateCheckoutEmailAsync(
+            UsageSession session, BookingDetail? detail, string violationCode, DateTime nowUtc)
+        {
+            try
+            {
+                var user = await _userRepo.GetByIdAsync(session.UserId);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email))
+                    return;
+
+                var room = detail?.Room;
+                var roomLabel = room == null ? null :
+                    !string.IsNullOrWhiteSpace(room.Name) && !string.IsNullOrWhiteSpace(room.RoomCode) && room.Name != room.RoomCode
+                        ? $"{room.RoomCode} — {room.Name}" : (room.Name ?? room.RoomCode);
+
+                await _emailService.SendViolationNotificationEmailAsync(
+                    user.Email,
+                    user.FullName ?? user.UserName ?? "người dùng",
+                    violationCode,
+                    "Trả phòng trễ giờ",
+                    "Hệ thống tự động ghi nhận: không xác nhận trả phòng đúng giờ kết thúc đã đăng ký, phiên bị tự đóng.",
+                    "1 - Nhẹ",
+                    "Nhắc nhở / Cảnh cáo lần đầu",
+                    roomLabel,
+                    nowUtc,
+                    autoRecorded: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send late-checkout violation email for session #{SessionId}.", session.Id);
+            }
         }
 
         /// <summary>Ghi nhận biên bản vi phạm VT01 (Trả phòng trễ giờ) cho phiên bị tự đóng.</summary>

@@ -20,13 +20,16 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
         private readonly IRepository<UsageSession> _usageSessionRepo;
         private readonly IRepository<Domain.Entities.Room> _roomRepo;
         private readonly IRepository<Domain.Entities.Booking> _bookingRepo;
+        private readonly IRepository<Domain.Entities.Notification> _notificationRepo;
         private readonly UserManager<User> _userManager;
         private readonly ICurrentUserService _currentUser;
+        private readonly IEmailService _emailService;
 
         public ViolationService(
             IUnitOfWork unitOfWork,
             UserManager<User> userManager,
-            ICurrentUserService currentUser)
+            ICurrentUserService currentUser,
+            IEmailService emailService)
         {
             _unitOfWork = unitOfWork;
             _violationTypeRepo = _unitOfWork.Repository<ViolationType>();
@@ -35,8 +38,10 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
             _usageSessionRepo = _unitOfWork.Repository<UsageSession>();
             _roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
             _bookingRepo = _unitOfWork.Repository<Domain.Entities.Booking>();
+            _notificationRepo = _unitOfWork.Repository<Domain.Entities.Notification>();
             _userManager = userManager;
             _currentUser = currentUser;
+            _emailService = emailService;
         }
 
         private static string GetSeverityText(int severity) => severity switch
@@ -455,6 +460,41 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
             }
 
             var room = session?.BookingDetail?.Room;
+            var roomLabel = room == null ? null :
+                !string.IsNullOrWhiteSpace(room.Name) && !string.IsNullOrWhiteSpace(room.RoomCode) && room.Name != room.RoomCode
+                    ? $"{room.RoomCode} — {room.Name}" : (room.Name ?? room.RoomCode);
+
+            // Thông báo in-app + email cho người bị lập biên bản
+            var restrictionNote = restrictionEndAt.HasValue
+                ? $" Bạn bị tạm cấm mượn phòng đến {restrictionEndAt.Value.ToUniversalTime().AddHours(7):HH:mm dd/MM/yyyy}."
+                : "";
+            await _notificationRepo.AddAsync(new Domain.Entities.Notification
+            {
+                UserId = request.UserId,
+                Title = $"Biên bản vi phạm {record.Code}",
+                Content = $"{vt.Name} — mức {GetSeverityText(record.Severity)}, hình thức xử lý: {record.PenaltyApplied}.{restrictionNote}",
+                Type = 1,
+                IsRead = false,
+                SentAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _unitOfWork.SaveChangesAsync();
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                await _emailService.SendViolationNotificationEmailAsync(
+                    user.Email,
+                    user.FullName ?? user.UserName ?? "người dùng",
+                    record.Code,
+                    vt.Name,
+                    record.Description,
+                    GetSeverityText(record.Severity),
+                    record.PenaltyApplied,
+                    roomLabel,
+                    record.IncidentTime,
+                    autoRecorded: false);
+            }
+
             var dto = new ViolationRecordDto
             {
                 Id = record.Id,
