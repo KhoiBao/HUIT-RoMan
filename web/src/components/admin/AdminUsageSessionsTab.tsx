@@ -30,6 +30,7 @@ import {
 import { useAuth } from "../../auth/AuthContext";
 import {
   getAllReminders,
+  fetchReminders,
   addReminder,
   type SessionReminderItem,
   REMINDER_PRESETS,
@@ -71,12 +72,17 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
 
   // Quản lý nhắc nhở nội quy (Rule of 3 Warnings)
   const [reminders, setReminders] = useState<SessionReminderItem[]>([]);
-  const refreshReminders = () => {
-    setReminders(getAllReminders());
+  const refreshReminders = async () => {
+    try {
+      const list = await fetchReminders();
+      setReminders(list);
+    } catch {
+      setReminders(getAllReminders());
+    }
   };
 
   useEffect(() => {
-    refreshReminders();
+    void refreshReminders();
   }, []);
 
   // Modal Gửi nhắc nhở
@@ -141,7 +147,7 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
         remindedByStaff: staffName,
       });
 
-      refreshReminders();
+      await refreshReminders();
       setShowReminderModal(false);
 
       if (result.isEscalated) {

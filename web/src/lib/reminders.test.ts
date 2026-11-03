@@ -13,6 +13,7 @@ vi.mock("./api", () => ({
   api: {
     post: vi.fn().mockResolvedValue({ data: { success: true } }),
     get: vi.fn().mockResolvedValue({ data: { success: true, data: [] } }),
+    delete: vi.fn().mockResolvedValue({ data: { success: true } }),
   },
 }));
 

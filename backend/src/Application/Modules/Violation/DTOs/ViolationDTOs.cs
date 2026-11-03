@@ -273,4 +273,47 @@ namespace HUIT_RoMan.Application.Modules.Violation.DTOs
         public string Status { get; set; } = string.Empty;
         public DateTime IncidentTime { get; set; }
     }
+
+    // ── Session Reminders DTOs ────────────────────────────────────────
+
+    public class SessionReminderDto
+    {
+        public int Id { get; set; }
+        public int SessionId { get; set; }
+        public int UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public string UserFullName { get; set; } = string.Empty;
+        public string? UserCardCode { get; set; }
+        public int RoomId { get; set; }
+        public string RoomCode { get; set; } = string.Empty;
+        public string RoomName { get; set; } = string.Empty;
+        public string Reason { get; set; } = string.Empty;
+        public string? Note { get; set; }
+        public DateTime RemindedAt { get; set; }
+        public string RemindedByStaff { get; set; } = string.Empty;
+        public int WarningLevel { get; set; }
+        public bool EscalatedToViolation { get; set; }
+        public string? ViolationCode { get; set; }
+        public int? DepartmentId { get; set; }
+    }
+
+    public class CreateSessionReminderDto
+    {
+        [Required(ErrorMessage = "Mã phiên sử dụng là bắt buộc")]
+        public int SessionId { get; set; }
+
+        [Required(ErrorMessage = "Người bị nhắc nhở là bắt buộc")]
+        public int UserId { get; set; }
+
+        public int RoomId { get; set; }
+
+        [Required(ErrorMessage = "Lý do nhắc nhở là bắt buộc")]
+        [StringLength(500)]
+        public string Reason { get; set; } = string.Empty;
+
+        [StringLength(1000)]
+        public string? Note { get; set; }
+
+        public string? RemindedByStaff { get; set; }
+    }
 }

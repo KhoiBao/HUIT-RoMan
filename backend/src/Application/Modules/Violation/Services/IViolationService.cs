@@ -31,5 +31,10 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
         // ── Statistics & Unified Search ───────────────────────────────────
         Task<ApiResponse<ViolationStatsDto>> GetStatsAsync(int? departmentId = null);
         Task<ApiResponse<GlobalSearchResultDto>> GlobalSearchAsync(string query);
+    
+        // ── Session Reminders (Quy tắc nhắc nhở 3 lần) ───────────────────
+        Task<ApiResponse<IEnumerable<SessionReminderDto>>> GetRemindersAsync(int? sessionId = null, int? userId = null, int? departmentId = null);
+        Task<ApiResponse<SessionReminderDto>> AddReminderAsync(CreateSessionReminderDto request);
+        Task<ApiResponse<bool>> ClearRemindersForSessionAsync(int sessionId);
     }
 }

@@ -216,5 +216,37 @@ namespace HUIT_RoMan.API.Controllers
             var res = await _violationService.GlobalSearchAsync(query);
             return Ok(res);
         }
+    
+        // ─────────────────────────────────────────────────────────────────
+        // SESSION REMINDERS (QUY TẮC 3 LẦN NHẮC NHỞ)
+        // ─────────────────────────────────────────────────────────────────
+
+        /// <summary>Lấy danh sách nhắc nhở (lọc theo phiên, người dùng hoặc đơn vị)</summary>
+        [HttpGet("reminders")]
+        public async Task<IActionResult> GetReminders([FromQuery] int? sessionId, [FromQuery] int? userId, [FromQuery] int? departmentId)
+        {
+            var res = await _violationService.GetRemindersAsync(sessionId, userId, departmentId);
+            return Ok(res);
+        }
+
+        /// <summary>Gửi nhắc nhở nội quy cho người dùng trong phiên (vượt quá 3 lần tự lập biên bản)</summary>
+        [HttpPost("reminders")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        public async Task<IActionResult> AddReminder([FromBody] CreateSessionReminderDto request)
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            var res = await _violationService.AddReminderAsync(request);
+            if (!res.Success) return BadRequest(res);
+            return Ok(res);
+        }
+
+        /// <summary>Xóa toàn bộ nhắc nhở của một phiên sử dụng</summary>
+        [HttpDelete("reminders/session/{sessionId}")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        public async Task<IActionResult> ClearRemindersForSession(int sessionId)
+        {
+            var res = await _violationService.ClearRemindersForSessionAsync(sessionId);
+            return Ok(res);
+        }
     }
 }

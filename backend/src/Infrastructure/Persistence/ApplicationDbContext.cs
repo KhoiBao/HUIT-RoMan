@@ -42,6 +42,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
         public DbSet<WorkingHour> WorkingHours { get; set; }
         public DbSet<SystemSetting> SystemSettings { get; set; }
         public DbSet<IncidentReport> IncidentReports { get; set; }
+        public DbSet<SessionReminder> SessionReminders { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

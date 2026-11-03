@@ -321,8 +321,8 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
       const title = isCurrent
         ? "Tuần này"
         : isNext
-        ? "Tuần sau"
-        : `Tuần từ ${days[0].getDate()}/${days[0].getMonth() + 1}`;
+          ? "Tuần sau"
+          : `Tuần từ ${days[0].getDate()}/${days[0].getMonth() + 1}`;
       const range = `${days[0].getDate()}/${days[0].getMonth() + 1} – ${days[6].getDate()}/${days[6].getMonth() + 1}/${days[6].getFullYear()}`;
 
       return {
@@ -421,13 +421,13 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
 
     const relevantShifts = targetDeptId
       ? shifts.filter(
-          (s) =>
-            s.employees.length === 0 ||
-            s.employees.some((e) => {
-              const emp = employees.find((x) => x.id === e.id);
-              return (emp?.departmentId || e.departmentId) === targetDeptId;
-            })
-        )
+        (s) =>
+          s.employees.length === 0 ||
+          s.employees.some((e) => {
+            const emp = employees.find((x) => x.id === e.id);
+            return (emp?.departmentId || e.departmentId) === targetDeptId;
+          })
+      )
       : shifts;
 
     const overlapping = findOverlappingShift(
@@ -703,9 +703,9 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
               className="filter-select"
               title="Lọc ca trực theo đơn vị vận hành"
             >
-              <option value="ALL">🏢 Toàn trường (Tất cả đơn vị)</option>
-              <option value="3">📚 Thư viện</option>
-              <option value="2">🎓 Phòng Đào tạo</option>
+              <option value="ALL">Toàn trường (Tất cả đơn vị)</option>
+              <option value="3">Thư viện</option>
+              <option value="2">Phòng Đào tạo</option>
             </select>
           </div>
         ) : (
@@ -724,7 +724,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
             }}
             title="Đơn vị vận hành ca trực của bạn"
           >
-            <span>{user?.departmentId === 2 ? "🎓 Phòng Đào tạo" : "📚 Thư viện"}</span>
+            <span>{user?.departmentId === 2 ? "Phòng Đào tạo" : "Thư viện"}</span>
           </div>
         )}
 
@@ -866,350 +866,349 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                       (s) => normalizeShiftDateString(s.dateString || s.date) === dateStr
                     );
 
-            return (
-              <div
-                key={dateStr}
-                style={{
-                  background: isToday ? "#eff6ff" : "#ffffff",
-                  border: isToday ? "2px solid #3b82f6" : "1px solid #e2e8f0",
-                  borderRadius: "10px",
-                  padding: "12px 10px",
-                  display: "flex",
-                  flexDirection: "column",
-                  minHeight: "360px",
-                  boxShadow: isToday ? "0 4px 12px rgba(59, 130, 246, 0.12)" : "0 1px 3px rgba(0,0,0,0.04)",
-                }}
-              >
-                {/* Day Header */}
-                <div
-                  style={{
-                    borderBottom: "1px solid #e2e8f0",
-                    paddingBottom: "8px",
-                    marginBottom: "10px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <div>
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        color: isToday ? "#1d4ed8" : "#64748b",
-                      }}
-                    >
-                      {dayNames[idx]}
-                    </span>
-                    <div
-                      style={{
-                        fontSize: "16px",
-                        fontWeight: 800,
-                        color: isToday ? "#1e40af" : "#1e293b",
-                      }}
-                    >
-                      {day.getDate()}/{day.getMonth() + 1}
-                    </div>
-                  </div>
-                  {isToday && (
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        background: "#3b82f6",
-                        color: "#fff",
-                        padding: "2px 6px",
-                        borderRadius: "10px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Hôm nay
-                    </span>
-                  )}
-                </div>
-
-                {/* Shift cards for this day */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
-                  {dayShifts.length === 0 ? (
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#94a3b8",
-                        textAlign: "center",
-                        marginTop: "30px",
-                        fontStyle: "italic",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <span>Chưa có ca trực</span>
-                      {canManageShifts && isShiftDateValid(dateStr) && (
-                        <button
-                          type="button"
-                          style={{
-                            fontSize: "11px",
-                            padding: "3px 8px",
-                            borderRadius: "6px",
-                            border: "1px dashed #93c5fd",
-                            background: "#f0f9ff",
-                            color: "#0284c7",
-                            cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            fontWeight: 600,
-                          }}
-                          onClick={() => handleOpenCreateModal(dateStr)}
-                          title={`Phân ca trực cho ngày ${day.getDate()}/${day.getMonth() + 1}`}
-                        >
-                          <PlusIcon size={12} />
-                          <span>Phân ca</span>
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    dayShifts.map((s) => {
-                      const isMorning = s.startTime.startsWith("07") || s.startTime.startsWith("08");
-                      const isEvening = s.startTime.startsWith("17") || s.startTime.startsWith("18");
-
-                      return (
+                    return (
+                      <div
+                        key={dateStr}
+                        style={{
+                          background: isToday ? "#eff6ff" : "#ffffff",
+                          border: isToday ? "2px solid #3b82f6" : "1px solid #e2e8f0",
+                          borderRadius: "10px",
+                          padding: "12px 10px",
+                          display: "flex",
+                          flexDirection: "column",
+                          minHeight: "360px",
+                          boxShadow: isToday ? "0 4px 12px rgba(59, 130, 246, 0.12)" : "0 1px 3px rgba(0,0,0,0.04)",
+                        }}
+                      >
+                        {/* Day Header */}
                         <div
-                          key={s.id}
                           style={{
-                            background: isMorning ? "#f0fdf4" : isEvening ? "#faf5ff" : "#fffbeb",
-                            border: `1px solid ${
-                              isMorning ? "#bbf7d0" : isEvening ? "#e9d5ff" : "#fef08a"
-                            }`,
-                            borderRadius: "8px",
-                            padding: "9px",
-                            fontSize: "12px",
-                            position: "relative",
+                            borderBottom: "1px solid #e2e8f0",
+                            paddingBottom: "8px",
+                            marginBottom: "10px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
                           }}
                         >
-                          {/* Shift Header & Status */}
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              flexWrap: "wrap",
-                              gap: "4px 6px",
-                              marginBottom: "4px",
-                            }}
-                          >
+                          <div>
                             <span
                               style={{
-                                fontWeight: 800,
-                                fontSize: "11.5px",
-                                whiteSpace: "nowrap",
-                                color: isMorning ? "#15803d" : isEvening ? "#6b21a8" : "#b45309",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "4px",
-                              }}
-                            >
-                              <ClockIcon size={12} />
-                              <span>{s.timeRange || `${s.startTime.slice(0, 5)} - ${s.endTime.slice(0, 5)}`}</span>
-                            </span>
-                            <span
-                              style={{
-                                fontSize: "10.5px",
-                                padding: "2px 5px",
-                                borderRadius: "4px",
+                                fontSize: "12px",
                                 fontWeight: 700,
-                                whiteSpace: "nowrap",
-                                flexShrink: 0,
-                                background:
-                                  s.status === "Đang trực"
-                                    ? "#fee2e2"
-                                    : s.status === "Hoàn thành"
-                                    ? "#dcfce7"
-                                    : "#f1f5f9",
-                                color:
-                                  s.status === "Đang trực"
-                                    ? "#b91c1c"
-                                    : s.status === "Hoàn thành"
-                                    ? "#15803d"
-                                    : "#475569",
+                                textTransform: "uppercase",
+                                color: isToday ? "#1d4ed8" : "#64748b",
                               }}
                             >
-                              {s.status === "Đang trực" ? "• Đang trực" : s.status}
+                              {dayNames[idx]}
                             </span>
-                          </div>
-
-                          <div
-                            style={{
-                              fontWeight: 700,
-                              color: "#1e293b",
-                              marginBottom: "6px",
-                              lineHeight: "1.3",
-                            }}
-                          >
-                            {s.name}
-                          </div>
-
-                          {/* Assigned Employees */}
-                          <div style={{ marginTop: "4px" }}>
-                            <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "2px" }}>
-                              Nhân sự trực:
-                            </div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                              {s.employees.length === 0 ? (
-                                <span style={{ color: "#ef4444", fontSize: "11px", fontStyle: "italic", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                                  <AlertTriangleIcon size={12} />
-                                  <span>Chưa phân công</span>
-                                </span>
-                              ) : (
-                                s.employees.map((e) => (
-                                  <span
-                                    key={e.id}
-                                    style={{
-                                      background: "#ffffff",
-                                      border: "1px solid #cbd5e1",
-                                      borderRadius: "12px",
-                                      padding: "1px 6px",
-                                      fontSize: "11px",
-                                      fontWeight: 600,
-                                      color: "#334155",
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "4px",
-                                    }}
-                                    title={`${e.fullName} (${e.code}) - ${e.position}`}
-                                  >
-                                    <PersonIcon size={12} />
-                                    <span>{e.fullName}</span>
-                                  </span>
-                                ))
-                              )}
+                            <div
+                              style={{
+                                fontSize: "16px",
+                                fontWeight: 800,
+                                color: isToday ? "#1e40af" : "#1e293b",
+                              }}
+                            >
+                              {day.getDate()}/{day.getMonth() + 1}
                             </div>
                           </div>
+                          {isToday && (
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                background: "#3b82f6",
+                                color: "#fff",
+                                padding: "2px 6px",
+                                borderRadius: "10px",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Hôm nay
+                            </span>
+                          )}
+                        </div>
 
-                          {/* Action Buttons */}
-                          <div
-                            style={{
-                              marginTop: "8px",
-                              paddingTop: "6px",
-                              borderTop: "1px dashed rgba(0,0,0,0.1)",
-                              display: "flex",
-                              gap: "4px",
-                              justifyContent: "flex-end",
-                              alignItems: "center",
-                            }}
-                          >
-                            {s.status === "Lên lịch" && canStartShift(s) && (
-                              <button
-                                type="button"
-                                style={{
-                                  fontSize: "10.5px",
-                                  padding: "2px 6px",
-                                  borderRadius: "4px",
-                                  background: "#0284c7",
-                                  color: "#fff",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  fontWeight: 600,
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "3px",
-                                }}
-                                onClick={() => handleChangeStatus(s, "Đang trực")}
-                                title="Bắt đầu ca trực"
-                              >
-                                <PlayIcon size={10} />
-                                <span>Bắt đầu</span>
-                              </button>
-                            )}
-                            {s.status === "Đang trực" && (
-                              <button
-                                type="button"
-                                style={{
-                                  fontSize: "10.5px",
-                                  padding: "2px 6px",
-                                  borderRadius: "4px",
-                                  background: "#16a34a",
-                                  color: "#fff",
-                                  border: "none",
-                                  cursor: canCompleteShift(s) ? "pointer" : "not-allowed",
-                                  opacity: canCompleteShift(s) ? 1 : 0.5,
-                                  fontWeight: 600,
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "3px",
-                                }}
-                                onClick={() => handleChangeStatus(s, "Hoàn thành")}
-                                disabled={!canCompleteShift(s)}
-                                title={
-                                  canCompleteShift(s)
-                                    ? "Bàn giao & Hoàn tất ca trực"
-                                    : "Ca đã qua ngày — không thể hoàn tất"
-                                }
-                              >
-                                <CheckIcon size={11} />
-                                <span>Hoàn tất</span>
-                              </button>
-                            )}
-                            {canManageShifts && (
-                              <>
-                                {(() => {
-                                  const isFuture = isShiftDateValid(s.dateString || s.date.slice(0, 10));
-                                  return (
-                                    <button
-                                      type="button"
-                                      style={{
-                                        fontSize: "10.5px",
-                                        padding: "3px 6px",
-                                        borderRadius: "4px",
-                                        background: "#f8fafc",
-                                        border: "1px solid #cbd5e1",
-                                        cursor: isFuture ? "pointer" : "not-allowed",
-                                        opacity: isFuture ? 1 : 0.45,
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        color: "#475569",
-                                      }}
-                                      onClick={() => {
-                                        if (!isFuture) {
-                                          onNotify?.("Không thể chỉnh sửa ca trực của ngày hiện tại hoặc quá khứ. Chỉ được phân ca trực cho các ngày sau ngày hiện tại.", "warning");
-                                          return;
-                                        }
-                                        handleOpenEditModal(s);
-                                      }}
-                                      title={isFuture ? "Chỉnh sửa ca trực" : "Chỉ có thể chỉnh sửa ca trực của ngày sau ngày hiện tại"}
-                                    >
-                                      <PencilIcon size={12} />
-                                    </button>
-                                  );
-                                })()}
+                        {/* Shift cards for this day */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
+                          {dayShifts.length === 0 ? (
+                            <div
+                              style={{
+                                fontSize: "12px",
+                                color: "#94a3b8",
+                                textAlign: "center",
+                                marginTop: "30px",
+                                fontStyle: "italic",
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
+                              <span>Chưa có ca trực</span>
+                              {canManageShifts && isShiftDateValid(dateStr) && (
                                 <button
                                   type="button"
                                   style={{
-                                    fontSize: "10.5px",
-                                    padding: "3px 6px",
-                                    borderRadius: "4px",
-                                    background: "#fff1f2",
-                                    border: "1px solid #fecdd3",
-                                    color: "#e11d48",
+                                    fontSize: "11px",
+                                    padding: "3px 8px",
+                                    borderRadius: "6px",
+                                    border: "1px dashed #93c5fd",
+                                    background: "#f0f9ff",
+                                    color: "#0284c7",
                                     cursor: "pointer",
                                     display: "inline-flex",
                                     alignItems: "center",
+                                    gap: "4px",
+                                    fontWeight: 600,
                                   }}
-                                  onClick={() => handleDeleteShift(s)}
-                                  title="Xóa ca trực"
+                                  onClick={() => handleOpenCreateModal(dateStr)}
+                                  title={`Phân ca trực cho ngày ${day.getDate()}/${day.getMonth() + 1}`}
                                 >
-                                  <TrashIcon size={12} />
+                                  <PlusIcon size={12} />
+                                  <span>Phân ca</span>
                                 </button>
-                              </>
-                            )}
-                          </div>
+                              )}
+                            </div>
+                          ) : (
+                            dayShifts.map((s) => {
+                              const isMorning = s.startTime.startsWith("07") || s.startTime.startsWith("08");
+                              const isEvening = s.startTime.startsWith("17") || s.startTime.startsWith("18");
+
+                              return (
+                                <div
+                                  key={s.id}
+                                  style={{
+                                    background: isMorning ? "#f0fdf4" : isEvening ? "#faf5ff" : "#fffbeb",
+                                    border: `1px solid ${isMorning ? "#bbf7d0" : isEvening ? "#e9d5ff" : "#fef08a"
+                                      }`,
+                                    borderRadius: "8px",
+                                    padding: "9px",
+                                    fontSize: "12px",
+                                    position: "relative",
+                                  }}
+                                >
+                                  {/* Shift Header & Status */}
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "flex-start",
+                                      flexWrap: "wrap",
+                                      gap: "4px 6px",
+                                      marginBottom: "4px",
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        fontWeight: 800,
+                                        fontSize: "11.5px",
+                                        whiteSpace: "nowrap",
+                                        color: isMorning ? "#15803d" : isEvening ? "#6b21a8" : "#b45309",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                      }}
+                                    >
+                                      <ClockIcon size={12} />
+                                      <span>{s.timeRange || `${s.startTime.slice(0, 5)} - ${s.endTime.slice(0, 5)}`}</span>
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: "10.5px",
+                                        padding: "2px 5px",
+                                        borderRadius: "4px",
+                                        fontWeight: 700,
+                                        whiteSpace: "nowrap",
+                                        flexShrink: 0,
+                                        background:
+                                          s.status === "Đang trực"
+                                            ? "#fee2e2"
+                                            : s.status === "Hoàn thành"
+                                              ? "#dcfce7"
+                                              : "#f1f5f9",
+                                        color:
+                                          s.status === "Đang trực"
+                                            ? "#b91c1c"
+                                            : s.status === "Hoàn thành"
+                                              ? "#15803d"
+                                              : "#475569",
+                                      }}
+                                    >
+                                      {s.status === "Đang trực" ? "• Đang trực" : s.status}
+                                    </span>
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      fontWeight: 700,
+                                      color: "#1e293b",
+                                      marginBottom: "6px",
+                                      lineHeight: "1.3",
+                                    }}
+                                  >
+                                    {s.name}
+                                  </div>
+
+                                  {/* Assigned Employees */}
+                                  <div style={{ marginTop: "4px" }}>
+                                    <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "2px" }}>
+                                      Nhân sự trực:
+                                    </div>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                                      {s.employees.length === 0 ? (
+                                        <span style={{ color: "#ef4444", fontSize: "11px", fontStyle: "italic", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                          <AlertTriangleIcon size={12} />
+                                          <span>Chưa phân công</span>
+                                        </span>
+                                      ) : (
+                                        s.employees.map((e) => (
+                                          <span
+                                            key={e.id}
+                                            style={{
+                                              background: "#ffffff",
+                                              border: "1px solid #cbd5e1",
+                                              borderRadius: "12px",
+                                              padding: "1px 6px",
+                                              fontSize: "11px",
+                                              fontWeight: 600,
+                                              color: "#334155",
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "4px",
+                                            }}
+                                            title={`${e.fullName} (${e.code}) - ${e.position}`}
+                                          >
+                                            <PersonIcon size={12} />
+                                            <span>{e.fullName}</span>
+                                          </span>
+                                        ))
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Action Buttons */}
+                                  <div
+                                    style={{
+                                      marginTop: "8px",
+                                      paddingTop: "6px",
+                                      borderTop: "1px dashed rgba(0,0,0,0.1)",
+                                      display: "flex",
+                                      gap: "4px",
+                                      justifyContent: "flex-end",
+                                      alignItems: "center",
+                                    }}
+                                  >
+                                    {s.status === "Lên lịch" && canStartShift(s) && (
+                                      <button
+                                        type="button"
+                                        style={{
+                                          fontSize: "10.5px",
+                                          padding: "2px 6px",
+                                          borderRadius: "4px",
+                                          background: "#0284c7",
+                                          color: "#fff",
+                                          border: "none",
+                                          cursor: "pointer",
+                                          fontWeight: 600,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "3px",
+                                        }}
+                                        onClick={() => handleChangeStatus(s, "Đang trực")}
+                                        title="Bắt đầu ca trực"
+                                      >
+                                        <PlayIcon size={10} />
+                                        <span>Bắt đầu</span>
+                                      </button>
+                                    )}
+                                    {s.status === "Đang trực" && (
+                                      <button
+                                        type="button"
+                                        style={{
+                                          fontSize: "10.5px",
+                                          padding: "2px 6px",
+                                          borderRadius: "4px",
+                                          background: "#16a34a",
+                                          color: "#fff",
+                                          border: "none",
+                                          cursor: canCompleteShift(s) ? "pointer" : "not-allowed",
+                                          opacity: canCompleteShift(s) ? 1 : 0.5,
+                                          fontWeight: 600,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "3px",
+                                        }}
+                                        onClick={() => handleChangeStatus(s, "Hoàn thành")}
+                                        disabled={!canCompleteShift(s)}
+                                        title={
+                                          canCompleteShift(s)
+                                            ? "Bàn giao & Hoàn tất ca trực"
+                                            : "Ca đã qua ngày — không thể hoàn tất"
+                                        }
+                                      >
+                                        <CheckIcon size={11} />
+                                        <span>Hoàn tất</span>
+                                      </button>
+                                    )}
+                                    {canManageShifts && (
+                                      <>
+                                        {(() => {
+                                          const isFuture = isShiftDateValid(s.dateString || s.date.slice(0, 10));
+                                          return (
+                                            <button
+                                              type="button"
+                                              style={{
+                                                fontSize: "10.5px",
+                                                padding: "3px 6px",
+                                                borderRadius: "4px",
+                                                background: "#f8fafc",
+                                                border: "1px solid #cbd5e1",
+                                                cursor: isFuture ? "pointer" : "not-allowed",
+                                                opacity: isFuture ? 1 : 0.45,
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                color: "#475569",
+                                              }}
+                                              onClick={() => {
+                                                if (!isFuture) {
+                                                  onNotify?.("Không thể chỉnh sửa ca trực của ngày hiện tại hoặc quá khứ. Chỉ được phân ca trực cho các ngày sau ngày hiện tại.", "warning");
+                                                  return;
+                                                }
+                                                handleOpenEditModal(s);
+                                              }}
+                                              title={isFuture ? "Chỉnh sửa ca trực" : "Chỉ có thể chỉnh sửa ca trực của ngày sau ngày hiện tại"}
+                                            >
+                                              <PencilIcon size={12} />
+                                            </button>
+                                          );
+                                        })()}
+                                        <button
+                                          type="button"
+                                          style={{
+                                            fontSize: "10.5px",
+                                            padding: "3px 6px",
+                                            borderRadius: "4px",
+                                            background: "#fff1f2",
+                                            border: "1px solid #fecdd3",
+                                            color: "#e11d48",
+                                            cursor: "pointer",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                          }}
+                                          onClick={() => handleDeleteShift(s)}
+                                          title="Xóa ca trực"
+                                        >
+                                          <TrashIcon size={12} />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+                      </div>
                     );
                   })}
                 </div>

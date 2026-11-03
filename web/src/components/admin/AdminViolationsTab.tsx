@@ -37,7 +37,7 @@ import {
   FlameIcon,
   ScaleIcon,
 } from "../Icon";
-import { getAllReminders, type SessionReminderItem } from "../../lib/reminders";
+import { getAllReminders, fetchReminders, type SessionReminderItem } from "../../lib/reminders";
 import {
   getAllPenalties,
   createPenalty,
@@ -200,13 +200,20 @@ export default function AdminViolationsTab({
   const [reminderPage, setReminderPage] = useState<number>(1);
   const [reminderPageSize, setReminderPageSize] = useState<number>(10);
 
-  const refreshReminders = () => {
-    setReminders(getAllReminders());
+  const refreshReminders = async () => {
+    try {
+      const list = await fetchReminders(
+        activeDepartmentId ? { departmentId: activeDepartmentId } : undefined
+      );
+      setReminders(list);
+    } catch {
+      setReminders(getAllReminders());
+    }
   };
 
   useEffect(() => {
-    refreshReminders();
-  }, []);
+    void refreshReminders();
+  }, [activeDepartmentId]);
 
   useEffect(() => {
     setReminderPage(1);
@@ -357,6 +364,7 @@ export default function AdminViolationsTab({
       setRestrictions(rList);
       setStats(sData);
       setPenalties(getAllPenalties());
+      void refreshReminders();
 
       const rawSessions = sessRes.data?.data || sessRes.data || [];
       if (Array.isArray(rawSessions)) {
@@ -681,10 +689,9 @@ export default function AdminViolationsTab({
       });
 
       onNotify(
-        `Ghi nhận biên bản vi phạm thành công! ${
-          formRestrictDays > 0
-            ? `Đã tự động áp dụng lệnh cấm mượn phòng ${formRestrictDays} ngày.`
-            : ""
+        `Ghi nhận biên bản vi phạm thành công! ${formRestrictDays > 0
+          ? `Đã tự động áp dụng lệnh cấm mượn phòng ${formRestrictDays} ngày.`
+          : ""
         }`,
         "success"
       );
@@ -1030,6 +1037,7 @@ export default function AdminViolationsTab({
         onNotify(`Đã thêm mới hình phạt "${res.name}".`, "success");
       }
       setPenalties(getAllPenalties());
+      void refreshReminders();
       setShowPenaltyModal(false);
     } catch {
       onNotify("Có lỗi xảy ra khi lưu hình phạt.", "warning");
@@ -1155,7 +1163,7 @@ export default function AdminViolationsTab({
       >
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontSize: "13.5px", fontWeight: 600, color: "#475569" }}>
-            🏢 Đơn vị xử lý vi phạm:
+            Đơn vị xử lý vi phạm:
           </span>
           {isAdmin ? (
             <select
@@ -1172,9 +1180,9 @@ export default function AdminViolationsTab({
               }}
               title="Lọc biên bản vi phạm theo đơn vị quản lý"
             >
-              <option value="ALL">🏢 Toàn trường (Tất cả đơn vị)</option>
-              <option value="3">📚 Thư viện</option>
-              <option value="2">🎓 Phòng Đào tạo</option>
+              <option value="ALL">Toàn trường (Tất cả đơn vị)</option>
+              <option value="3">Thư viện</option>
+              <option value="2">Phòng Đào tạo</option>
             </select>
           ) : (
             <span
@@ -1191,33 +1199,12 @@ export default function AdminViolationsTab({
                 color: "var(--rp-link, #0284c7)",
               }}
             >
-              {user?.departmentId === 2 ? "🎓 Phòng Đào tạo" : "📚 Thư viện"}
+              {user?.departmentId === 2 ? "Phòng Đào tạo" : "Thư viện"}
             </span>
           )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <button
-            type="button"
-            className="btn-icon-refresh"
-            onClick={loadAllData}
-            title="Làm mới toàn bộ dữ liệu vi phạm"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "6px 12px",
-              fontSize: "13px",
-              borderRadius: "6px",
-              border: "1px solid #cbd5e1",
-              background: "#fff",
-              cursor: "pointer",
-            }}
-          >
-            <RefreshCwIcon size={14} />
-            <span>Làm mới</span>
-          </button>
-        </div>
+
       </div>
 
       {/* ── 1. Top Hero Stat Cards ─────────────────────────────────────── */}
@@ -1233,8 +1220,8 @@ export default function AdminViolationsTab({
               {activeDepartmentId === 3
                 ? "Đơn vị Thư viện"
                 : activeDepartmentId === 2
-                ? "Đơn vị Phòng Đào tạo"
-                : "Đã ghi nhận toàn hệ thống"}
+                  ? "Đơn vị Phòng Đào tạo"
+                  : "Đã ghi nhận toàn hệ thống"}
             </span>
           </div>
         </div>
@@ -1282,9 +1269,8 @@ export default function AdminViolationsTab({
         <div className="subtab-buttons-group">
           <button
             type="button"
-            className={`subtab-btn ${
-              activeSubTab === "records" ? "active" : ""
-            }`}
+            className={`subtab-btn ${activeSubTab === "records" ? "active" : ""
+              }`}
             onClick={() => setActiveSubTab("records")}
           >
             <AlertTriangleIcon size={16} />
@@ -1294,9 +1280,8 @@ export default function AdminViolationsTab({
 
           <button
             type="button"
-            className={`subtab-btn ${
-              activeSubTab === "restrictions" ? "active" : ""
-            }`}
+            className={`subtab-btn ${activeSubTab === "restrictions" ? "active" : ""
+              }`}
             onClick={() => setActiveSubTab("restrictions")}
           >
             <BanIcon size={16} />
@@ -1308,9 +1293,8 @@ export default function AdminViolationsTab({
 
           <button
             type="button"
-            className={`subtab-btn ${
-              activeSubTab === "reminders" ? "active" : ""
-            }`}
+            className={`subtab-btn ${activeSubTab === "reminders" ? "active" : ""
+              }`}
             onClick={() => setActiveSubTab("reminders")}
           >
             <BellRingIcon size={16} />
@@ -1799,13 +1783,12 @@ export default function AdminViolationsTab({
                       </td>
                       <td>
                         <span
-                          className={`admin-status-pill ${
-                            r.isActive
-                              ? "pill-cancelled"
-                              : r.status === "Đã gỡ"
+                          className={`admin-status-pill ${r.isActive
+                            ? "pill-cancelled"
+                            : r.status === "Đã gỡ"
                               ? "pill-approved"
                               : "pill-pending"
-                          }`}
+                            }`}
                         >
                           {r.isActive ? "Đang hiệu lực" : r.status}
                         </span>
@@ -2209,67 +2192,67 @@ export default function AdminViolationsTab({
                   </tr>
                 ) : (
                   pagedTypes.map((vt) => (
-                  <tr
-                    key={vt.id}
-                    className="admin-clickable-row"
-                    onClick={() => openEditTypeModal(vt)}
-                    title="Bấm vào dòng để chỉnh sửa loại vi phạm này"
-                  >
-                    <td>
-                      <span className="code-pill font-mono">{vt.code}</span>
-                    </td>
-                    <td>
-                      <strong className="type-title">{vt.name}</strong>
-                    </td>
-                    <td>
-                      <p className="type-desc">{vt.description || "—"}</p>
-                    </td>
-                    <td>
-                      <span
-                        className={`severity-badge ${getSeverityBadgeClass(
-                          vt.severity
-                        )}`}
-                      >
-                        {vt.severity === 1
-                          ? "1 - Nhẹ"
-                          : vt.severity === 2
-                          ? "2 - Vừa"
-                          : vt.severity === 3
-                          ? "3 - Nghiêm trọng"
-                          : "4 - Rất nghiêm trọng"}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="penalty-text">
-                        {vt.defaultPenalty || "Cảnh cáo"}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <span className="record-count-badge">{vt.recordCount}</span>
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
-                      <div className="table-actions-inline">
-                        <button
-                          type="button"
-                          className="btn-table-action btn-action-edit"
-                          onClick={() => openEditTypeModal(vt)}
+                    <tr
+                      key={vt.id}
+                      className="admin-clickable-row"
+                      onClick={() => openEditTypeModal(vt)}
+                      title="Bấm vào dòng để chỉnh sửa loại vi phạm này"
+                    >
+                      <td>
+                        <span className="code-pill font-mono">{vt.code}</span>
+                      </td>
+                      <td>
+                        <strong className="type-title">{vt.name}</strong>
+                      </td>
+                      <td>
+                        <p className="type-desc">{vt.description || "—"}</p>
+                      </td>
+                      <td>
+                        <span
+                          className={`severity-badge ${getSeverityBadgeClass(
+                            vt.severity
+                          )}`}
                         >
-                          Sửa
-                        </button>
-                        {isAdmin && (
+                          {vt.severity === 1
+                            ? "1 - Nhẹ"
+                            : vt.severity === 2
+                              ? "2 - Vừa"
+                              : vt.severity === 3
+                                ? "3 - Nghiêm trọng"
+                                : "4 - Rất nghiêm trọng"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="penalty-text">
+                          {vt.defaultPenalty || "Cảnh cáo"}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <span className="record-count-badge">{vt.recordCount}</span>
+                      </td>
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
+                        <div className="table-actions-inline">
                           <button
                             type="button"
-                            className="btn-table-action btn-action-delete"
-                            onClick={() => handleDeleteType(vt)}
-                            title="Xóa quy chế vi phạm"
+                            className="btn-table-action btn-action-edit"
+                            onClick={() => openEditTypeModal(vt)}
                           >
-                            <XIcon size={14} />
+                            Sửa
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )))}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              className="btn-table-action btn-action-delete"
+                              onClick={() => handleDeleteType(vt)}
+                              title="Xóa quy chế vi phạm"
+                            >
+                              <XIcon size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )))}
               </tbody>
             </table>
           </div>
@@ -2407,10 +2390,10 @@ export default function AdminViolationsTab({
                           {p.severity === 1
                             ? "1 - Nhẹ"
                             : p.severity === 2
-                            ? "2 - Vừa"
-                            : p.severity === 3
-                            ? "3 - Nghiêm trọng"
-                            : "4 - Rất nghiêm trọng"}
+                              ? "2 - Vừa"
+                              : p.severity === 3
+                                ? "3 - Nghiêm trọng"
+                                : "4 - Rất nghiêm trọng"}
                         </span>
                       </td>
                       <td>
@@ -2510,9 +2493,8 @@ export default function AdminViolationsTab({
                       {filteredUsersForPicker.map((u) => (
                         <div
                           key={u.id}
-                          className={`user-picker-item ${
-                            formUserId === u.id ? "selected" : ""
-                          }`}
+                          className={`user-picker-item ${formUserId === u.id ? "selected" : ""
+                            }`}
                           onClick={() => {
                             setFormUserId(u.id);
                             setFormUserSearch(
@@ -2714,9 +2696,8 @@ export default function AdminViolationsTab({
                       <button
                         key={d}
                         type="button"
-                        className={`day-pill-btn ${
-                          formRestrictDays === d ? "active" : ""
-                        }`}
+                        className={`day-pill-btn ${formRestrictDays === d ? "active" : ""
+                          }`}
                         onClick={() => setFormRestrictDays(d)}
                       >
                         {d === 0 ? "Không cấm" : `Cấm ${d} ngày`}
@@ -3256,7 +3237,7 @@ export default function AdminViolationsTab({
                             <input
                               type="checkbox"
                               checked={isSelected}
-                              onChange={() => {}}
+                              onChange={() => { }}
                               className="penalty-select-checkbox"
                             />
                             <div className="penalty-select-info">

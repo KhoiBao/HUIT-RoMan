@@ -21,6 +21,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
         private readonly IRepository<Domain.Entities.Room> _roomRepo;
         private readonly IRepository<Domain.Entities.Booking> _bookingRepo;
         private readonly IRepository<Domain.Entities.Notification> _notificationRepo;
+        private readonly IRepository<SessionReminder> _sessionReminderRepo;
         private readonly UserManager<User> _userManager;
         private readonly ICurrentUserService _currentUser;
         private readonly IEmailService _emailService;
@@ -39,6 +40,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
             _roomRepo = _unitOfWork.Repository<Domain.Entities.Room>();
             _bookingRepo = _unitOfWork.Repository<Domain.Entities.Booking>();
             _notificationRepo = _unitOfWork.Repository<Domain.Entities.Notification>();
+            _sessionReminderRepo = _unitOfWork.Repository<SessionReminder>();
             _userManager = userManager;
             _currentUser = currentUser;
             _emailService = emailService;
@@ -967,5 +969,223 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
         }
 
         private static string termMatch(string q) => q;
+    
+        // ─────────────────────────────────────────────────────────────────
+        // SESSION REMINDERS (QUY TẮC 3 LẦN NHẮC NHỞ)
+        // ─────────────────────────────────────────────────────────────────
+
+        public async Task<ApiResponse<IEnumerable<SessionReminderDto>>> GetRemindersAsync(
+            int? sessionId = null,
+            int? userId = null,
+            int? departmentId = null)
+        {
+            var reminders = await _sessionReminderRepo.FindAsync(
+                r => !r.IsDeleted &&
+                     (!sessionId.HasValue || r.UsageSessionId == sessionId.Value) &&
+                     (!userId.HasValue || r.UserId == userId.Value),
+                r => r.User,
+                r => r.User.Department,
+                r => r.Room,
+                r => r.Room.RoomType,
+                r => r.ViolationRecord
+            );
+
+            var list = reminders.ToList();
+
+            var effectiveDeptId = departmentId;
+            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
+            {
+                effectiveDeptId = _currentUser.DepartmentId.Value;
+            }
+
+            if (effectiveDeptId.HasValue)
+            {
+                list = list.Where(r =>
+                    (r.Room?.RoomType?.DepartmentId == effectiveDeptId.Value) ||
+                    (r.User?.DepartmentId == effectiveDeptId.Value)
+                ).ToList();
+            }
+
+            var dtos = list
+                .OrderByDescending(r => r.RemindedAt)
+                .Select(r => new SessionReminderDto
+                {
+                    Id = r.Id,
+                    SessionId = r.UsageSessionId,
+                    UserId = r.UserId,
+                    UserName = r.User?.UserName ?? "",
+                    UserFullName = r.User?.FullName ?? "",
+                    UserCardCode = r.User?.CardCode,
+                    RoomId = r.RoomId,
+                    RoomCode = r.Room?.RoomCode ?? "",
+                    RoomName = r.Room?.Name ?? "",
+                    Reason = r.Reason,
+                    Note = r.Note,
+                    RemindedAt = r.RemindedAt,
+                    RemindedByStaff = r.RemindedByStaff,
+                    WarningLevel = r.WarningLevel,
+                    EscalatedToViolation = r.EscalatedToViolation,
+                    ViolationCode = r.ViolationRecord?.Code,
+                    DepartmentId = r.Room?.RoomType?.DepartmentId ?? r.User?.DepartmentId
+                })
+                .ToList();
+
+            return ApiResponse<IEnumerable<SessionReminderDto>>.SuccessResponse(dtos);
+        }
+
+        public async Task<ApiResponse<SessionReminderDto>> AddReminderAsync(CreateSessionReminderDto request)
+        {
+            if (request == null)
+                return ApiResponse<SessionReminderDto>.ErrorResponse("Dữ liệu nhắc nhở không hợp lệ.");
+
+            var session = await _usageSessionRepo.GetByIdAsync(
+                request.SessionId,
+                s => s.BookingDetail,
+                s => s.BookingDetail.Room,
+                s => s.BookingDetail.Room.RoomType,
+                s => s.User);
+
+            if (session == null)
+                return ApiResponse<SessionReminderDto>.ErrorResponse("Không tìm thấy phiên sử dụng tương ứng.");
+
+            var room = session.BookingDetail?.Room;
+            var roomId = request.RoomId > 0 ? request.RoomId : (room?.Id ?? 0);
+            if (roomId == 0 && room != null) roomId = room.Id;
+
+            var user = session.User ?? await _userManager.FindByIdAsync(request.UserId.ToString());
+            if (user == null)
+                return ApiResponse<SessionReminderDto>.ErrorResponse("Không tìm thấy thông tin người mượn phòng.");
+
+            string staffName = "Cán bộ trực ban";
+            if (!string.IsNullOrWhiteSpace(request.RemindedByStaff))
+            {
+                staffName = request.RemindedByStaff.Trim();
+            }
+            else if (_currentUser.UserId.HasValue)
+            {
+                var curUser = await _userManager.FindByIdAsync(_currentUser.UserId.Value.ToString());
+                if (!string.IsNullOrWhiteSpace(curUser?.FullName))
+                    staffName = curUser.FullName;
+                else if (!string.IsNullOrWhiteSpace(curUser?.UserName))
+                    staffName = curUser.UserName;
+            }
+
+            var existingReminders = (await _sessionReminderRepo.FindAsync(
+                r => r.UsageSessionId == request.SessionId && !r.IsDeleted
+            )).OrderBy(r => r.RemindedAt).ToList();
+
+            int currentCount = existingReminders.Count;
+            int newCount = currentCount + 1;
+            bool isEscalated = false;
+            int? violationRecordId = null;
+            string? violationCode = null;
+
+            if (newCount > 3)
+            {
+                isEscalated = true;
+
+                var types = await _violationTypeRepo.GetAllAsync();
+                var vt = types.FirstOrDefault(t => t.Code == "VT02" || t.Code == "VT01" || t.Severity >= 2) ?? types.FirstOrDefault();
+                int vtId = vt?.Id ?? 1;
+
+                var previousReasons = string.Join(" | ", existingReminders.Select((r, i) => $"Lần {i + 1}: {r.Reason}"));
+                var fullDesc = $"[TÁI PHẠM NỘI QUY - VƯỢT QUÁ 3 LẦN NHẮC NHỞ] Phiên #{request.SessionId} tại phòng {room?.RoomCode} ({room?.Name}). Lý do vi phạm lần {newCount}: {request.Reason.Trim()}. {(!string.IsNullOrWhiteSpace(request.Note) ? $"Ghi chú: {request.Note.Trim()}. " : "")}Lịch sử các lần nhắc trước: [{previousReasons}]. Cán bộ thực hiện: {staffName}.";
+
+                var vrRes = await RecordViolationAsync(new RecordViolationDto
+                {
+                    UserId = request.UserId,
+                    UsageSessionId = request.SessionId,
+                    ViolationTypeId = vtId,
+                    IncidentTime = DateTime.UtcNow,
+                    Description = fullDesc,
+                    Severity = 2,
+                    PenaltyApplied = "Lập biên bản vi phạm do tái phạm sau 3 lần nhắc nhở & Cấm mượn phòng 3 ngày",
+                    RestrictDays = 3,
+                    Status = "Chờ xử lý"
+                });
+
+                if (vrRes.Success && vrRes.Data != null)
+                {
+                    violationRecordId = vrRes.Data.Id;
+                    violationCode = vrRes.Data.Code;
+                }
+
+                var notif = new Domain.Entities.Notification
+                {
+                    UserId = request.UserId,
+                    Title = $"[BIÊN BẢN VI PHẠM KỶ LUẬT] Lập biên bản vi phạm do quá 3 lần nhắc nhở",
+                    Content = $"Do bạn đã bị cán bộ trực ban nhắc nhở quá 3 lần tại phòng {room?.RoomCode} ({room?.Name}) nhưng vẫn tái phạm nội quy ({request.Reason.Trim()}), hệ thống đã chính thức thiết lập Biên bản vi phạm {(!string.IsNullOrWhiteSpace(violationCode) ? $"#{violationCode}" : "")} và ban hành lệnh cấm mượn phòng 3 ngày.",
+                    Type = 4,
+                    SentAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _notificationRepo.AddAsync(notif);
+            }
+            else
+            {
+                var notif = new Domain.Entities.Notification
+                {
+                    UserId = request.UserId,
+                    Title = $"[CẢNH BÁO NHẮC NHỞ LẦN {newCount}/3] Phòng {room?.RoomCode ?? "học"}",
+                    Content = $"Cán bộ trực ban ({staffName}) gửi lời nhắc nhở tại phòng {room?.RoomCode} ({room?.Name}): \"{request.Reason.Trim()}\". {(!string.IsNullOrWhiteSpace(request.Note) ? $"Chi tiết: {request.Note.Trim()}. " : "")}Bạn đã bị nhắc nhở {newCount}/3 lần. Lưu ý: Theo quy chế HUIT, nếu bị nhắc nhở quá 3 lần, hệ thống sẽ tự động lập biên bản vi phạm và cấm mượn phòng!",
+                    Type = 4,
+                    SentAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _notificationRepo.AddAsync(notif);
+            }
+
+            var reminder = new SessionReminder
+            {
+                UsageSessionId = request.SessionId,
+                UserId = request.UserId,
+                RoomId = roomId,
+                Reason = request.Reason.Trim(),
+                Note = request.Note?.Trim(),
+                WarningLevel = newCount,
+                RemindedByStaff = staffName,
+                RemindedAt = DateTime.UtcNow,
+                EscalatedToViolation = isEscalated,
+                ViolationRecordId = violationRecordId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _sessionReminderRepo.AddAsync(reminder);
+            await _unitOfWork.SaveChangesAsync();
+
+            var dto = new SessionReminderDto
+            {
+                Id = reminder.Id,
+                SessionId = reminder.UsageSessionId,
+                UserId = reminder.UserId,
+                UserName = user.UserName ?? "",
+                UserFullName = user.FullName ?? "",
+                UserCardCode = user.CardCode,
+                RoomId = reminder.RoomId,
+                RoomCode = room?.RoomCode ?? "",
+                RoomName = room?.Name ?? "",
+                Reason = reminder.Reason,
+                Note = reminder.Note,
+                RemindedAt = reminder.RemindedAt,
+                RemindedByStaff = reminder.RemindedByStaff,
+                WarningLevel = reminder.WarningLevel,
+                EscalatedToViolation = reminder.EscalatedToViolation,
+                ViolationCode = violationCode,
+                DepartmentId = room?.RoomType?.DepartmentId ?? user.DepartmentId
+            };
+
+            return ApiResponse<SessionReminderDto>.SuccessResponse(dto, "Ghi nhận nhắc nhở thành công.");
+        }
+
+        public async Task<ApiResponse<bool>> ClearRemindersForSessionAsync(int sessionId)
+        {
+            var reminders = await _sessionReminderRepo.FindAsync(r => r.UsageSessionId == sessionId);
+            foreach (var r in reminders)
+            {
+                _sessionReminderRepo.Remove(r);
+            }
+            await _unitOfWork.SaveChangesAsync();
+            return ApiResponse<bool>.SuccessResponse(true, "Đã xóa toàn bộ nhắc nhở của phiên sử dụng.");
+        }
     }
 }
