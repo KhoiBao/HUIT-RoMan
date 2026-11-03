@@ -5263,10 +5263,67 @@
 .admin-custom-table td:nth-child(3) { min-width: 220px; }
 
 
-/* Dialogs must stay reachable on short screens */
-.admin-modal-content {
+/* Dialogs structure: outer container pinned, only modal-body scrolls (avoids dual scrollbars) */
+.admin-modal-content,
+.admin-modal-box {
   max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+}
+
+.admin-modal-content > form,
+.admin-modal-box > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-modal-content .modal-header,
+.admin-modal-box .modal-header {
+  flex-shrink: 0;
+}
+
+.admin-modal-content .modal-body,
+.admin-modal-box .modal-body {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.admin-modal-content .modal-footer,
+.admin-modal-box .modal-footer {
+  flex-shrink: 0;
+}
+
+.admin-modal-content .modal-body::-webkit-scrollbar,
+.admin-modal-box .modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+.admin-modal-content .modal-body::-webkit-scrollbar-track,
+.admin-modal-box .modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-modal-content .modal-body::-webkit-scrollbar-thumb,
+.admin-modal-box .modal-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.admin-modal-content .modal-body::-webkit-scrollbar-thumb:hover,
+.admin-modal-box .modal-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.admin-workspace-layout.dark-mode .admin-modal-content .modal-body::-webkit-scrollbar-thumb,
+.admin-workspace-layout.dark-mode .admin-modal-box .modal-body::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+.admin-workspace-layout.dark-mode .admin-modal-content .modal-body::-webkit-scrollbar-thumb:hover,
+.admin-workspace-layout.dark-mode .admin-modal-box .modal-body::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 /* Global search close button holds an icon, not the word Esc */
@@ -5867,16 +5924,19 @@
 .btn-action-remind {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
   background-color: #fef3c7;
   color: #92400e;
   border: 1px solid #fde68a;
   border-radius: 6px;
-  padding: 5px 9px;
-  font-size: 11.5px;
-  font-weight: 600;
+  padding: 5px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 .btn-action-remind:hover {
   background-color: #fde68a;
@@ -5903,6 +5963,36 @@
   color: #991b1b;
 }
 
+.admin-workspace-layout.dark-mode .btn-action-remind {
+  background-color: #3b2d18;
+  border-color: #78521a;
+  color: #fde047;
+}
+.admin-workspace-layout.dark-mode .btn-action-remind:hover {
+  background-color: #4a381e;
+  border-color: #a16207;
+  color: #fef08a;
+}
+.admin-workspace-layout.dark-mode .btn-action-remind.btn-remind-active {
+  background-color: #432212;
+  border-color: #9a4718;
+  color: #fdba74;
+}
+.admin-workspace-layout.dark-mode .btn-action-remind.btn-remind-active:hover {
+  background-color: #552b17;
+  border-color: #c2410c;
+  color: #fed7aa;
+}
+.admin-workspace-layout.dark-mode .btn-action-remind.btn-remind-danger {
+  background-color: #451a1a;
+  border-color: #991b1b;
+  color: #fca5a5;
+}
+.admin-workspace-layout.dark-mode .btn-action-remind.btn-remind-danger:hover {
+  background-color: #5c2323;
+  color: #fee2e2;
+}
+
 @keyframes pulse-border {
   0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
   70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
@@ -5920,6 +6010,8 @@
   border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .reminder-tag-badge:hover {
   filter: brightness(0.95);
@@ -6172,9 +6264,18 @@
 }
 
 /* UserProfileModal dark-mode enhancements */
+.admin-workspace-layout.dark-mode .user-profile-modal-box {
+  background: var(--rp-surface);
+}
 .admin-workspace-layout.dark-mode .user-profile-body {
   background: var(--rp-surface);
   color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .user-profile-body::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+.admin-workspace-layout.dark-mode .user-profile-body::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 .admin-workspace-layout.dark-mode .profile-section-card {
   background: var(--rp-soft);
@@ -6191,14 +6292,70 @@
   border-top-color: var(--rp-border);
 }
 .admin-workspace-layout.dark-mode .user-violation-item {
-  background: var(--rp-surface);
+  background: var(--rp-soft);
   border-color: var(--rp-border);
+  box-shadow: none;
+}
+.admin-workspace-layout.dark-mode .user-violation-item:hover {
+  border-color: var(--rp-accent);
+}
+.admin-workspace-layout.dark-mode .user-violation-item.item-active-restriction {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 4px solid #ef4444;
+}
+.admin-workspace-layout.dark-mode .violation-item-header {
+  border-bottom-color: var(--rp-border);
 }
 .admin-workspace-layout.dark-mode .violation-item-code {
   color: var(--rp-title);
 }
 .admin-workspace-layout.dark-mode .violation-item-body {
   color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .violation-type-label {
+  color: var(--rp-title);
+}
+.admin-workspace-layout.dark-mode .violation-desc-text {
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .violation-desc-label {
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .violation-penalty-pill {
+  background: rgba(220, 38, 38, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+.admin-workspace-layout.dark-mode .violation-penalty-tag {
+  color: #f87171;
+}
+.admin-workspace-layout.dark-mode .violation-penalty-value {
+  color: #fecdd3;
+}
+.admin-workspace-layout.dark-mode .violation-item-meta {
+  border-top-color: var(--rp-border);
+  color: var(--rp-muted);
+}
+.admin-workspace-layout.dark-mode .violation-severity-tag.severity-1 {
+  background: var(--rp-surface);
+  color: var(--rp-muted);
+  border-color: var(--rp-border);
+}
+.admin-workspace-layout.dark-mode .violation-severity-tag.severity-2 {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.admin-workspace-layout.dark-mode .violation-severity-tag.severity-3 {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.admin-workspace-layout.dark-mode .violation-restriction-badge {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.35);
 }
 .admin-workspace-layout.dark-mode .empty-violations-box {
   background: rgba(22, 101, 52, 0.15);
@@ -6217,4 +6374,467 @@
 }
 .admin-workspace-layout.dark-mode .admin-data-table tbody tr.admin-clickable-row:hover {
   background-color: #27354f !important;
+}
+
+.admin-workspace-layout.dark-mode .penalties-picker-wrapper {
+  background: var(--rp-soft);
+  border-color: var(--rp-border);
+}
+.admin-workspace-layout.dark-mode .penalty-chip-btn {
+  background: var(--rp-surface);
+  border-color: var(--rp-border);
+  color: var(--rp-text);
+}
+.admin-workspace-layout.dark-mode .penalty-chip-btn.active {
+  background: var(--rp-accent);
+  color: #ffffff;
+}
+.admin-workspace-layout.dark-mode .penalty-select-item {
+  background: var(--rp-surface);
+  border-color: var(--rp-border);
+}
+.admin-workspace-layout.dark-mode .penalty-select-item:hover {
+  background: var(--rp-soft);
+}
+.admin-workspace-layout.dark-mode .penalty-select-item.selected {
+  background: rgba(2, 132, 199, 0.15);
+  border-color: #38bdf8;
+}
+.admin-workspace-layout.dark-mode .penalty-select-name {
+  color: var(--rp-title);
+}
+
+/* Incident Reports & Maintenance Styling */
+.severity-pill-danger {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  font-weight: 600;
+}
+.severity-pill-warning {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #b45309;
+  font-weight: 600;
+}
+.severity-pill-info {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #15803d;
+  font-weight: 600;
+}
+.border-orange {
+  border-left: 4px solid #ea580c !important;
+}
+.border-warning {
+  border-left: 4px solid #d97706 !important;
+}
+.border-success {
+  border-left: 4px solid #16a34a !important;
+}
+.text-orange {
+  color: #ea580c !important;
+}
+.text-warning {
+  color: #d97706 !important;
+}
+.text-success {
+  color: #16a34a !important;
+}
+
+.admin-workspace-layout.dark-mode .severity-pill-danger {
+  background: #451a1a;
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+.admin-workspace-layout.dark-mode .severity-pill-warning {
+  background: #422006;
+  border-color: #78350f;
+  color: #fcd34d;
+}
+.admin-workspace-layout.dark-mode .severity-pill-info {
+  background: #14351f;
+  border-color: #1f5c3a;
+  color: #86efac;
+}
+
+/* Session Detail Modal Action Buttons */
+.btn-action-create-violation,
+.btn-modal-action-violation {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-action-create-violation:hover,
+.btn-modal-action-violation:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.btn-action-resolve {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  padding: 5px;
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.btn-action-resolve:hover {
+  background-color: #bbf7d0;
+  border-color: #4ade80;
+  color: #166534;
+}
+.admin-workspace-layout.dark-mode .btn-action-resolve {
+  background-color: #14351f;
+  border-color: #1f5c3a;
+  color: #86efac;
+}
+.admin-workspace-layout.dark-mode .btn-action-resolve:hover {
+  background-color: #1b492b;
+  border-color: #22c55e;
+  color: #bbf7d0;
+}
+
+.btn-modal-action-remind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-modal-action-remind:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.btn-modal-action-remind.is-active {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0369a1;
+}
+
+.btn-modal-action-remind.is-danger {
+  background: #fdf2f8;
+  border-color: #fbcfe8;
+  color: #be185d;
+}
+
+.admin-workspace-layout.dark-mode .btn-action-create-violation,
+.admin-workspace-layout.dark-mode .btn-modal-action-violation {
+  background: #451a1a;
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+.admin-workspace-layout.dark-mode .btn-action-create-violation:hover,
+.admin-workspace-layout.dark-mode .btn-modal-action-violation:hover {
+  background: #5c2323;
+  color: #fee2e2;
+}
+
+.admin-workspace-layout.dark-mode .btn-modal-action-remind {
+  background: #172554;
+  border-color: #1e3a8a;
+  color: #93c5fd;
+}
+
+.admin-workspace-layout.dark-mode .btn-modal-action-remind:hover {
+  background: #1e3a8a;
+  color: #bfdbfe;
+}
+
+/* Filter Reset & Toolbar Action Buttons */
+.filter-reset-btn,
+.btn-link-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.filter-reset-btn:hover,
+.btn-link-reset:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+.admin-workspace-layout.dark-mode .filter-reset-btn,
+.admin-workspace-layout.dark-mode .btn-link-reset {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+.admin-workspace-layout.dark-mode .filter-reset-btn:hover,
+.admin-workspace-layout.dark-mode .btn-link-reset:hover {
+  background: #334155;
+  color: #f1f5f9;
+  border-color: #475569;
+}
+
+/* ── INCIDENT MODALS (CREATE & EDIT MODAL FIX) ─────────────────────────── */
+.admin-modal-box.modal-medium {
+  max-width: 660px;
+  width: 95%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin-modal-form-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.modal-body-scrollable {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.modal-body-scrollable::-webkit-scrollbar {
+  width: 6px;
+}
+.modal-body-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modal-body-scrollable::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.modal-body-scrollable::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.modal-footer-pinned {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.admin-workspace-layout.dark-mode .modal-body-scrollable::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+.admin-workspace-layout.dark-mode .modal-body-scrollable::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+.admin-workspace-layout.dark-mode .modal-footer-pinned {
+  background: #0f172a;
+  border-top-color: #334155;
+}
+
+/* ── KPI Mini Cards (Reminders & Monitoring) ─────────────────────────── */
+.kpi-mini-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justifyContent: space-between;
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-height: 96px;
+  box-sizing: border-box;
+}
+
+.kpi-mini-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.kpi-mini-card .kpi-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.35;
+  display: block;
+}
+
+.kpi-mini-card .kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 2px 0;
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-mini-card .kpi-subtext {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.35;
+  display: block;
+}
+
+.kpi-mini-card .kpi-value.color-blue {
+  color: #2563eb;
+}
+
+.kpi-mini-card .kpi-value.color-amber {
+  color: #d97706;
+}
+
+.kpi-mini-card .kpi-value.color-red {
+  color: #dc2626;
+}
+
+.admin-workspace-layout.dark-mode .kpi-mini-card {
+  background: #182234 !important;
+  border-color: #243047 !important;
+}
+
+.admin-workspace-layout.dark-mode .kpi-mini-card .kpi-label,
+.admin-workspace-layout.dark-mode .kpi-mini-card .kpi-subtext {
+  color: #94a3b8 !important;
+}
+
+/* ── Check-in & No-Show button disabled states ──────────────────────────── */
+.btn-table-action.btn-checkin:disabled,
+.btn-table-action.btn-checkin.is-disabled,
+.btn-modal-submit.is-disabled,
+.btn-modal-submit:disabled {
+  background-color: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+  color: #94a3b8 !important;
+  cursor: not-allowed !important;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.btn-table-action.btn-noshow:disabled,
+.btn-table-action.btn-noshow.is-disabled,
+.btn-danger-outline.is-disabled,
+.btn-danger-outline:disabled {
+  border-color: #e2e8f0 !important;
+  color: #cbd5e1 !important;
+  cursor: not-allowed !important;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.admin-workspace-layout.dark-mode .btn-table-action.btn-checkin:disabled,
+.admin-workspace-layout.dark-mode .btn-table-action.btn-checkin.is-disabled,
+.admin-workspace-layout.dark-mode .btn-modal-submit.is-disabled,
+.admin-workspace-layout.dark-mode .btn-modal-submit:disabled {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #64748b !important;
+}
+
+.admin-workspace-layout.dark-mode .btn-table-action.btn-noshow:disabled,
+.admin-workspace-layout.dark-mode .btn-table-action.btn-noshow.is-disabled,
+.admin-workspace-layout.dark-mode .btn-danger-outline.is-disabled,
+.admin-workspace-layout.dark-mode .btn-danger-outline:disabled {
+  border-color: #334155 !important;
+  color: #475569 !important;
+}
+
+/* ── Universal Modal Scrolling & Fixed Footer Rules ────────────────────────── */
+.admin-modal-overlay {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+  background-color: rgba(15, 23, 42, 0.6) !important;
+  padding: 16px !important;
+  box-sizing: border-box !important;
+  overflow-y: auto !important;
+}
+
+.admin-modal-box {
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: min(90vh, calc(100vh - 48px)) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+}
+
+.admin-modal-box .admin-modal-form-wrap,
+.admin-modal-box form.modal-form,
+.admin-modal-box .modal-form {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+
+.admin-modal-box .modal-body-scrollable,
+.admin-modal-box .modal-form {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.admin-modal-box .modal-footer-pinned {
+  flex-shrink: 0 !important;
+  background: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+  padding: 14px 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+}
+
+.admin-workspace-layout.dark-mode .admin-modal-box .modal-footer-pinned {
+  background: #0f172a !important;
+  border-top-color: #334155 !important;
 }

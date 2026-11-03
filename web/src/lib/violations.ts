@@ -186,6 +186,7 @@ export async function fetchViolations(params?: {
   status?: string;
   fromDate?: string;
   toDate?: string;
+  departmentId?: number;
 }): Promise<ViolationRecordItem[]> {
   const res = await api.get("/api/Violations", { params });
   return res.data?.data || res.data || [];
@@ -219,6 +220,7 @@ export async function deleteViolation(id: number): Promise<boolean> {
 export async function fetchRestrictions(params?: {
   status?: string;
   search?: string;
+  departmentId?: number;
 }): Promise<UserRestrictionItem[]> {
   const res = await api.get("/api/Violations/restrictions", { params });
   return res.data?.data || res.data || [];
@@ -288,8 +290,10 @@ export async function checkUserEligibility(
   );
 }
 
-export async function fetchViolationStats(): Promise<ViolationStats> {
-  const res = await api.get("/api/Violations/stats");
+export async function fetchViolationStats(departmentId?: number): Promise<ViolationStats> {
+  const res = await api.get("/api/Violations/stats", {
+    params: departmentId ? { departmentId } : undefined,
+  });
   return (
     res.data?.data || {
       totalRecords: 0,

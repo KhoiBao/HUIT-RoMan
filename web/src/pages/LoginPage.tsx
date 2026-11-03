@@ -121,7 +121,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} noValidate>
             <label className="field">
               <span>
-                Email HUIT <b>*</b>
+                Mã số thẻ HUIT <b>*</b>
               </span>
               <div className="input-wrap">
                 <span className="input-icon">
@@ -130,7 +130,7 @@ export default function LoginPage() {
                 <input
                   type="text"
                   autoComplete="username"
-                  placeholder="VD: username@huit.edu.vn"
+                  placeholder="VD: 2000111222"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                 />

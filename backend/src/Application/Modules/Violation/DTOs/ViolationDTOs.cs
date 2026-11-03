@@ -197,6 +197,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.DTOs
         public string? Status { get; set; }
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
+        public int? DepartmentId { get; set; }
     }
 
     public class ViolationStatsDto

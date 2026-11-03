@@ -15,9 +15,9 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
         Task<ApiResponse<bool>> DeleteShiftAsync(int id);
         Task<ApiResponse<ShiftDto>> UpdateShiftStatusAsync(int id, string status);
         Task<ApiResponse<ShiftDto>> AssignEmployeesAsync(int id, List<int> employeeIds);
-        Task<ApiResponse<IEnumerable<ShiftLogDto>>> GetShiftLogsAsync(int? employeeId = null, DateTime? fromDate = null, DateTime? toDate = null);
+        Task<ApiResponse<IEnumerable<ShiftLogDto>>> GetShiftLogsAsync(int? employeeId = null, DateTime? fromDate = null, DateTime? toDate = null, int? departmentId = null);
         Task<ApiResponse<ShiftLogDto>> CreateShiftLogAsync(CreateShiftLogDto dto);
         Task<ApiResponse<IEnumerable<ShiftDto>>> GetMyShiftsAsync(DateTime? fromDate = null, DateTime? toDate = null);
-        Task<ApiResponse<ShiftStatsDto>> GetShiftStatsAsync();
+        Task<ApiResponse<ShiftStatsDto>> GetShiftStatsAsync(int? departmentId = null);
     }
 }

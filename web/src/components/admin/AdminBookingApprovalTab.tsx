@@ -28,6 +28,7 @@ import {
 } from "../../lib/booking";
 import { ApprovalHistoryModal } from "../ApprovalHistoryModal";
 import AdminPagination from "../common/AdminPagination";
+import { formatDateTime24h } from "../../lib/dateTimeFormat";
 
 export interface BookingDetail {
   id: number;
@@ -854,14 +855,7 @@ export default function AdminBookingApprovalTab({
                     )}
                     {b.checkedInAt && (
                       <div className="booking-checkedin-notice">
-                        Đã nhận phòng lúc{" "}
-                        {new Date(b.checkedInAt).toLocaleString("vi-VN", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                        })}
+                        Đã nhận phòng lúc {formatDateTime24h(b.checkedInAt)}
                       </div>
                     )}
                   </div>

@@ -27,6 +27,7 @@ import {
   ChatIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
+import { formatTime24h } from "../../lib/dateTimeFormat";
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
@@ -636,12 +637,7 @@ export default function AdminChatTab({ onNotify }: Props) {
                           {c.userName || "Người dùng"}
                         </span>
                         <span style={{ fontSize: "10.5px", color: "#94a3b8", flexShrink: 0, marginLeft: "6px" }}>
-                          {c.lastMessageTime
-                            ? new Date(c.lastMessageTime).toLocaleTimeString("vi-VN", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                            : ""}
+                          {c.lastMessageTime ? formatTime24h(c.lastMessageTime) : ""}
                         </span>
                       </div>
 
@@ -1083,10 +1079,7 @@ export default function AdminChatTab({ onNotify }: Props) {
                               padding: "0 2px",
                             }}
                           >
-                            {new Date(m.sentAt).toLocaleTimeString("vi-VN", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {formatTime24h(m.sentAt)}
                           </span>
                         </div>
                       </div>

@@ -5482,13 +5482,16 @@ body {
 }
 
 .modal-form,
-.modal-form-body {
+.modal-form-body,
+.modal-body {
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
   box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .modal-actions-row,
@@ -5811,13 +5814,18 @@ body {
    USER PROFILE MODAL
    ═══════════════════════════════════════════════════════════════════════════ */
 .user-profile-modal-box {
+  width: 100%;
   max-width: 540px;
-  border-radius: 12px;
+  max-height: 88vh;
+  border-radius: 14px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 }
 
 .user-profile-header-banner {
+  flex-shrink: 0;
   background: linear-gradient(135deg, #004473 0%, #00558f 60%, #0284c7 100%);
   color: #ffffff;
   padding: 20px 24px;
@@ -5924,11 +5932,30 @@ body {
 }
 
 .user-profile-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px 24px 24px;
   display: flex;
   flex-direction: column;
   gap: 16px;
   background: #ffffff;
+  overscroll-behavior: contain;
+}
+
+.user-profile-body::-webkit-scrollbar {
+  width: 6px;
+}
+.user-profile-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.user-profile-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.user-profile-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .profile-loading-state {
@@ -6021,13 +6048,244 @@ body {
   margin-top: 4px;
 }
 
-.user-profile-footer {
+/* User Profile Violations & Sanctions */
+.user-profile-violations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-violation-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease;
+}
+
+.user-violation-item:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.06);
+}
+
+.user-violation-item.item-active-restriction {
+  border-color: #fca5a5;
+  background: #fffafa;
+  border-left: 4px solid #ef4444;
+}
+
+.violation-item-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 4px;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.violation-item-code {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: -0.2px;
+}
+
+.violation-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.violation-status-badge.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.violation-status-badge.status-resolved {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.violation-status-badge.status-fined {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+}
+
+.violation-status-badge.status-cancelled {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.violation-status-badge.status-restricted {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.violation-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.violation-type-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.violation-type-label {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.violation-severity-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 4px;
+  line-height: 1.3;
+}
+
+.violation-severity-tag.severity-1 {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.violation-severity-tag.severity-2 {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.violation-severity-tag.severity-3 {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.violation-desc-text {
+  color: #475569;
+  font-size: 12.5px;
+  word-break: break-word;
+}
+
+.violation-desc-label {
+  font-weight: 600;
+  color: #64748b;
+  margin-right: 4px;
+}
+
+.violation-penalty-pill {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.violation-penalty-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  color: #be123c;
+  flex-shrink: 0;
+}
+
+.violation-penalty-value {
+  color: #881337;
+  font-weight: 600;
+}
+
+.violation-item-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11.5px;
+  color: #64748b;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  margin-top: 2px;
+}
+
+.violation-meta-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.violation-meta-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.violation-restriction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 11.5px;
+}
+
+.empty-violations-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #166534;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.user-profile-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0;
+  padding: 14px 24px 18px;
+  background: #ffffff;
   border-top: 1px solid #e2e8f0;
-  padding-top: 14px;
 }
 
 .btn-profile-logout {
@@ -11436,4 +11694,132 @@ button.admin-status-pill:disabled {
   .user-bookings-search-input {
     width: 100%;
   }
+}
+
+/* Penalties Multi-Select & Management */
+.penalties-picker-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.penalties-picker-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.penalties-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.penalty-chip-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.penalty-chip-btn:hover {
+  background: #f1f5f9;
+}
+
+.penalty-chip-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+  font-weight: 600;
+}
+
+.penalties-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.penalty-select-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.penalty-select-item:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.penalty-select-item.selected {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 1px #0284c7;
+}
+
+.penalty-select-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #0284c7;
+  flex-shrink: 0;
+}
+
+.penalty-select-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.penalty-select-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  word-break: break-word;
+}
+
+.penalty-select-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.penalty-meta-restrict {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 10.5px;
+}
+
+.penalty-meta-custom {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 10.5px;
 }

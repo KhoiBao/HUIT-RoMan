@@ -4,6 +4,7 @@ import {
   type ApprovalHistoryItem,
 } from "../lib/booking";
 import { ClipboardListIcon, UsersIcon } from "./Icon";
+import { formatDateTime24h } from "../lib/dateTimeFormat";
 
 interface ApprovalHistoryModalProps {
   isOpen: boolean;
@@ -14,14 +15,7 @@ interface ApprovalHistoryModalProps {
 
 function formatDateTime(isoString: string): string {
   try {
-    const d = new Date(isoString);
-    return d.toLocaleString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatDateTime24h(isoString);
   } catch {
     return isoString;
   }

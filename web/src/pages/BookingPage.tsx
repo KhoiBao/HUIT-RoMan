@@ -82,6 +82,8 @@ import {
   type UsageSessionItem,
 } from "../lib/usage";
 import { useConfirm } from "../context/ConfirmContext";
+import { TimeSelect24h } from "../components/common/TimeSelect24h";
+import { formatTime24h, formatDateVN, formatDateTime24h } from "../lib/dateTimeFormat";
 
 function shouldHideConfirmationCode(
   booking: BookingResponse,
@@ -115,9 +117,15 @@ export default function BookingPage() {
 
   // Form State
   const studentSlot = getNextStudentBookingSlot();
+  const isPastEveningHours = new Date().getHours() >= 18;
+  const tomorrowDateStr = toISODateString(new Date(Date.now() + 86400000));
   const defaultDate =
     searchParams.get("date") ||
-    (isStudent ? studentSlot.date : toISODateString(new Date()));
+    (isStudent
+      ? studentSlot.date
+      : isPastEveningHours
+        ? tomorrowDateStr
+        : toISODateString(new Date()));
   const initialRoomId = Number(searchParams.get("roomId")) || null;
   const initialStartPeriod = Number(searchParams.get("startPeriodId")) || 1;
   const initialEndPeriod = Number(searchParams.get("endPeriodId")) || 2;
@@ -1148,8 +1156,8 @@ export default function BookingPage() {
     const firstDetail = booking.details?.[0];
     const roomLabel = (booking.details || []).map((d) => d.roomCode || `#${d.roomId}`).join(", ") || "—";
     const timeLabel = startAt
-      ? `${startAt.toLocaleDateString("vi-VN")} • ${
-          firstDetail ? formatDetailTimeRange(firstDetail) : `${startAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`
+      ? `${formatDateVN(startAt)} • ${
+          firstDetail ? formatDetailTimeRange(firstDetail) : formatTime24h(startAt)
         }`
       : "—";
 
@@ -1589,20 +1597,19 @@ export default function BookingPage() {
                         <label className="form-label" htmlFor="start-time">
                           Giờ bắt đầu: <span className="req">*</span>
                         </label>
-                        <input
+                        <TimeSelect24h
                           id="start-time"
-                          type="time"
                           className={`form-input ${
                             errors.startTime ? "input-error" : ""
                           }`}
                           value={form.startTime}
-                          min={isStudent ? STUDENT_OPEN_TIME : undefined}
-                          max={isStudent ? STUDENT_CLOSE_TIME : undefined}
-                          step={isStudent ? 900 : undefined}
-                          onChange={(e) =>
+                          minTime={isStudent ? STUDENT_OPEN_TIME : "07:00"}
+                          maxTime={isStudent ? STUDENT_CLOSE_TIME : "21:30"}
+                          stepMinutes={15}
+                          onChange={(val) =>
                             setForm((prev) => ({
                               ...prev,
-                              startTime: e.target.value,
+                              startTime: val,
                             }))
                           }
                         />
@@ -1615,20 +1622,19 @@ export default function BookingPage() {
                         <label className="form-label" htmlFor="end-time">
                           Giờ kết thúc: <span className="req">*</span>
                         </label>
-                        <input
+                        <TimeSelect24h
                           id="end-time"
-                          type="time"
                           className={`form-input ${
                             errors.endTime ? "input-error" : ""
                           }`}
                           value={form.endTime}
-                          min={isStudent ? form.startTime : undefined}
-                          max={isStudent ? STUDENT_CLOSE_TIME : undefined}
-                          step={isStudent ? 900 : undefined}
-                          onChange={(e) =>
+                          minTime={form.startTime || (isStudent ? STUDENT_OPEN_TIME : "07:00")}
+                          maxTime={isStudent ? STUDENT_CLOSE_TIME : "21:30"}
+                          stepMinutes={15}
+                          onChange={(val) =>
                             setForm((prev) => ({
                               ...prev,
-                              endTime: e.target.value,
+                              endTime: val,
                             }))
                           }
                         />
@@ -1892,7 +1898,9 @@ export default function BookingPage() {
                       <InfoIcon size={32} />
                       <h4>Không tìm thấy phòng trống phù hợp</h4>
                       <p>
-                        {isStudent
+                        {submitError
+                          ? submitError
+                          : isStudent
                           ? "Phòng học nhóm và phòng thuyết trình trong khung giờ này đã có lịch hoặc đang bảo trì. Bạn vui lòng chọn khung giờ khác trong 07:00 – 20:00."
                           : form.bookingMode === "time"
                             ? timeRoomScope === "hall"
@@ -2715,7 +2723,7 @@ export default function BookingPage() {
                       <div className="user-modal-summary-row">
                         <span>Nhận phòng lúc:</span>
                         <span>
-                          {new Date(viewingDetailItem.session.actualCheckIn).toLocaleString("vi-VN")}
+                          {formatDateTime24h(viewingDetailItem.session.actualCheckIn)}
                         </span>
                       </div>
                     )}
@@ -2723,7 +2731,7 @@ export default function BookingPage() {
                       <div className="user-modal-summary-row">
                         <span>Trả phòng lúc:</span>
                         <span>
-                          {new Date(viewingDetailItem.session.actualCheckOut).toLocaleString("vi-VN")}
+                          {formatDateTime24h(viewingDetailItem.session.actualCheckOut)}
                         </span>
                       </div>
                     )}

@@ -75,10 +75,10 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
                 }));
             }
 
-            if ((_currentUser.Role == "Manager" || _currentUser.Role == "Employee") && _currentUser.DepartmentId.HasValue)
+            if (!_currentUser.IsAdmin && (_currentUser.Role == "Manager" || _currentUser.Role == "Employee") && _currentUser.DepartmentId.HasValue)
             {
                 var myDeptId = _currentUser.DepartmentId.Value;
-                query = query.Where(s => !s.Employees.Any() || s.Employees.Any(e =>
+                query = query.Where(s => s.Employees.Any(e =>
                 {
                     if (allEmployees.TryGetValue(e.Id, out var fullEmp))
                     {
@@ -141,11 +141,17 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
             if (dto.StartTime >= dto.EndTime)
                 return ApiResponse<ShiftDto>.ErrorResponse("Giờ bắt đầu ca trực phải trước giờ kết thúc.");
 
-            // Kiểm tra trùng lặp thời gian với các ca trực khác trong cùng ngày (trừ ca đã Hủy)
-            var allShifts = await _shiftRepo.GetAllAsync();
+            // Kiểm tra trùng lặp thời gian với các ca trực khác trong cùng ngày thuộc cùng đơn vị (trừ ca đã Hủy)
+            var allShifts = await _shiftRepo.GetAllAsync(s => s.Employees);
+            var allEmpsForCheck = (await _employeeRepo.GetAllAsync(e => e.User)).ToDictionary(e => e.Id);
+            var targetDeptId = (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
+                ? _currentUser.DepartmentId.Value
+                : (dto.EmployeeIds != null && dto.EmployeeIds.Any() && allEmpsForCheck.TryGetValue(dto.EmployeeIds.First(), out var fe) ? fe.User?.DepartmentId : null);
+
             var shiftDate = dto.Date.Date;
             var overlappingShift = allShifts
                 .Where(s => s.Date.Date == shiftDate && s.Status != "Hủy")
+                .Where(s => !targetDeptId.HasValue || s.Employees.Any(e => allEmpsForCheck.TryGetValue(e.Id, out var emp) && emp.User?.DepartmentId == targetDeptId.Value))
                 .FirstOrDefault(s => dto.StartTime < s.EndTime && dto.EndTime > s.StartTime);
 
             if (overlappingShift != null)
@@ -209,11 +215,17 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
             if (dto.StartTime >= dto.EndTime)
                 return ApiResponse<ShiftDto>.ErrorResponse("Giờ bắt đầu ca trực phải trước giờ kết thúc.");
 
-            // Kiểm tra trùng lặp thời gian với các ca trực khác trong cùng ngày (trừ chính ca đang sửa và ca đã Hủy)
-            var allExistingShifts = await _shiftRepo.GetAllAsync();
+            // Kiểm tra trùng lặp thời gian với các ca trực khác trong cùng ngày thuộc cùng đơn vị (trừ chính ca đang sửa và ca đã Hủy)
+            var allExistingShifts = await _shiftRepo.GetAllAsync(s => s.Employees);
+            var allEmpsForCheck = (await _employeeRepo.GetAllAsync(e => e.User)).ToDictionary(e => e.Id);
+            var targetDeptId = (!_currentUser.IsAdmin && _currentUser.DepartmentId.HasValue)
+                ? _currentUser.DepartmentId.Value
+                : (dto.EmployeeIds != null && dto.EmployeeIds.Any() && allEmpsForCheck.TryGetValue(dto.EmployeeIds.First(), out var fe) ? fe.User?.DepartmentId : null);
+
             var updateShiftDate = dto.Date.Date;
             var updateOverlap = allExistingShifts
                 .Where(s => s.Id != id && s.Date.Date == updateShiftDate && s.Status != "Hủy")
+                .Where(s => !targetDeptId.HasValue || s.Employees.Any(e => allEmpsForCheck.TryGetValue(e.Id, out var emp) && emp.User?.DepartmentId == targetDeptId.Value))
                 .FirstOrDefault(s => dto.StartTime < s.EndTime && dto.EndTime > s.StartTime);
 
             if (updateOverlap != null)
@@ -367,10 +379,21 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
         // 8. SHIFT LOGS
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<IEnumerable<ShiftLogDto>>> GetShiftLogsAsync(
-            int? employeeId = null, DateTime? fromDate = null, DateTime? toDate = null)
+            int? employeeId = null, DateTime? fromDate = null, DateTime? toDate = null, int? departmentId = null)
         {
+            var targetDeptId = departmentId;
+            if (!_currentUser.IsAdmin && (_currentUser.Role == "Manager" || _currentUser.Role == "Employee") && _currentUser.DepartmentId.HasValue)
+            {
+                targetDeptId = _currentUser.DepartmentId.Value;
+            }
+
             var logs = await _shiftLogRepo.GetAllAsync(sl => sl.Employee, sl => sl.Employee.User);
             var query = logs.AsEnumerable();
+
+            if (targetDeptId.HasValue)
+            {
+                query = query.Where(sl => sl.Employee?.User?.DepartmentId == targetDeptId.Value);
+            }
 
             if (employeeId.HasValue)
             {
@@ -504,12 +527,32 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
         // ─────────────────────────────────────────────────────────────────
         // 10. SHIFT STATS
         // ─────────────────────────────────────────────────────────────────
-        public async Task<ApiResponse<ShiftStatsDto>> GetShiftStatsAsync()
+        public async Task<ApiResponse<ShiftStatsDto>> GetShiftStatsAsync(int? departmentId = null)
         {
-            var allShifts = (await _shiftRepo.GetAllAsync(s => s.Employees)).ToList();
-            var allLogs = (await _shiftLogRepo.GetAllAsync()).ToList();
+            var targetDeptId = departmentId;
+            if (!_currentUser.IsAdmin && (_currentUser.Role == "Manager" || _currentUser.Role == "Employee") && _currentUser.DepartmentId.HasValue)
+            {
+                targetDeptId = _currentUser.DepartmentId.Value;
+            }
 
-            var distinctEmployees = allShifts
+            var allShifts = (await _shiftRepo.GetAllAsync(s => s.Employees)).ToList();
+            var allLogs = (await _shiftLogRepo.GetAllAsync(l => l.Employee, l => l.Employee.User)).ToList();
+            var allEmployees = (await _employeeRepo.GetAllAsync(e => e.User)).ToDictionary(e => e.Id);
+
+            var shiftsQuery = allShifts.AsEnumerable();
+            var logsQuery = allLogs.AsEnumerable();
+
+            if (targetDeptId.HasValue)
+            {
+                shiftsQuery = shiftsQuery.Where(s => s.Employees.Any(e =>
+                    allEmployees.TryGetValue(e.Id, out var fullEmp) && fullEmp.User?.DepartmentId == targetDeptId.Value));
+                logsQuery = logsQuery.Where(l => l.Employee?.User?.DepartmentId == targetDeptId.Value);
+            }
+
+            var filteredShifts = shiftsQuery.ToList();
+            var filteredLogs = logsQuery.ToList();
+
+            var distinctEmployees = filteredShifts
                 .SelectMany(s => s.Employees)
                 .Select(e => e.Id)
                 .Distinct()
@@ -517,13 +560,13 @@ namespace HUIT_RoMan.Application.Modules.Shift.Services
 
             var stats = new ShiftStatsDto
             {
-                TotalShifts = allShifts.Count,
-                ScheduledShifts = allShifts.Count(s => s.Status == "Lên lịch" || s.Status == "Scheduled"),
-                InProgressShifts = allShifts.Count(s => s.Status == "Đang trực" || s.Status == "InProgress"),
-                CompletedShifts = allShifts.Count(s => s.Status == "Hoàn thành" || s.Status == "Completed"),
-                CancelledShifts = allShifts.Count(s => s.Status == "Hủy" || s.Status == "Cancelled"),
+                TotalShifts = filteredShifts.Count,
+                ScheduledShifts = filteredShifts.Count(s => s.Status == "Lên lịch" || s.Status == "Scheduled"),
+                InProgressShifts = filteredShifts.Count(s => s.Status == "Đang trực" || s.Status == "InProgress"),
+                CompletedShifts = filteredShifts.Count(s => s.Status == "Hoàn thành" || s.Status == "Completed"),
+                CancelledShifts = filteredShifts.Count(s => s.Status == "Hủy" || s.Status == "Cancelled"),
                 TotalAssignedEmployees = distinctEmployees,
-                TotalLogs = allLogs.Count
+                TotalLogs = filteredLogs.Count
             };
 
             return ApiResponse<ShiftStatsDto>.SuccessResponse(stats);

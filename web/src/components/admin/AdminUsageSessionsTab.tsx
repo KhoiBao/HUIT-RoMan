@@ -5,6 +5,7 @@ import {
   checkInSession,
   checkOutSession,
   cancelNoShow,
+  getCheckInStatus,
   type UsageSessionItem,
   type UsageSummary,
 } from "../../lib/usage";
@@ -23,8 +24,6 @@ import {
   AlertTriangleIcon,
   CalendarIcon,
   BellRingIcon,
-  MegaphoneIcon,
-  FlameIcon,
   ZapIcon,
   PencilIcon,
 } from "../Icon";
@@ -40,8 +39,10 @@ import {
   recordViolation,
   type ViolationTypeItem,
 } from "../../lib/violations";
+import { createIncident } from "../../lib/incidents";
 import { useConfirm } from "../../context/ConfirmContext";
 import AdminPagination from "../common/AdminPagination";
+import { formatDateTime24h } from "../../lib/dateTimeFormat";
 
 interface Props {
   onNotify: (msg: string, type?: "success" | "warning" | "info") => void;
@@ -91,6 +92,10 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
   const [historyTargetSession, setHistoryTargetSession] = useState<UsageSessionItem | null>(null);
 
   const openReminderModal = (session: UsageSessionItem) => {
+    if (session.status === "Hoàn thành" || session.status === "Đã hủy") {
+      onNotify("Không thể gửi nhắc nhở cho ca đã hoàn thành hoặc đã hủy.", "warning");
+      return;
+    }
     setReminderTargetSession(session);
     setReminderReason(REMINDER_PRESETS[0]);
     setCustomReason("");
@@ -106,6 +111,11 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
   const handleSendReminderSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!reminderTargetSession) return;
+    if (reminderTargetSession.status === "Hoàn thành" || reminderTargetSession.status === "Đã hủy") {
+      onNotify("Không thể gửi nhắc nhở cho ca đã hoàn thành hoặc đã hủy.", "warning");
+      setShowReminderModal(false);
+      return;
+    }
 
     const finalReason =
       reminderReason === "OTHER"
@@ -278,6 +288,15 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
 
   // Check-in nhanh một phiên
   const handleCheckIn = async (session: UsageSessionItem) => {
+    const checkInCheck = getCheckInStatus(session);
+    if (!checkInCheck.allowed) {
+      onNotify(
+        checkInCheck.reason || "Chưa đến thời điểm nhận phòng theo quy định.",
+        "warning"
+      );
+      return;
+    }
+
     try {
       await checkInSession({
         usageSessionId: session.id,
@@ -298,15 +317,26 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
 
   // Hủy do No-show
   const handleCancelNoShow = async (session: UsageSessionItem) => {
+    if (session.startAt) {
+      const start = new Date(session.startAt).getTime();
+      if (!isNaN(start) && Date.now() < start) {
+        onNotify(
+          "Chưa đến thời gian bắt đầu ca sử dụng, không thể hủy do không đến nhận phòng (No-show).",
+          "warning"
+        );
+        return;
+      }
+    }
+
     const timeRange = session.startPeriodName
       ? `${session.startPeriodName} → ${session.endPeriodName}`
       : `${formatDateTime(session.startAt)} → ${formatDateTime(session.endAt)}`;
 
     const confirmed = await confirm({
-      title: "Xác nhận hủy phiên mượn phòng (No-show)",
+      title: "Xác nhận hủy ca mượn phòng",
       message: `Bạn có chắc chắn muốn hủy phiên mượn phòng của ${session.userFullName}?`,
       subMessage:
-        "Lý do: Quá 15 phút không đến nhận phòng (No-show). Thao tác này sẽ hủy phiên, giải phóng phòng ngay lập tức và ghi nhận lịch sử xử lý.",
+        "Lý do: Quá 15 phút không đến nhận phòng. Thao tác này sẽ hủy phiên, giải phóng phòng ngay lập tức và ghi nhận lịch sử xử lý.",
       itemDetails: [
         {
           label: "Phòng mượn",
@@ -339,9 +369,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
     try {
       await cancelNoShow(
         session.id,
-        "Hủy do quá 15 phút không đến nhận phòng (No-show)"
+        "Hủy do quá 15 phút không đến nhận phòng"
       );
-      onNotify(`Đã hủy phiên phòng ${session.roomCode} do No-show.`, "info");
+      onNotify(`Đã hủy ca mượn phòng ${session.roomCode}.`, "info");
       loadData();
     } catch (err: any) {
       onNotify(
@@ -378,9 +408,34 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
         lightsOff: checkoutChecklist.lightsOff,
       });
 
+      let ticketCode = "";
+      if (checkoutChecklist.roomCondition === "Bảo trì") {
+        try {
+          const newIncident = createIncident({
+            roomCode: selectedSessionForCheckout.roomCode,
+            roomId: selectedSessionForCheckout.roomId,
+            roomName: selectedSessionForCheckout.roomName,
+            targetType: "Phòng",
+            category: !checkoutChecklist.devicesOk ? "Thiết bị hư hỏng" : "Cơ sở vật chất / Bàn ghế",
+            severity: "Khẩn cấp",
+            description:
+              checkoutChecklist.staffNote ||
+              (!checkoutChecklist.devicesOk
+                ? "Thiết bị trong phòng gặp sự cố khi thủ thư kiểm tra trả phòng."
+                : "Phát hiện sự cố kỹ thuật trong quá trình kiểm tra bàn giao trả phòng."),
+            status: "Chờ tiếp nhận",
+            reportedBy: "Thủ thư trực ca (Biên bản trả phòng)",
+            sessionId: selectedSessionForCheckout.id,
+          });
+          ticketCode = newIncident.code;
+        } catch (e) {
+          console.error("Auto create incident error:", e);
+        }
+      }
+
       const conditionMsg =
         checkoutChecklist.roomCondition === "Bảo trì"
-          ? "Phòng đã chuyển sang trạng thái Bảo trì để kỹ thuật kiểm tra sự cố."
+          ? `Phòng đã chuyển sang trạng thái Bảo trì & Tự động tạo phiếu sự cố ${ticketCode ? `[${ticketCode}] ` : ""}để kỹ thuật kiểm tra.`
           : "Phòng đã chuyển về trạng thái Trống sẵn sàng đón lượt mới.";
 
       onNotify(
@@ -849,59 +904,6 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                             </span>
                           )}
                         </div>
-                        {reminderCount > 0 && (
-                          <div style={{ marginTop: "5px" }}>
-                            {reminderCount > 3 ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openReminderHistory(session);
-                                }}
-                                className="reminder-tag-badge reminder-tag-violation"
-                                title="Đã quá 3 lần nhắc nhở và tự động lập biên bản. Bấm để xem chi tiết"
-                              >
-                                <BanIcon size={12} className="inline-block" /> Đã lập biên bản (Quá 3 lần)
-                              </button>
-                            ) : reminderCount === 3 ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openReminderHistory(session);
-                                }}
-                                className="reminder-tag-badge reminder-tag-max"
-                                title="Đã nhắc nhở 3 lần (Mức tối đa). Bấm để xem chi tiết"
-                              >
-                                <FlameIcon size={12} className="inline-block" /> Cảnh báo tối đa (3/3)
-                              </button>
-                            ) : reminderCount === 2 ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openReminderHistory(session);
-                                }}
-                                className="reminder-tag-badge reminder-tag-warn"
-                                title="Đã nhắc nhở 2 lần. Bấm để xem chi tiết"
-                              >
-                                <AlertTriangleIcon size={12} className="inline-block" /> Nhắc nhở (2/3)
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openReminderHistory(session);
-                                }}
-                                className="reminder-tag-badge reminder-tag-light"
-                                title="Đã nhắc nhở 1 lần. Bấm để xem chi tiết"
-                              >
-                                <MegaphoneIcon size={12} className="inline-block" /> Nhắc nhở (1/3)
-                              </button>
-                            )}
-                          </div>
-                        )}
                       </td>
 
                     {/* Scheduled Period / Time */}
@@ -969,28 +971,42 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                     {/* Actions */}
                     <td className="cell-actions text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="action-button-group">
-                        {session.status === "Chờ nhận phòng" && (
-                          <>
-                            <button
-                              type="button"
-                              className="btn-table-action btn-checkin"
-                              onClick={() => handleCheckIn(session)}
-                              title="Xác nhận nhận phòng ngay"
-                            >
-                              <ShieldCheckIcon size={14} />
-                              <span>Check-in</span>
-                            </button>
+                        {session.status === "Chờ nhận phòng" && (() => {
+                          const checkInStatus = getCheckInStatus(session);
+                          const isNoShowAllowed = !session.startAt || new Date(session.startAt).getTime() <= Date.now();
+                          return (
+                            <>
+                              <button
+                                type="button"
+                                className={`btn-table-action btn-checkin ${!checkInStatus.allowed ? "is-disabled" : ""}`}
+                                onClick={() => handleCheckIn(session)}
+                                disabled={!checkInStatus.allowed}
+                                title={
+                                  checkInStatus.allowed
+                                    ? "Xác nhận nhận phòng ngay"
+                                    : checkInStatus.reason
+                                }
+                              >
+                                <ShieldCheckIcon size={14} />
+                                <span>Check-in</span>
+                              </button>
 
-                            <button
-                              type="button"
-                              className="btn-table-action btn-noshow"
-                              onClick={() => handleCancelNoShow(session)}
-                              title="Hủy do quá 15 phút không đến nhận phòng"
-                            >
-                              <BanIcon size={14} />
-                            </button>
-                          </>
-                        )}
+                              <button
+                                type="button"
+                                className={`btn-table-action btn-noshow ${!isNoShowAllowed ? "is-disabled" : ""}`}
+                                onClick={() => handleCancelNoShow(session)}
+                                disabled={!isNoShowAllowed}
+                                title={
+                                  isNoShowAllowed
+                                    ? "Hủy do quá 15 phút không đến nhận phòng"
+                                    : "Chưa đến thời gian bắt đầu ca sử dụng (không thể hủy No-show)"
+                                }
+                              >
+                                <BanIcon size={14} />
+                              </button>
+                            </>
+                          );
+                        })()}
 
                         {session.status === "Đang sử dụng" && (
                           <button
@@ -1010,32 +1026,30 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                           </span>
                         )}
 
-                        {/* Nút Nhắc nhở (Quá 3 lần tự động lập biên bản) */}
-                        <button
-                          type="button"
-                          className={`btn-table-action btn-action-remind ${
-                            reminderCount >= 3
-                              ? "btn-remind-danger"
-                              : reminderCount > 0
-                              ? "btn-remind-active"
-                              : ""
-                          }`}
-                          onClick={() => openReminderModal(session)}
-                          title={
-                            reminderCount >= 3
-                              ? "Cảnh báo: Đã nhắc 3 lần! Thao tác tiếp theo sẽ VƯỢT QUÁ 3 LẦN và tự động lập biên bản vi phạm"
-                              : `Gửi nhắc nhở nội quy (Hiện tại: ${reminderCount}/3 lần)`
-                          }
-                        >
-                          <BellRingIcon size={13} />
-                          <span>
-                            {reminderCount >= 3
-                              ? "Quá 3 lần"
-                              : reminderCount > 0
-                              ? `Nhắc (${reminderCount}/3)`
-                              : "Nhắc nhở"}
-                          </span>
-                        </button>
+                        {/* Nút Nhắc nhở: CHỈ HIỂN THỊ KHI ĐANG SỬ DỤNG HOẶC CHỜ NHẬN PHÒNG (Khi hoàn tất không thể nhắc nhở được nữa) */}
+                        {session.status !== "Hoàn thành" && session.status !== "Đã hủy" && (
+                          <button
+                            type="button"
+                            className={`btn-table-action btn-action-remind ${
+                              reminderCount >= 3
+                                ? "btn-remind-danger"
+                                : reminderCount > 0
+                                ? "btn-remind-active"
+                                : ""
+                            }`}
+                            onClick={() => openReminderModal(session)}
+                            title={
+                              reminderCount >= 3
+                                ? `Cảnh báo: Đã nhắc ${reminderCount} lần (Quá 3 lần)! Thao tác tiếp theo sẽ tự động lập biên bản vi phạm`
+                                : reminderCount > 0
+                                ? `Gửi nhắc nhở nội quy (Đã nhắc ${reminderCount}/3 lần)`
+                                : "Gửi nhắc nhở nội quy sử dụng phòng"
+                            }
+                            aria-label={`Nhắc nhở nội quy (Đã nhắc ${reminderCount}/3 lần)`}
+                          >
+                            <BellRingIcon size={14} />
+                          </button>
+                        )}
 
                         <button
                           type="button"
@@ -1088,8 +1102,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
               </button>
             </div>
 
-            <div className="modal-form">
-              <div className="checkout-summary-banner">
+            <div className="admin-modal-form-wrap">
+              <div className="modal-body-scrollable">
+                <div className="checkout-summary-banner">
                 <div className="banner-item">
                   <span className="banner-label">Người mượn:</span>
                   <strong>{selectedSessionForCheckout.userFullName}</strong>
@@ -1214,7 +1229,7 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                       <AlertTriangleIcon size={14} className="inline-block" style={{ marginRight: "4px" }} /> Cần bảo trì / Xử lý sự cố
                     </span>
                     <span className="radio-desc">
-                      Phát hiện hỏng hóc thiết bị hoặc sự cố cần khóa phòng để kỹ thuật xử lý.
+                      Phát hiện hỏng hóc thiết bị hoặc sự cố cần khóa phòng để kỹ thuật xử lý. (Tự động tạo phiếu sự cố)
                     </span>
                   </div>
                 </label>
@@ -1234,8 +1249,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                   }
                 />
               </div>
+              </div>
 
-              <div className="modal-footer-actions">
+              <div className="modal-footer-pinned">
                 <button
                   type="button"
                   className="btn-modal-cancel"
@@ -1354,8 +1370,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
               </button>
             </div>
 
-            <form onSubmit={handleRecordViolationSubmit} className="modal-form">
-              <div className="form-field">
+            <form onSubmit={handleRecordViolationSubmit} className="admin-modal-form-wrap">
+              <div className="modal-body-scrollable">
+                <div className="form-field">
                 <label>Loại vi phạm (*):</label>
                 <select
                   value={violationTypeId}
@@ -1418,8 +1435,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                   <option value={30}>Cấm mượn 30 ngày</option>
                 </select>
               </div>
+              </div>
 
-              <div className="modal-footer-actions">
+              <div className="modal-footer-pinned">
                 <button
                   type="button"
                   className="btn-modal-cancel"
@@ -1477,8 +1495,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                 </button>
               </div>
 
-              <form onSubmit={handleSendReminderSubmit} className="modal-form">
-                {/* Thông tin người mượn & Phiên */}
+              <form onSubmit={handleSendReminderSubmit} className="admin-modal-form-wrap">
+                <div className="modal-body-scrollable">
+                  {/* Thông tin người mượn & Phiên */}
                 <div className="checkout-summary-banner">
                   <div className="banner-item">
                     <span className="banner-label">Người mượn:</span>
@@ -1611,6 +1630,26 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                   </div>
                 </div>
 
+                {currentCount > 0 && (
+                  <div style={{ textAlign: "right", marginTop: "4px", marginBottom: "8px" }}>
+                    <button
+                      type="button"
+                      style={{
+                        fontSize: "12px",
+                        color: "#0284c7",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        padding: 0,
+                      }}
+                      onClick={() => openReminderHistory(reminderTargetSession)}
+                    >
+                      Xem lịch sử {currentCount} lần nhắc trước của phiên này →
+                    </button>
+                  </div>
+                )}
+
                 {/* Banner cảnh báo vượt quá 3 lần */}
                 {isExceeding && (
                   <div className="reminder-escalation-banner">
@@ -1684,8 +1723,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                     placeholder="VD: Cán bộ nhắc nhở trực tiếp tại phòng, sinh viên đã đồng ý tuân thủ..."
                   />
                 </div>
+                </div>
 
-                <div className="modal-footer-actions">
+                <div className="modal-footer-pinned">
                   <button
                     type="button"
                     className="btn-modal-cancel"
@@ -1750,8 +1790,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                 </button>
               </div>
 
-              <div className="modal-form">
-                <div className="checkout-summary-banner">
+              <div className="admin-modal-form-wrap">
+                <div className="modal-body-scrollable">
+                  <div className="checkout-summary-banner">
                   <div className="banner-item">
                     <span className="banner-label">Người mượn:</span>
                     <strong>{historyTargetSession.userFullName}</strong>
@@ -1830,11 +1871,7 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                               )}
                             </span>
                             <span className="timeline-time-meta">
-                              {new Date(item.remindedAt).toLocaleTimeString("vi-VN", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}{" "}
-                              - {new Date(item.remindedAt).toLocaleDateString("vi-VN")}
+                              {formatDateTime24h(item.remindedAt, " - ")}
                             </span>
                           </div>
 
@@ -1851,8 +1888,9 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
                     ))}
                   </div>
                 )}
+                </div>
 
-                <div className="modal-footer-actions">
+                <div className="modal-footer-pinned">
                   <button
                     type="button"
                     className="btn-modal-cancel"
@@ -1882,7 +1920,7 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
         <div className="admin-modal-overlay" onClick={() => setDetailSession(null)}>
           <div
             className="admin-modal-box checkout-modal-card"
-            style={{ maxWidth: "560px" }}
+            style={{ maxWidth: "680px" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header">
@@ -1903,7 +1941,7 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
               </button>
             </div>
 
-            <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div className="modal-body-scrollable" style={{ gap: "14px" }}>
               {/* Trạng thái & Mã nhận */}
               <div
                 style={{
@@ -2002,63 +2040,167 @@ export default function AdminUsageSessionsTab({ onNotify }: Props) {
               )}
             </div>
 
-            <div className="modal-footer" style={{ display: "flex", justifyContent: "space-between" }}>
-              <div>
-                <button
-                  type="button"
-                  className="btn-action-create-violation"
-                  onClick={() => {
-                    const s = detailSession;
-                    setDetailSession(null);
-                    openViolationModalForSession(s);
+            {/* Modal Footer Actions */}
+            {(() => {
+              const detailReminders = reminders.filter((r) => r.sessionId === detailSession.id);
+              const detailReminderCount = detailReminders.length;
+
+              return (
+                <div
+                  className="modal-footer"
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                    paddingTop: "14px",
+                    borderTop: "1px solid #e2e8f0",
                   }}
-                  title="Lập biên bản vi phạm cho phiên này"
                 >
-                  <AlertTriangleIcon size={13} className="mr-1 inline-block" />
-                  <span>Lập biên bản</span>
-                </button>
-              </div>
+                  {/* Left: Lập biên bản & Nhắc nhở */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      type="button"
+                      className="btn-modal-action-violation"
+                      onClick={() => {
+                        const s = detailSession;
+                        setDetailSession(null);
+                        openViolationModalForSession(s);
+                      }}
+                      title="Lập biên bản vi phạm cho phiên này"
+                      style={{ padding: "7px 11px", fontSize: "12.5px" }}
+                    >
+                      <AlertTriangleIcon size={14} />
+                      <span>Lập biên bản</span>
+                    </button>
 
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  type="button"
-                  className="btn-modal-cancel"
-                  onClick={() => setDetailSession(null)}
-                >
-                  Đóng
-                </button>
+                    {detailSession.status !== "Hoàn thành" && detailSession.status !== "Đã hủy" && (
+                      <button
+                        type="button"
+                        className={`btn-modal-action-remind ${
+                          detailReminderCount >= 3
+                            ? "is-danger"
+                            : detailReminderCount > 0
+                            ? "is-active"
+                            : ""
+                        }`}
+                        onClick={() => {
+                          const s = detailSession;
+                          setDetailSession(null);
+                          openReminderModal(s);
+                        }}
+                        title={
+                          detailReminderCount >= 3
+                            ? "Cảnh báo: Đã nhắc nhở 3 lần!"
+                            : `Gửi nhắc nhở nội quy (Hiện tại: ${detailReminderCount}/3 lần)`
+                        }
+                        style={{ padding: "7px 11px", fontSize: "12.5px" }}
+                      >
+                        <BellRingIcon size={14} />
+                        <span>
+                          {detailReminderCount >= 3
+                            ? "Quá 3 lần"
+                            : detailReminderCount > 0
+                            ? `Nhắc (${detailReminderCount}/3)`
+                            : "Nhắc nhở"}
+                        </span>
+                      </button>
+                    )}
+                  </div>
 
-                {detailSession.status === "Chờ nhận phòng" && (
-                  <button
-                    type="button"
-                    className="btn-modal-submit"
-                    onClick={() => {
-                      const s = detailSession;
-                      setDetailSession(null);
-                      handleCheckIn(s);
-                    }}
-                  >
-                    <ShieldCheckIcon size={14} className="mr-1 inline-block" />
-                    <span>Check-in ngay</span>
-                  </button>
-                )}
+                  {/* Right: Thao tác theo trạng thái + Đóng */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      type="button"
+                      className="btn-modal-cancel"
+                      onClick={() => setDetailSession(null)}
+                      style={{ padding: "7px 12px", fontSize: "12.5px" }}
+                    >
+                      Đóng
+                    </button>
 
-                {detailSession.status === "Đang sử dụng" && (
-                  <button
-                    type="button"
-                    className="btn-modal-submit"
-                    onClick={() => {
-                      const s = detailSession;
-                      setDetailSession(null);
-                      openCheckoutModal(s);
-                    }}
-                  >
-                    <ClipboardListIcon size={14} className="mr-1 inline-block" />
-                    <span>Khảo sát &amp; Trả phòng</span>
-                  </button>
-                )}
-              </div>
-            </div>
+                    {detailSession.status === "Chờ nhận phòng" && (() => {
+                      const checkInStatus = getCheckInStatus(detailSession);
+                      const isNoShowAllowed = !detailSession.startAt || new Date(detailSession.startAt).getTime() <= Date.now();
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            className={`btn-danger-outline flex items-center gap-1.5 ${!isNoShowAllowed ? "is-disabled" : ""}`}
+                            disabled={!isNoShowAllowed}
+                            onClick={() => {
+                              const s = detailSession;
+                              setDetailSession(null);
+                              handleCancelNoShow(s);
+                            }}
+                            title={
+                              isNoShowAllowed
+                                ? "Hủy ca do quá 15 phút không nhận phòng"
+                                : "Chưa đến thời gian bắt đầu ca sử dụng (không thể hủy No-show)"
+                            }
+                            style={{
+                              padding: "7px 12px",
+                              fontSize: "12.5px",
+                              fontWeight: 600,
+                              borderRadius: "6px",
+                              opacity: isNoShowAllowed ? 1 : 0.5,
+                              cursor: isNoShowAllowed ? "pointer" : "not-allowed",
+                            }}
+                          >
+                            <BanIcon size={14} />
+                            <span>Hủy ca</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`btn-modal-submit flex items-center gap-1.5 ${!checkInStatus.allowed ? "is-disabled" : ""}`}
+                            disabled={!checkInStatus.allowed}
+                            onClick={() => {
+                              const s = detailSession;
+                              setDetailSession(null);
+                              handleCheckIn(s);
+                            }}
+                            style={{
+                              padding: "7px 13px",
+                              fontSize: "12.5px",
+                              opacity: checkInStatus.allowed ? 1 : 0.55,
+                              cursor: checkInStatus.allowed ? "pointer" : "not-allowed",
+                            }}
+                            title={checkInStatus.allowed ? "Xác nhận nhận phòng" : checkInStatus.reason}
+                          >
+                            <ShieldCheckIcon size={14} />
+                            <span>Xác nhận Check-in</span>
+                          </button>
+                        </>
+                      );
+                    })()}
+
+                    {detailSession.status === "Đang sử dụng" && (
+                      <button
+                        type="button"
+                        className="btn-modal-submit flex items-center gap-1.5"
+                        style={{ background: "#2563eb", borderColor: "#1d4ed8", padding: "7px 13px", fontSize: "12.5px" }}
+                        onClick={() => {
+                          const s = detailSession;
+                          setDetailSession(null);
+                          openCheckoutModal(s);
+                        }}
+                      >
+                        <ClipboardListIcon size={14} />
+                        <span>Khảo sát &amp; Trả phòng</span>
+                      </button>
+                    )}
+
+                    {detailSession.status === "Hoàn thành" && (
+                      <span className="done-pill" style={{ padding: "6px 12px", fontSize: "13px" }}>
+                        <CheckCircleIcon size={14} /> Đã trả phòng
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

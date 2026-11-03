@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { formatTime24h, formatDateTime24h } from "./dateTimeFormat";
 
 export interface NotificationItem {
   id: number;
@@ -75,15 +76,9 @@ export function formatRelativeTime(dateString: string): string {
   if (diffSec < 60) return "Vừa xong";
   if (diffMin < 60) return `${diffMin} phút trước`;
   if (diffHours < 24) return `${diffHours} giờ trước`;
-  if (diffDays === 1) return `Hôm qua, ${date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`;
+  if (diffDays === 1) return `Hôm qua, ${formatTime24h(date)}`;
   if (diffDays < 7) return `${diffDays} ngày trước`;
 
-  return date.toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTime24h(date);
 }
 

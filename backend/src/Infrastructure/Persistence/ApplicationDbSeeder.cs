@@ -78,8 +78,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             const string demoPassword = "Huit@123";
             var students = new[]
             {
-                ("200123456", "Nguyễn Văn An"),
-                ("200123457", "Trần Thị Bình"),
+                ("2001230399", "NLDK"),
                 ("200123458", "Lê Văn Cường"),
                 ("200123459", "Phạm Thị Dung"),
                 ("200123460", "Hoàng Văn Em"),
@@ -126,17 +125,8 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             // 8. Khởi tạo các phòng dùng chung của Thư viện và phòng học theo tiết
             await EnsureDemoRoomsAsync(dbContext, deptThuVien.Id, deptDaoTao.Id);
 
-            // 8b. Khởi tạo danh mục Thiết bị & Trang thiết bị mẫu
-            await EnsureDemoEquipmentsAsync(dbContext);
-
-            // 9. Khởi tạo lịch mẫu cho ngày hôm nay
-            await EnsureDemoBookingsAsync(dbContext);
-
-            // 10. Khởi tạo danh mục Loại vi phạm & Biên bản vi phạm mẫu
-            await EnsureDemoViolationsAsync(dbContext, userManager);
-
-            // 11. Khởi tạo lịch trực mẫu cho nhân viên (Shifts & ShiftLogs)
-            await EnsureDemoShiftsAsync(dbContext);
+            // 9. Khởi tạo danh mục Loại vi phạm (ViolationTypes)
+            await EnsureViolationTypesAsync(dbContext);
         }
 
         /// <summary>
@@ -729,68 +719,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             return roomType;
         }
 
-        private static async Task EnsureDemoBookingsAsync(ApplicationDbContext dbContext)
-        {
-            // Bỏ tự động tạo booking mẫu để giữ lịch sử đặt phòng sạch
-            await Task.CompletedTask;
-            return;
-        }
-
-        private static async Task EnsureDemoEquipmentsAsync(ApplicationDbContext dbContext)
-        {
-            var catMayChieu = await dbContext.EquipmentCategories.FirstOrDefaultAsync(c => c.Name == "Máy chiếu");
-            if (catMayChieu == null)
-            {
-                catMayChieu = new EquipmentCategory { Name = "Máy chiếu", Description = "Máy chiếu phục vụ phòng học và hội trường" };
-                dbContext.EquipmentCategories.Add(catMayChieu);
-            }
-
-            var catMayTinh = await dbContext.EquipmentCategories.FirstOrDefaultAsync(c => c.Name == "Máy tính");
-            if (catMayTinh == null)
-            {
-                catMayTinh = new EquipmentCategory { Name = "Máy tính", Description = "Dàn máy tính cho các phòng thực hành" };
-                dbContext.EquipmentCategories.Add(catMayTinh);
-            }
-
-            var catAmThanh = await dbContext.EquipmentCategories.FirstOrDefaultAsync(c => c.Name == "Âm thanh");
-            if (catAmThanh == null)
-            {
-                catAmThanh = new EquipmentCategory { Name = "Âm thanh", Description = "Micro và thiết bị âm thanh trợ giảng" };
-                dbContext.EquipmentCategories.Add(catAmThanh);
-            }
-
-            await dbContext.SaveChangesAsync();
-
-            var demoEquipments = new (string Code, string Name, string Description, int CategoryId, int TotalQuantity)[]
-            {
-                ("MC-HUIT-01", "Máy chiếu Sony Laser", "Máy chiếu độ phân giải cao cổng HDMI", catMayChieu.Id, 15),
-                ("PC-LAB-01", "Dàn máy tính Lab CNTT", "Máy tính để bàn Core i7 16GB RAM", catMayTinh.Id, 50),
-                ("MIC-01", "Micro không dây trợ giảng", "Micro kèm bộ thu phát sóng UHF", catAmThanh.Id, 30),
-            };
-
-            foreach (var eq in demoEquipments)
-            {
-                var existing = await dbContext.Equipments.FirstOrDefaultAsync(e => e.Code == eq.Code);
-                if (existing == null)
-                {
-                    dbContext.Equipments.Add(new Equipment
-                    {
-                        Code = eq.Code,
-                        Name = eq.Name,
-                        Description = eq.Description,
-                        EquipmentCategoryId = eq.CategoryId,
-                        TotalQuantity = eq.TotalQuantity,
-                        AvailableQuantity = eq.TotalQuantity,
-                        Status = "Hoạt động",
-                        CreatedAt = DateTime.UtcNow
-                    });
-                }
-            }
-
-            await dbContext.SaveChangesAsync();
-        }
-
-        private static async Task EnsureDemoViolationsAsync(ApplicationDbContext dbContext, UserManager<User> userManager)
+        private static async Task EnsureViolationTypesAsync(ApplicationDbContext dbContext)
         {
             if (!await dbContext.ViolationTypes.AnyAsync())
             {
@@ -855,211 +784,6 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 await dbContext.ViolationTypes.AddRangeAsync(types);
                 await dbContext.SaveChangesAsync();
             }
-
-            // Seed demo records if not exist
-            if (!await dbContext.ViolationRecords.AnyAsync())
-            {
-                var allTypes = await dbContext.ViolationTypes.ToListAsync();
-                var vtDamage = allTypes.FirstOrDefault(t => t.Code == "VT05") ?? allTypes.First();
-                var vtLate = allTypes.FirstOrDefault(t => t.Code == "VT01") ?? allTypes.First();
-
-                var studentEm = await dbContext.Users.FirstOrDefaultAsync(u => u.CardCode == "200123460" || u.UserName == "200123460" || u.Email.Contains("hoangvanem"))
-                    ?? await dbContext.Users.FirstOrDefaultAsync(u => !u.IsDeleted);
-                var studentCuong = await dbContext.Users.FirstOrDefaultAsync(u => u.CardCode == "200123458" || u.UserName == "200123458" || u.Email.Contains("cuong"))
-                    ?? await dbContext.Users.Skip(1).FirstOrDefaultAsync(u => !u.IsDeleted);
-
-                if (studentEm != null)
-                {
-                    var vr1 = new ViolationRecord
-                    {
-                        Code = $"VP-{DateTime.UtcNow:yyyyMMdd}-001",
-                        UserId = studentEm.Id,
-                        ViolationTypeId = vtDamage.Id,
-                        IncidentTime = DateTime.UtcNow.AddDays(-2),
-                        Description = "Làm gãy chân giá đỡ máy chiếu và làm trầy xước màn hình tivi phòng A102",
-                        Severity = 3,
-                        PenaltyApplied = "Bồi thường chi phí sửa chữa & Cấm mượn phòng 14 ngày",
-                        Status = "Chờ xử lý",
-                        CreatedAt = DateTime.UtcNow.AddDays(-2)
-                    };
-                    dbContext.ViolationRecords.Add(vr1);
-
-                    // Add active restriction
-                    dbContext.UserRestrictions.Add(new UserRestriction
-                    {
-                        UserId = studentEm.Id,
-                        RestrictionType = "Cấm mượn phòng",
-                        Reason = $"[Biên bản #{vr1.Code}] Bồi thường chi phí sửa chữa & Cấm mượn phòng 14 ngày",
-                        StartAt = DateTime.UtcNow.AddDays(-2),
-                        EndAt = DateTime.UtcNow.AddDays(12),
-                        Status = "Hoạt động",
-                        CreatedAt = DateTime.UtcNow.AddDays(-2)
-                    });
-                }
-
-                if (studentCuong != null)
-                {
-                    var vr2 = new ViolationRecord
-                    {
-                        Code = $"VP-{DateTime.UtcNow:yyyyMMdd}-002",
-                        UserId = studentCuong.Id,
-                        ViolationTypeId = vtLate.Id,
-                        IncidentTime = DateTime.UtcNow.AddDays(-1),
-                        Description = "Quá giờ ca mượn 25 phút chưa trả phòng B201 khiến ca tiếp theo phải chờ",
-                        Severity = 1,
-                        PenaltyApplied = "Nhắc nhở và ghi nhận biên bản vi phạm lần 1",
-                        Status = "Đã xử lý",
-                        CreatedAt = DateTime.UtcNow.AddDays(-1)
-                    };
-                    dbContext.ViolationRecords.Add(vr2);
-                }
-
-                await dbContext.SaveChangesAsync();
-            }
-        }
-
-        private static async Task EnsureDemoShiftsAsync(ApplicationDbContext dbContext)
-        {
-            var employees = await dbContext.Employees
-                .Include(e => e.User)
-                .Where(e => e.Status == "Hoạt động")
-                .ToListAsync();
-
-            if (!employees.Any()) return;
-
-            var empTV1 = employees.FirstOrDefault(e => e.User?.UserName?.Contains("tv001") == true || e.Code.Contains("TV001")) ?? employees[0];
-            var empTV2 = employees.FirstOrDefault(e => e.User?.UserName?.Contains("tv002") == true || e.Code.Contains("TV002")) ?? employees[Math.Min(1, employees.Count - 1)];
-            var empTV3 = employees.FirstOrDefault(e => e.User?.UserName?.Contains("tv003") == true || e.Code.Contains("TV003")) ?? employees[Math.Min(2, employees.Count - 1)];
-            var empQLP1 = employees.FirstOrDefault(e => e.User?.UserName?.Contains("qlp001") == true || e.Code.Contains("QLP001")) ?? employees[Math.Min(3, employees.Count - 1)];
-            var empQLP2 = employees.FirstOrDefault(e => e.User?.UserName?.Contains("qlp002") == true || e.Code.Contains("QLP002")) ?? employees[Math.Min(4, employees.Count - 1)];
-
-            // Mốc giờ Việt Nam (UTC+7) để trạng thái ca khớp với giờ hiển thị trên UI.
-            var nowLocal = DateTime.UtcNow.AddHours(7);
-            var today = DateTime.SpecifyKind(nowLocal.Date, DateTimeKind.Utc);
-
-            // Shift schedule templates across 7 days (-2 to +3)
-            var shiftPlan = new List<(int dayOffset, string name, TimeSpan start, TimeSpan end, Employee[] assigned)>
-            {
-                // Day -2
-                (-2, "Ca Sáng - Quản lý phòng & Tiếp nhận mượn", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV1, empQLP1 }),
-                (-2, "Ca Chiều - Hỗ trợ thiết bị phòng hội thảo", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV2 }),
-                // Day -1
-                (-1, "Ca Sáng - Kiểm tra thiết bị & Tiếp đón", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV3, empQLP2 }),
-                (-1, "Ca Chiều - Giám sát phòng tự học & Hội thảo", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV1, empQLP1 }),
-                (-1, "Ca Tối - Trực phòng học nhóm & Thu hồi chìa khóa", new TimeSpan(17, 30, 0), new TimeSpan(21, 0, 0), new[] { empTV2 }),
-                // Today (0)
-                (0, "Ca Sáng - Điều phối ca mượn & Bàn giao thiết bị", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV1, empQLP1 }),
-                (0, "Ca Chiều - Giám sát thời gian thực & Tiếp nhận trả phòng", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV2, empQLP2 }),
-                (0, "Ca Tối - Khóa phòng & Kiểm kê trang thiết bị cuối ngày", new TimeSpan(17, 30, 0), new TimeSpan(21, 0, 0), new[] { empTV3 }),
-                // Tomorrow (+1)
-                (1, "Ca Sáng - Phục vụ phòng học chuyên đề & Lab", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV1, empQLP2 }),
-                (1, "Ca Chiều - Kiểm tra vệ sinh & Trả phòng", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV3 }),
-                // Day +2
-                (2, "Ca Sáng - Hỗ trợ hội thảo Khoa CNTT", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV2, empQLP1 }),
-                (2, "Ca Chiều - Phục vụ phòng tự học thông minh", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV1 }),
-                // Day +3
-                (3, "Ca Sáng - Điều phối phòng Lab thực hành", new TimeSpan(7, 0, 0), new TimeSpan(11, 30, 0), new[] { empTV3, empQLP2 }),
-                (3, "Ca Chiều - Giám sát an ninh & Thiết bị", new TimeSpan(12, 30, 0), new TimeSpan(17, 0, 0), new[] { empTV2 })
-            };
-
-            var existingShifts = await dbContext.Shifts.ToListAsync();
-
-            if (!existingShifts.Any())
-            {
-                foreach (var item in shiftPlan)
-                {
-                    var date = today.AddDays(item.dayOffset);
-                    var s = new Domain.Entities.Shift
-                    {
-                        Date = date,
-                        Name = item.name,
-                        StartTime = item.start,
-                        EndTime = item.end,
-                        Status = ResolveShiftStatus(date, item.start, item.end, nowLocal),
-                        CreatedAt = DateTime.UtcNow
-                    };
-
-                    foreach (var emp in item.assigned)
-                    {
-                        s.Employees.Add(emp);
-                    }
-
-                    dbContext.Shifts.Add(s);
-                }
-
-                // Seed sample ShiftLogs
-                dbContext.ShiftLogs.AddRange(
-                    new ShiftLog
-                    {
-                        LogTime = DateTime.UtcNow.AddDays(-1).Date.AddHours(11).AddMinutes(35),
-                        Content = "Bàn giao ca sáng ngày hôm qua: Đã bàn giao 12 chìa khóa phòng, hệ thống điều hòa và máy chiếu phòng A101-A103 hoạt động tốt.",
-                        Type = 1, // Bàn giao
-                        EmployeeId = empTV1.Id,
-                        CreatedAt = DateTime.UtcNow.AddDays(-1)
-                    },
-                    new ShiftLog
-                    {
-                        LogTime = DateTime.UtcNow.AddDays(-1).Date.AddHours(16).AddMinutes(40),
-                        Content = "Sự cố phát sinh: Cáp HDMI tại phòng thảo luận B201 bị chập chờn khi kết nối với máy tính xách tay. Đã ghi nhận chuyển bộ phận kỹ thuật.",
-                        Type = 2, // Sự cố
-                        EmployeeId = empTV2.Id,
-                        CreatedAt = DateTime.UtcNow.AddDays(-1)
-                    },
-                    new ShiftLog
-                    {
-                        LogTime = DateTime.UtcNow.Date.AddHours(11).AddMinutes(30),
-                        Content = "Bàn giao ca sáng hôm nay: Đã tiếp nhận và hỗ trợ 8 lượt mượn phòng. Phòng họp A102 đã được bàn giao sạch sẽ sau giờ mượn.",
-                        Type = 1, // Bàn giao
-                        EmployeeId = empTV1.Id,
-                        CreatedAt = DateTime.UtcNow
-                    },
-                    new ShiftLog
-                    {
-                        LogTime = DateTime.UtcNow.Date.AddHours(14).AddMinutes(15),
-                        Content = "Kiểm tra an ninh & vệ sinh: Tất cả các phòng tầng 2 và tầng 3 khu tự học đều tuân thủ quy định giữ trật tự và không mang thức ăn vào phòng.",
-                        Type = 3, // Kiểm tra an ninh / vệ sinh
-                        EmployeeId = empTV2.Id,
-                        CreatedAt = DateTime.UtcNow
-                    }
-                );
-
-                await dbContext.SaveChangesAsync();
-                return;
-            }
-
-            // Đã có ca trong khoảng hiện tại thì giữ nguyên (không ghi đè trạng thái người dùng đã cập nhật).
-            var hasCurrentSchedule = existingShifts.Any(s =>
-                s.Date.Date >= today.AddDays(-2) && s.Date.Date <= today.AddDays(3));
-            if (hasCurrentSchedule) return;
-
-            // Dữ liệu mẫu được seed theo ngày tạo DB nên có thể đã lệch tuần hiện tại:
-            // cập nhật lại ngày/giờ/trạng thái của đúng các ca mẫu, không xoá dữ liệu khác.
-            foreach (var item in shiftPlan)
-            {
-                var shift = existingShifts.FirstOrDefault(s => s.Name == item.name);
-                if (shift == null) continue;
-
-                var date = today.AddDays(item.dayOffset);
-                shift.Date = date;
-                shift.StartTime = item.start;
-                shift.EndTime = item.end;
-                shift.Status = ResolveShiftStatus(date, item.start, item.end, nowLocal);
-            }
-
-            await dbContext.SaveChangesAsync();
-        }
-
-        /// <summary>
-        /// Trạng thái ca trực suy ra từ ngày/giờ thực tế để demo không hiển thị ca quá khứ ở trạng thái "Lên lịch".
-        /// </summary>
-        private static string ResolveShiftStatus(DateTime date, TimeSpan start, TimeSpan end, DateTime nowLocal)
-        {
-            var today = nowLocal.Date;
-            if (date.Date < today) return "Hoàn thành";
-            if (date.Date > today) return "Lên lịch";
-            if (nowLocal.TimeOfDay > end) return "Hoàn thành";
-            if (nowLocal.TimeOfDay >= start) return "Đang trực";
-            return "Lên lịch";
         }
     }
 }

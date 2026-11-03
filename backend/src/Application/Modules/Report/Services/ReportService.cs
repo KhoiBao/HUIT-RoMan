@@ -23,6 +23,7 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
         private readonly IRepository<UserRestriction> _userRestrictionRepo;
         private readonly IRepository<Domain.Entities.Shift> _shiftRepo;
         private readonly IRepository<ShiftLog> _shiftLogRepo;
+        private readonly IRepository<Employee> _employeeRepo;
         private readonly UserManager<User> _userManager;
         private readonly IStoredProcedureService _spService;
         private readonly ICurrentUserService _currentUser;
@@ -42,6 +43,7 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
             _userRestrictionRepo = _unitOfWork.Repository<UserRestriction>();
             _shiftRepo = _unitOfWork.Repository<Domain.Entities.Shift>();
             _shiftLogRepo = _unitOfWork.Repository<ShiftLog>();
+            _employeeRepo = _unitOfWork.Repository<Employee>();
             _userManager = userManager;
             _spService = spService;
             _currentUser = currentUser;
@@ -52,39 +54,87 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<SystemOverviewReportDto>> GetSystemOverviewAsync(ReportFilterDto filter)
         {
+            var targetDeptId = ResolveTargetDepartmentId(filter);
             var (from, to) = ResolveDateRange(filter);
 
-            // 1. Bookings
-            var bookings = (await _bookingRepo.GetAllAsync(b => b.BookingDetails, b => b.User, b => b.User.Department))
-                .Where(b => b.RequestedAt >= from && b.RequestedAt <= to)
-                .ToList();
+            // 1. Rooms & Scope
+            var allRooms = (await _roomRepo.GetAllAsync(r => r.RoomType, r => r.RoomType.Department)).ToList();
+            HashSet<int>? deptRoomIds = null;
+            if (targetDeptId.HasValue)
+            {
+                deptRoomIds = allRooms
+                    .Where(r => r.RoomType?.DepartmentId == targetDeptId.Value)
+                    .Select(r => r.Id)
+                    .ToHashSet();
+                allRooms = allRooms.Where(r => deptRoomIds.Contains(r.Id)).ToList();
+            }
 
-            long totalBookings = bookings.Count;
-            long approved = bookings.Count(b => b.Status == "Đã duyệt" || b.Status == "Approved");
-            long pending = bookings.Count(b => b.Status == "Chờ duyệt" || b.Status == "Pending");
-            long rejected = bookings.Count(b => b.Status == "Từ chối" || b.Status == "Rejected");
-            long cancelled = bookings.Count(b => b.Status == "Đã hủy" || b.Status == "Cancelled");
-            // Phân loại nguồn hủy: sinh viên tự hủy / tự động hủy (no-show) / quản trị hủy.
-            // Đơn cũ không có dữ liệu nguồn được đếm riêng, không suy đoán.
-            long cancelledByStudent = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") && b.CancelSource == BookingCancelPolicy.SourceStudent);
-            long cancelledByNoShow = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") && b.CancelSource == BookingCancelPolicy.SourceAuto);
-            long cancelledByStaff = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") && b.CancelSource == BookingCancelPolicy.SourceStaff);
-            long cancelledUnknown = cancelled - cancelledByStudent - cancelledByNoShow - cancelledByStaff;
-            double approvalRate = totalBookings > 0 ? Math.Round((double)approved / totalBookings * 100, 1) : 100.0;
-
-            // 2. Rooms & Usage
-            var allRooms = (await _roomRepo.GetAllAsync(r => r.RoomType)).ToList();
             int totalRooms = allRooms.Count;
             int activeRooms = allRooms.Count(r => r.Status != "Bảo trì" && r.Status != "Ngưng hoạt động");
 
+            // 2. Bookings
+            var allBookings = (await _bookingRepo.GetAllAsync(b => b.BookingDetails, b => b.User, b => b.User.Department))
+                .Where(b => b.RequestedAt >= from && b.RequestedAt <= to)
+                .ToList();
+
+            List<Domain.Entities.Booking> bookings;
+            if (deptRoomIds != null)
+            {
+                bookings = allBookings
+                    .Where(b => b.BookingDetails != null && b.BookingDetails.Any(bd => deptRoomIds.Contains(bd.RoomId)))
+                    .ToList();
+            }
+            else
+            {
+                bookings = allBookings;
+            }
+
+            long totalBookings = bookings.Count;
+            long approved;
+            long pending;
+            long rejected;
+            long cancelled;
+
+            if (deptRoomIds != null)
+            {
+                approved = bookings.Count(b => b.BookingDetails != null && b.BookingDetails.Any(bd => deptRoomIds.Contains(bd.RoomId) && (bd.Status == "Đã duyệt" || bd.Status == "Approved")));
+                pending = bookings.Count(b => b.BookingDetails != null && b.BookingDetails.Any(bd => deptRoomIds.Contains(bd.RoomId) && (bd.Status == "Chờ duyệt" || bd.Status == "Pending")));
+                rejected = bookings.Count(b => b.BookingDetails != null && b.BookingDetails.All(bd => deptRoomIds.Contains(bd.RoomId) && (bd.Status == "Từ chối" || bd.Status == "Rejected")));
+                cancelled = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") || (b.BookingDetails != null && b.BookingDetails.All(bd => deptRoomIds.Contains(bd.RoomId) && (bd.Status == "Đã hủy" || bd.Status == "Cancelled"))));
+            }
+            else
+            {
+                approved = bookings.Count(b => b.Status == "Đã duyệt" || b.Status == "Approved");
+                pending = bookings.Count(b => b.Status == "Chờ duyệt" || b.Status == "Pending");
+                rejected = bookings.Count(b => b.Status == "Từ chối" || b.Status == "Rejected");
+                cancelled = bookings.Count(b => b.Status == "Đã hủy" || b.Status == "Cancelled");
+            }
+
+            // Phân loại nguồn hủy: sinh viên tự hủy / tự động hủy (no-show) / quản trị hủy.
+            long cancelledByStudent = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") && b.CancelSource == BookingCancelPolicy.SourceStudent);
+            long cancelledByNoShow = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") && b.CancelSource == BookingCancelPolicy.SourceAuto);
+            long cancelledByStaff = bookings.Count(b => (b.Status == "Đã hủy" || b.Status == "Cancelled") && b.CancelSource == BookingCancelPolicy.SourceStaff);
+            long cancelledUnknown = Math.Max(0, cancelled - cancelledByStudent - cancelledByNoShow - cancelledByStaff);
+            double approvalRate = totalBookings > 0 ? Math.Round((double)approved / totalBookings * 100, 1) : 100.0;
+
+            // 3. Sessions & Usage
             var sessions = (await _usageSessionRepo.GetAllAsync(s => s.BookingDetail))
                 .Where(s => (s.ActualCheckIn ?? s.CreatedAt) >= from && (s.ActualCheckIn ?? s.CreatedAt) <= to)
                 .ToList();
 
+            if (deptRoomIds != null)
+            {
+                sessions = sessions.Where(s => s.BookingDetail != null && deptRoomIds.Contains(s.BookingDetail.RoomId)).ToList();
+            }
+
             long totalRoomsUsed = sessions.Select(s => s.BookingDetail?.RoomId).Where(id => id.HasValue).Distinct().Count();
             if (totalRoomsUsed == 0 && approved > 0)
             {
-                totalRoomsUsed = bookings.SelectMany(b => b.BookingDetails).Select(d => d.RoomId).Distinct().Count();
+                totalRoomsUsed = bookings.SelectMany(b => b.BookingDetails ?? Enumerable.Empty<BookingDetail>())
+                    .Where(d => deptRoomIds == null || deptRoomIds.Contains(d.RoomId))
+                    .Select(d => d.RoomId)
+                    .Distinct()
+                    .Count();
             }
 
             double totalHours = 0;
@@ -98,7 +148,8 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
             if (totalHours == 0 && approved > 0)
             {
                 totalHours = bookings.Where(b => b.Status == "Đã duyệt" || b.Status == "Approved")
-                    .SelectMany(b => b.BookingDetails)
+                    .SelectMany(b => b.BookingDetails ?? Enumerable.Empty<BookingDetail>())
+                    .Where(d => deptRoomIds == null || deptRoomIds.Contains(d.RoomId))
                     .Sum(d => Math.Max(0.5, (d.EndAt - d.StartAt).TotalHours));
             }
             totalHours = Math.Round(totalHours, 1);
@@ -108,10 +159,25 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
             double maxCapacityHours = Math.Max(1, activeRooms * days * 12);
             double occupancyRate = Math.Min(100.0, Math.Round((totalHours / maxCapacityHours) * 100, 1));
 
-            // 3. Violations
-            var violations = (await _violationRecordRepo.GetAllAsync(v => v.ViolationType))
-                .Where(v => v.IncidentTime >= from && v.IncidentTime <= to)
-                .ToList();
+            // 4. Violations (phân theo đơn vị quản lý)
+            var violationsQuery = (await _violationRecordRepo.GetAllAsync(
+                v => v.ViolationType,
+                v => v.User,
+                v => v.UsageSession,
+                v => v.UsageSession.BookingDetail,
+                v => v.UsageSession.BookingDetail.Room,
+                v => v.UsageSession.BookingDetail.Room.RoomType
+            )).Where(v => v.IncidentTime >= from && v.IncidentTime <= to);
+
+            if (targetDeptId.HasValue)
+            {
+                violationsQuery = violationsQuery.Where(v =>
+                    v.UsageSession != null
+                        ? v.UsageSession.BookingDetail?.Room?.RoomType?.DepartmentId == targetDeptId.Value
+                        : v.User?.DepartmentId == targetDeptId.Value);
+            }
+
+            var violations = violationsQuery.ToList();
 
             int totalViolations = violations.Count;
             int resolved = violations.Count(v => v.Status == "Đã xử lý" || v.Status == "Đã nộp phạt");
@@ -119,19 +185,41 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
             int severe = violations.Count(v => v.Severity >= 3);
 
             var now = DateTime.UtcNow;
-            var activeBans = (await _userRestrictionRepo.FindAsync(
+            var activeRestrictionsQuery = (await _userRestrictionRepo.FindAsync(
                 ur => ur.Status == "Hoạt động" && ur.StartAt <= now && (ur.EndAt == null || ur.EndAt >= now)
-            )).Count();
+            )).AsEnumerable();
 
-            // 4. Shifts
-            var shifts = (await _shiftRepo.GetAllAsync())
-                .Where(s => s.Date >= from && s.Date <= to)
-                .ToList();
+            if (targetDeptId.HasValue)
+            {
+                var deptUserIds = violations.Select(v => v.UserId).ToHashSet();
+                activeRestrictionsQuery = activeRestrictionsQuery.Where(ur => deptUserIds.Contains(ur.UserId));
+            }
 
-            int totalShifts = shifts.Count;
-            int completedShifts = shifts.Count(s => s.Status == "Hoàn thành" || s.Status == "Completed");
-            int shiftLogs = (await _shiftLogRepo.GetAllAsync())
-                .Count(l => l.LogTime >= from && l.LogTime <= to);
+            var activeBans = activeRestrictionsQuery.Select(ur => ur.UserId).Distinct().Count();
+
+            // 5. Shifts (phân theo đơn vị quản lý ca trực)
+            var allShifts = (await _shiftRepo.GetAllAsync(s => s.Employees)).ToList();
+            var allEmployeesForShifts = (await _employeeRepo.GetAllAsync(e => e.User))
+                .ToDictionary(e => e.Id);
+
+            var shiftsQuery = allShifts.Where(s => s.Date >= from && s.Date <= to);
+            if (targetDeptId.HasValue)
+            {
+                shiftsQuery = shiftsQuery.Where(s => s.Employees.Any(e =>
+                    allEmployeesForShifts.TryGetValue(e.Id, out var fullEmp) && fullEmp.User?.DepartmentId == targetDeptId.Value));
+            }
+            var shiftList = shiftsQuery.ToList();
+
+            int totalShifts = shiftList.Count;
+            int completedShifts = shiftList.Count(s => s.Status == "Hoàn thành" || s.Status == "Completed");
+
+            var allLogs = (await _shiftLogRepo.GetAllAsync(l => l.Employee, l => l.Employee.User))
+                .Where(l => l.LogTime >= from && l.LogTime <= to);
+            if (targetDeptId.HasValue)
+            {
+                allLogs = allLogs.Where(l => l.Employee?.User?.DepartmentId == targetDeptId.Value);
+            }
+            int shiftLogs = allLogs.Count();
 
             var overview = new SystemOverviewReportDto
             {
@@ -169,18 +257,33 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<BookingStatsReportDto>> GetBookingStatsReportAsync(ReportFilterDto filter)
         {
+            var targetDeptId = ResolveTargetDepartmentId(filter);
             var overviewRes = await GetSystemOverviewAsync(filter);
             var overview = overviewRes.Data ?? new SystemOverviewReportDto();
 
             var (from, to) = ResolveDateRange(filter);
 
-            var allBookings = (await _bookingRepo.GetAllAsync(b => b.BookingDetails, b => b.User, b => b.User.Department))
+            var allRoomsWithDept = (await _roomRepo.GetAllAsync(r => r.RoomType, r => r.RoomType.Department)).ToList();
+
+            HashSet<int>? deptRoomIds = null;
+            if (targetDeptId.HasValue)
+            {
+                deptRoomIds = allRoomsWithDept
+                    .Where(r => r.RoomType?.DepartmentId == targetDeptId.Value)
+                    .Select(r => r.Id)
+                    .ToHashSet();
+            }
+
+            var rawBookings = (await _bookingRepo.GetAllAsync(b => b.BookingDetails, b => b.User, b => b.User.Department))
                 .Where(b => b.RequestedAt >= from && b.RequestedAt <= to)
                 .ToList();
 
-            if (filter.DepartmentId.HasValue)
+            var allBookings = rawBookings;
+            if (deptRoomIds != null)
             {
-                allBookings = allBookings.Where(b => b.User != null && b.User.DepartmentId == filter.DepartmentId.Value).ToList();
+                allBookings = rawBookings
+                    .Where(b => b.BookingDetails != null && b.BookingDetails.Any(bd => deptRoomIds.Contains(bd.RoomId)))
+                    .ToList();
             }
 
             // Time series grouping
@@ -235,29 +338,54 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
                 Percentage = allBookings.Count > 0 ? Math.Round((double)g.Count() / allBookings.Count * 100, 1) : 0
             }).OrderByDescending(x => x.Count).Take(6).ToList();
 
-            // Department Stats
-            var deptGroups = allBookings
-                .GroupBy(b => b.User?.Department?.Name ?? "Đơn vị khác")
+            // Department Stats: Thống kê độc lập theo Đơn vị quản lý phòng (Thư viện vs Phòng Đào tạo)
+            var managingDepts = allRoomsWithDept
+                .Where(r => r.RoomType?.Department != null)
+                .Select(r => r.RoomType!.Department!)
+                .GroupBy(d => d.Id)
+                .Select(g => g.First())
                 .ToList();
 
-            var deptStats = deptGroups.Select(g =>
+            if (targetDeptId.HasValue)
             {
-                long tot = g.Count();
-                long app = g.Count(b => b.Status == "Đã duyệt" || b.Status == "Approved");
-                double succ = tot > 0 ? Math.Round((double)app / tot * 100, 1) : 0;
-                double hours = g.Where(b => b.Status == "Đã duyệt" || b.Status == "Approved")
-                                .SelectMany(b => b.BookingDetails)
-                                .Sum(d => Math.Max(0.5, (d.EndAt - d.StartAt).TotalHours));
+                managingDepts = managingDepts.Where(d => d.Id == targetDeptId.Value).ToList();
+            }
 
-                return new DepartmentBookingStatDto
+            var deptStats = new List<DepartmentBookingStatDto>();
+            foreach (var dept in managingDepts)
+            {
+                var currentDeptRoomIds = allRoomsWithDept
+                    .Where(r => r.RoomType?.DepartmentId == dept.Id)
+                    .Select(r => r.Id)
+                    .ToHashSet();
+
+                var deptBookings = rawBookings
+                    .Where(b => b.BookingDetails != null && b.BookingDetails.Any(bd => currentDeptRoomIds.Contains(bd.RoomId)))
+                    .ToList();
+
+                var deptDetails = deptBookings
+                    .SelectMany(b => b.BookingDetails ?? Enumerable.Empty<BookingDetail>())
+                    .Where(bd => currentDeptRoomIds.Contains(bd.RoomId))
+                    .ToList();
+
+                long tot = deptBookings.Count;
+                long app = deptBookings.Count(b => b.BookingDetails != null && b.BookingDetails.Any(bd => currentDeptRoomIds.Contains(bd.RoomId) && (bd.Status == "Đã duyệt" || bd.Status == "Approved")));
+                double succ = tot > 0 ? Math.Round((double)app / tot * 100, 1) : 0;
+                double hours = deptDetails
+                    .Where(d => d.Status == "Đã duyệt" || d.Status == "Approved")
+                    .Sum(d => Math.Max(0.5, (d.EndAt - d.StartAt).TotalHours));
+
+                deptStats.Add(new DepartmentBookingStatDto
                 {
-                    DepartmentName = g.Key,
+                    DepartmentId = dept.Id,
+                    DepartmentName = dept.Name,
                     TotalBookings = tot,
                     ApprovedBookings = app,
                     SuccessRate = succ,
                     TotalHoursUsed = Math.Round(hours, 1)
-                };
-            }).OrderByDescending(x => x.TotalBookings).ToList();
+                });
+            }
+            deptStats = deptStats.OrderByDescending(x => x.TotalBookings).ToList();
 
             var report = new BookingStatsReportDto
             {
@@ -312,16 +440,23 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<RoomUsageReportDto>> GetRoomUsageReportAsync(ReportFilterDto filter)
         {
+            var targetDeptId = ResolveTargetDepartmentId(filter);
             var (from, to) = ResolveDateRange(filter);
 
-            var rooms = (await _roomRepo.GetAllAsync(r => r.RoomType)).ToList();
+            var rooms = (await _roomRepo.GetAllAsync(r => r.RoomType, r => r.RoomType.Department)).ToList();
+            if (targetDeptId.HasValue)
+            {
+                rooms = rooms.Where(r => r.RoomType?.DepartmentId == targetDeptId.Value).ToList();
+            }
+
+            var roomIds = rooms.Select(r => r.Id).ToHashSet();
 
             var details = (await _bookingDetailRepo.GetAllAsync(d => d.Booking, d => d.UsageSessions))
-                .Where(d => d.StartAt >= from && d.StartAt <= to)
+                .Where(d => d.StartAt >= from && d.StartAt <= to && roomIds.Contains(d.RoomId))
                 .ToList();
 
             var sessions = (await _usageSessionRepo.GetAllAsync(s => s.BookingDetail))
-                .Where(s => (s.ActualCheckIn ?? s.CreatedAt) >= from && (s.ActualCheckIn ?? s.CreatedAt) <= to)
+                .Where(s => (s.ActualCheckIn ?? s.CreatedAt) >= from && (s.ActualCheckIn ?? s.CreatedAt) <= to && s.BookingDetail != null && roomIds.Contains(s.BookingDetail.RoomId))
                 .ToList();
 
             double totalPeriodDays = Math.Max(1, (to - from).TotalDays);
@@ -430,11 +565,33 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
         // ─────────────────────────────────────────────────────────────────
         public async Task<ApiResponse<ViolationStatsReportDto>> GetViolationStatsReportAsync(ReportFilterDto filter)
         {
+            var targetDeptId = filter.DepartmentId;
+            if (!_currentUser.IsAdmin && (_currentUser.Role == "Manager" || _currentUser.Role == "Employee") && _currentUser.DepartmentId.HasValue)
+            {
+                targetDeptId = _currentUser.DepartmentId.Value;
+            }
+
             var (from, to) = ResolveDateRange(filter, defaultMonths: 3);
 
-            var violations = (await _violationRecordRepo.GetAllAsync(v => v.ViolationType, v => v.User, v => v.User.Department))
-                .Where(v => v.IncidentTime >= from && v.IncidentTime <= to)
-                .ToList();
+            var violationsQuery = (await _violationRecordRepo.GetAllAsync(
+                v => v.ViolationType,
+                v => v.User,
+                v => v.User.Department,
+                v => v.UsageSession,
+                v => v.UsageSession.BookingDetail,
+                v => v.UsageSession.BookingDetail.Room,
+                v => v.UsageSession.BookingDetail.Room.RoomType
+            )).Where(v => v.IncidentTime >= from && v.IncidentTime <= to);
+
+            if (targetDeptId.HasValue)
+            {
+                violationsQuery = violationsQuery.Where(v =>
+                    v.UsageSession != null
+                        ? v.UsageSession.BookingDetail?.Room?.RoomType?.DepartmentId == targetDeptId.Value
+                        : v.User?.DepartmentId == targetDeptId.Value);
+            }
+
+            var violations = violationsQuery.ToList();
 
             int totalRecords = violations.Count;
             int pending = violations.Count(v => v.Status == "Chờ xử lý");
@@ -480,9 +637,15 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
                 .ToList();
 
             var now = DateTime.UtcNow;
-            var activeRestrictions = (await _userRestrictionRepo.GetAllAsync(ur => ur.User))
+            var activeRestrictions = (await _userRestrictionRepo.GetAllAsync(ur => ur.User, ur => ur.User.Department))
                 .Where(ur => ur.Status == "Hoạt động" && ur.StartAt <= now && (ur.EndAt == null || ur.EndAt >= now))
                 .ToList();
+
+            if (targetDeptId.HasValue)
+            {
+                var deptUserIds = violations.Select(v => v.UserId).ToHashSet();
+                activeRestrictions = activeRestrictions.Where(ur => deptUserIds.Contains(ur.UserId) || ur.User?.DepartmentId == targetDeptId.Value).ToList();
+            }
 
             var bannedUserIds = activeRestrictions.Select(ur => ur.UserId).ToHashSet();
 
@@ -589,6 +752,20 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
                 ? DateTime.SpecifyKind(filter.ToDate.Value.Date, DateTimeKind.Utc).AddDays(1)
                 : DateTime.UtcNow.AddDays(1);
             return (from, to);
+        }
+
+        /// <summary>
+        /// Xác định phòng ban quản lý phòng mục tiêu:
+        /// Nhân sự / Quản lý chỉ được xem dữ liệu thuộc đơn vị quản lý phòng của mình (Thư viện hoặc Đào tạo).
+        /// Quản trị viên (Admin) xem toàn bộ hệ thống hoặc theo bộ lọc gửi lên.
+        /// </summary>
+        private int? ResolveTargetDepartmentId(ReportFilterDto filter)
+        {
+            if (!_currentUser.IsAdmin && (_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
+            {
+                return _currentUser.DepartmentId.Value;
+            }
+            return filter?.DepartmentId;
         }
     }
 }

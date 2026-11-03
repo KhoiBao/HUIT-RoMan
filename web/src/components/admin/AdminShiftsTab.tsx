@@ -41,6 +41,8 @@ import {
   AlertTriangleIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
+import { TimeSelect24h } from "../common/TimeSelect24h";
+import { formatDateTime24h } from "../../lib/dateTimeFormat";
 
 interface AdminShiftsTabProps {
   onNotify?: (text: string, type?: "success" | "warning" | "info") => void;
@@ -90,11 +92,25 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
   const [logs, setLogs] = useState<ShiftLogItem[]>([]);
   const [stats, setStats] = useState<ShiftStats | null>(null);
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
-  // Danh sách nhân sự có thể phân công (nếu là Quản lý đơn vị thì chỉ phân công nhân sự thuộc đơn vị mình)
+
+  // Department filter for Admin: "ALL" | "3" (Thư viện) | "2" (Phòng Đào tạo)
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("ALL");
+
+  const activeDepartmentId = useMemo(() => {
+    if (!isAdmin && user?.departmentId) {
+      return user.departmentId;
+    }
+    if (isAdmin && selectedDepartmentId !== "ALL") {
+      return Number(selectedDepartmentId);
+    }
+    return undefined;
+  }, [isAdmin, user?.departmentId, selectedDepartmentId]);
+
+  // Danh sách nhân sự có thể phân công (theo đơn vị đang chọn hoặc đơn vị của Quản lý/Nhân viên)
   const assignableEmployees = useMemo(() => {
-    if (isAdmin || !user?.departmentId) return employees;
-    return employees.filter((e) => e.departmentId === user.departmentId);
-  }, [isAdmin, user?.departmentId, employees]);
+    if (!activeDepartmentId) return employees;
+    return employees.filter((e) => e.departmentId === activeDepartmentId);
+  }, [activeDepartmentId, employees]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // View state: "calendar" | "table"
@@ -165,9 +181,9 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
     setLoading(true);
     try {
       const [shiftsData, logsData, statsData, empRes] = await Promise.all([
-        showMyShiftsOnly ? fetchMyShifts() : fetchShifts(),
-        fetchShiftLogs(),
-        fetchShiftStats(),
+        showMyShiftsOnly ? fetchMyShifts() : fetchShifts({ departmentId: activeDepartmentId }),
+        fetchShiftLogs({ departmentId: activeDepartmentId }),
+        fetchShiftStats(activeDepartmentId),
         api.get("/api/Employees").catch(() => ({ data: [] })),
       ]);
 
@@ -187,7 +203,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
 
   useEffect(() => {
     loadData();
-  }, [showMyShiftsOnly]);
+  }, [showMyShiftsOnly, activeDepartmentId]);
 
   // Filtered shifts
   const filteredShifts = useMemo(() => {
@@ -396,12 +412,29 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
       return;
     }
 
-    // Kiểm tra trùng lặp thời gian ca trực trên cùng một ngày
+    // Kiểm tra trùng lặp thời gian ca trực trên cùng một ngày trong cùng đơn vị
+    const targetDeptId =
+      activeDepartmentId ||
+      (shiftForm.selectedEmployeeIds.length > 0
+        ? employees.find((e) => shiftForm.selectedEmployeeIds.includes(e.id))?.departmentId
+        : undefined);
+
+    const relevantShifts = targetDeptId
+      ? shifts.filter(
+          (s) =>
+            s.employees.length === 0 ||
+            s.employees.some((e) => {
+              const emp = employees.find((x) => x.id === e.id);
+              return (emp?.departmentId || e.departmentId) === targetDeptId;
+            })
+        )
+      : shifts;
+
     const overlapping = findOverlappingShift(
       shiftForm.date,
       shiftForm.startTime,
       shiftForm.endTime,
-      shifts,
+      relevantShifts,
       editingShift?.id
     );
     if (overlapping) {
@@ -660,6 +693,40 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
             <option value="Hủy">Đã hủy</option>
           </select>
         </div>
+
+        {/* Department Filter for Admin / Locked Badge for Staff */}
+        {isAdmin ? (
+          <div className="filter-item">
+            <select
+              value={selectedDepartmentId}
+              onChange={(e) => setSelectedDepartmentId(e.target.value)}
+              className="filter-select"
+              title="Lọc ca trực theo đơn vị vận hành"
+            >
+              <option value="ALL">🏢 Toàn trường (Tất cả đơn vị)</option>
+              <option value="3">📚 Thư viện</option>
+              <option value="2">🎓 Phòng Đào tạo</option>
+            </select>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 12px",
+              borderRadius: "6px",
+              background: "var(--rp-soft, #f1f5f9)",
+              border: "1px solid var(--rp-border, #cbd5e1)",
+              fontSize: "13px",
+              fontWeight: 600,
+              color: "#334155",
+            }}
+            title="Đơn vị vận hành ca trực của bạn"
+          >
+            <span>{user?.departmentId === 2 ? "🎓 Phòng Đào tạo" : "📚 Thư viện"}</span>
+          </div>
+        )}
 
         {/* View Switcher & Action Buttons */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1389,7 +1456,7 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                   </div>
                   <div style={{ marginTop: "4px", fontSize: "11.5px", color: "#64748b" }}>
                     Người ghi: <strong>{log.employeeName}</strong> ({log.employeeCode}) • Thời gian:{" "}
-                    {new Date(log.logTime).toLocaleString("vi-VN")}
+                    {formatDateTime24h(log.logTime)}
                   </div>
                 </div>
               </div>
@@ -1450,11 +1517,13 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                   <label>
                     Giờ bắt đầu: <span className="req-star">*</span>
                   </label>
-                  <input
-                    type="time"
+                  <TimeSelect24h
                     required
                     value={shiftForm.startTime}
-                    onChange={(e) => setShiftForm({ ...shiftForm, startTime: e.target.value })}
+                    minTime="06:00"
+                    maxTime="22:00"
+                    stepMinutes={15}
+                    onChange={(val) => setShiftForm({ ...shiftForm, startTime: val })}
                   />
                 </div>
 
@@ -1462,11 +1531,13 @@ export default function AdminShiftsTab({ onNotify }: AdminShiftsTabProps) {
                   <label>
                     Giờ kết thúc: <span className="req-star">*</span>
                   </label>
-                  <input
-                    type="time"
+                  <TimeSelect24h
                     required
                     value={shiftForm.endTime}
-                    onChange={(e) => setShiftForm({ ...shiftForm, endTime: e.target.value })}
+                    minTime={shiftForm.startTime || "06:00"}
+                    maxTime="22:00"
+                    stepMinutes={15}
+                    onChange={(val) => setShiftForm({ ...shiftForm, endTime: val })}
                   />
                 </div>
               </div>

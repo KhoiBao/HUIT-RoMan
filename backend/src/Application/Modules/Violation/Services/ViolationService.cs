@@ -173,13 +173,19 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
 
             var query = records.AsEnumerable();
 
-            // Employee department filter if needed
-            if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
+            // Department filter: Admin with departmentId filter or staff/manager locked to their DepartmentId
+            var targetDeptId = filter.DepartmentId;
+            if (!_currentUser.IsAdmin && (_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
+            {
+                targetDeptId = _currentUser.DepartmentId.Value;
+            }
+
+            if (targetDeptId.HasValue)
             {
                 query = query.Where(vr =>
-                    vr.User?.DepartmentId == _currentUser.DepartmentId.Value ||
-                    vr.UsageSession?.BookingDetail?.Room?.RoomType?.DepartmentId == _currentUser.DepartmentId.Value ||
-                    vr.UsageSession == null);
+                    vr.UsageSession != null
+                        ? vr.UsageSession.BookingDetail?.Room?.RoomType?.DepartmentId == targetDeptId.Value
+                        : vr.User?.DepartmentId == targetDeptId.Value);
             }
 
             // Keyword Search
@@ -528,12 +534,37 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
         // USER RESTRICTIONS
         // ─────────────────────────────────────────────────────────────────
 
-        public async Task<ApiResponse<IEnumerable<UserRestrictionDto>>> GetRestrictionsAsync(string? status = null, string? search = null)
+        public async Task<ApiResponse<IEnumerable<UserRestrictionDto>>> GetRestrictionsAsync(string? status = null, string? search = null, int? departmentId = null)
         {
+            var targetDeptId = departmentId;
+            if (!_currentUser.IsAdmin && (_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
+            {
+                targetDeptId = _currentUser.DepartmentId.Value;
+            }
+
             var list = await _userRestrictionRepo.GetAllAsync(ur => ur.User, ur => ur.User.Department);
             var now = DateTime.UtcNow;
 
             var query = list.AsEnumerable();
+
+            if (targetDeptId.HasValue)
+            {
+                var deptViolations = await _violationRecordRepo.GetAllAsync(
+                    vr => vr.User,
+                    vr => vr.UsageSession,
+                    vr => vr.UsageSession.BookingDetail,
+                    vr => vr.UsageSession.BookingDetail.Room,
+                    vr => vr.UsageSession.BookingDetail.Room.RoomType
+                );
+                var deptUserIds = deptViolations
+                    .Where(vr => vr.UsageSession != null
+                        ? vr.UsageSession.BookingDetail?.Room?.RoomType?.DepartmentId == targetDeptId.Value
+                        : vr.User?.DepartmentId == targetDeptId.Value)
+                    .Select(vr => vr.UserId)
+                    .ToHashSet();
+
+                query = query.Where(ur => deptUserIds.Contains(ur.UserId) || ur.User?.DepartmentId == targetDeptId.Value);
+            }
 
             // Filter status
             if (!string.IsNullOrWhiteSpace(status) && status != "ALL")
@@ -722,21 +753,54 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
         // STATS
         // ─────────────────────────────────────────────────────────────────
 
-        public async Task<ApiResponse<ViolationStatsDto>> GetStatsAsync()
+        public async Task<ApiResponse<ViolationStatsDto>> GetStatsAsync(int? departmentId = null)
         {
-            var records = await _violationRecordRepo.GetAllAsync();
+            var targetDeptId = departmentId;
+            if (!_currentUser.IsAdmin && (_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue)
+            {
+                targetDeptId = _currentUser.DepartmentId.Value;
+            }
+
+            var allRecords = await _violationRecordRepo.GetAllAsync(
+                vr => vr.User,
+                vr => vr.UsageSession,
+                vr => vr.UsageSession.BookingDetail,
+                vr => vr.UsageSession.BookingDetail.Room,
+                vr => vr.UsageSession.BookingDetail.Room.RoomType
+            );
+
+            var query = allRecords.AsEnumerable();
+
+            if (targetDeptId.HasValue)
+            {
+                query = query.Where(vr =>
+                    vr.UsageSession != null
+                        ? vr.UsageSession.BookingDetail?.Room?.RoomType?.DepartmentId == targetDeptId.Value
+                        : vr.User?.DepartmentId == targetDeptId.Value);
+            }
+
+            var filteredRecords = query.ToList();
+
             var now = DateTime.UtcNow;
-            var activeRestrictions = (await _userRestrictionRepo.FindAsync(
+            var activeRestrictionsQuery = (await _userRestrictionRepo.FindAsync(
                 ur => ur.Status == "Hoạt động" && ur.StartAt <= now && (ur.EndAt == null || ur.EndAt >= now)
-            )).Select(ur => ur.UserId).Distinct().Count();
+            )).AsEnumerable();
+
+            if (targetDeptId.HasValue)
+            {
+                var deptUserIds = filteredRecords.Select(r => r.UserId).ToHashSet();
+                activeRestrictionsQuery = activeRestrictionsQuery.Where(ur => deptUserIds.Contains(ur.UserId));
+            }
+
+            var activeRestrictions = activeRestrictionsQuery.Select(ur => ur.UserId).Distinct().Count();
 
             var stats = new ViolationStatsDto
             {
-                TotalRecords = records.Count(),
-                PendingRecords = records.Count(r => r.Status == "Chờ xử lý"),
-                ResolvedRecords = records.Count(r => r.Status == "Đã xử lý" || r.Status == "Đã nộp phạt"),
+                TotalRecords = filteredRecords.Count,
+                PendingRecords = filteredRecords.Count(r => r.Status == "Chờ xử lý"),
+                ResolvedRecords = filteredRecords.Count(r => r.Status == "Đã xử lý" || r.Status == "Đã nộp phạt"),
                 ActiveRestrictions = activeRestrictions,
-                SevereRecords = records.Count(r => r.Severity >= 3)
+                SevereRecords = filteredRecords.Count(r => r.Severity >= 3)
             };
 
             return ApiResponse<ViolationStatsDto>.SuccessResponse(stats);

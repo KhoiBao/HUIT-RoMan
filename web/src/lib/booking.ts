@@ -1,5 +1,6 @@
 import { api } from "./api";
 import { toISODateString, type Period } from "./schedule";
+import { formatTime24h, formatDateTime24h } from "./dateTimeFormat";
 
 export interface AvailableRoom {
   roomId: number;
@@ -825,7 +826,7 @@ export function canCancelBookingOnline(
   if (now.getTime() > deadline) {
     return {
       allowed: false,
-      message: `Đã quá hạn hủy trực tuyến (hạn cuối ${new Date(deadline).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}). Vui lòng liên hệ quản lý thư viện.`,
+      message: `Đã quá hạn hủy trực tuyến (hạn cuối ${formatDateTime24h(deadline)}). Vui lòng liên hệ quản lý thư viện.`,
     };
   }
 
@@ -915,10 +916,8 @@ export function formatDetailTimeRange(detail: BookingDetailItem): string {
   if (detail.startPeriodName && detail.endPeriodName) {
     return `${detail.startPeriodName} → ${detail.endPeriodName}`;
   }
-  const s = new Date(detail.startAt);
-  const e = new Date(detail.endAt);
-  const sStr = s.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-  const eStr = e.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  const sStr = formatTime24h(detail.startAt);
+  const eStr = formatTime24h(detail.endAt);
   return `${sStr} - ${eStr}`;
 }
 
