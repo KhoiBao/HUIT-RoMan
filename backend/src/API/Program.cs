@@ -126,6 +126,8 @@ builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.ICurrentUser
 // Chạy độc lập với trình duyệt; an toàn khi chạy lặp lại hoặc chạy nhiều instance backend.
 builder.Services.AddHostedService<HUIT_RoMan.API.Services.BookingNoShowWatcher>();
 builder.Services.AddHostedService<HUIT_RoMan.API.Services.BookingReminderWatcher>();
+// Tác vụ nền: tự đóng phiên đang sử dụng quá giờ kết thúc mà không trả phòng.
+builder.Services.AddHostedService<HUIT_RoMan.API.Services.OverdueSessionAutoCloseWatcher>();
 
 var app = builder.Build();
 

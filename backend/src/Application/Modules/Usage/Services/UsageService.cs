@@ -648,6 +648,8 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
 
             if (newEndAt <= detail.EndAt)
                 return ApiResponse<UsageSessionDto>.ErrorResponse("Thời gian gia hạn phải sau giờ kết thúc hiện tại.");
+            if ((newEndAt - detail.EndAt).TotalMinutes > 60)
+                return ApiResponse<UsageSessionDto>.ErrorResponse("Chỉ được gia hạn tối đa 60 phút mỗi lần.");
             if (newEndAt <= DateTime.UtcNow)
                 return ApiResponse<UsageSessionDto>.ErrorResponse("Thời gian kết thúc mới phải ở tương lai.");
 

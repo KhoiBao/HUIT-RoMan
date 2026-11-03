@@ -91,6 +91,18 @@ namespace HUIT_RoMan.API.Controllers
         }
 
         /// <summary>
+        /// Hủy từng phòng trong đơn (BookingDetail) khi đặt nhiều phòng.
+        /// Chủ đơn: lý do bắt buộc và còn hạn 3 giờ trước giờ bắt đầu của phòng đó.
+        /// </summary>
+        [HttpPatch("details/{detailId}/cancel")]
+        public async Task<IActionResult> CancelDetail(int detailId, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] CancelBookingRequest? request = null)
+        {
+            var response = await _bookingService.CancelBookingDetailAsync(detailId, request);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
+        /// <summary>
         /// Nhận phòng (check-in) đơn đã duyệt trong cửa sổ [T - 15 phút, T).
         /// Backend xác minh lại sở hữu đơn, trạng thái và thời điểm tại thời điểm request.
         /// </summary>

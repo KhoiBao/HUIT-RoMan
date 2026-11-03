@@ -495,7 +495,7 @@ describe("check-in window & cancellation rules (mirror backend policy)", () => {
     const info = evaluateCheckInWindow(START, now);
     expect(info.state).toBe("not_open");
     expect(info.remainingSeconds).toBe(300);
-    expect(info.message).toBe("Có thể nhận phòng sau 05:00");
+    expect(info.message).toBe("Có thể nhận phòng sau 5 phút 0 giây (mở từ 09:45)");
   });
 
   it("evaluateCheckInWindow: đúng T-15 phút → open ('Vui lòng nhận phòng trong 15:00')", () => {
@@ -503,7 +503,7 @@ describe("check-in window & cancellation rules (mirror backend policy)", () => {
     const info = evaluateCheckInWindow(START, now);
     expect(info.state).toBe("open");
     expect(info.remainingSeconds).toBe(900);
-    expect(info.message).toBe("Vui lòng nhận phòng trong 15:00");
+    expect(info.message).toBe("Vui lòng nhận phòng trong 15 phút 0 giây (trước 10:00)");
   });
 
   it("evaluateCheckInWindow: ngay trước T → vẫn open", () => {

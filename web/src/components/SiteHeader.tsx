@@ -134,13 +134,13 @@ export default function SiteHeader() {
               end
               className={({ isActive }) => navLinkClass(isActive, isMyBookings)}
             >
-              Đặt phòng
+              Đăng ký mượn phòng dùng chung
             </NavLink>
             <NavLink
               to="/dat-phong?tab=my-bookings"
               className={() => navLinkClass(isMyBookings)}
             >
-              Phòng đã đăng ký
+              Lịch sử đăng ký sử dụng phòng
             </NavLink>
             {isStaff && (
               <NavLink
@@ -158,7 +158,7 @@ export default function SiteHeader() {
                 <NotificationCenter />
                 <Link to="/dat-phong" className="roman-header-cta">
                   <PlusIcon size={15} />
-                  Đặt phòng
+                  Đăng ký mượn phòng
                 </Link>
                 <button
                   type="button"
@@ -218,13 +218,13 @@ export default function SiteHeader() {
               end
               className={({ isActive }) => navLinkClass(isActive, isMyBookings)}
             >
-              Đặt phòng
+              Đăng ký mượn phòng dùng chung
             </NavLink>
             <NavLink
               to="/dat-phong?tab=my-bookings"
               className={() => navLinkClass(isMyBookings)}
             >
-              Phòng đã đăng ký
+              Lịch sử đăng ký sử dụng phòng
             </NavLink>
             {isStaff && (
               <NavLink

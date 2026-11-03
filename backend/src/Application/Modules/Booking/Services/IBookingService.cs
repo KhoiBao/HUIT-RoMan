@@ -33,6 +33,12 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         Task<ApiResponse<bool>> CancelBookingAsync(int id, CancelBookingRequest? request = null, DateTime? nowUtc = null);
 
         /// <summary>
+        /// Hủy TỪNG phòng trong đơn (BookingDetail) cho chủ đơn:
+        /// lý do bắt buộc, còn hạn ≥ 3 giờ trước giờ bắt đầu của phòng đó.
+        /// </summary>
+        Task<ApiResponse<bool>> CancelBookingDetailAsync(int detailId, CancelBookingRequest? request = null, DateTime? nowUtc = null);
+
+        /// <summary>
         /// Nhận phòng (check-in) đơn đã duyệt trong cửa sổ [T - 15 phút, T).
         /// Đánh dấu Booking.CheckedInAt và khởi tạo phiên sử dụng cho các chi tiết đã duyệt.
         /// </summary>
