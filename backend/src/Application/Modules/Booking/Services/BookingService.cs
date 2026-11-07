@@ -72,6 +72,22 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 ? request.UserId.Value
                 : _currentUser.UserId.Value;
 
+            // Chống gửi trùng
+            var idempotencyKey = string.IsNullOrWhiteSpace(request.IdempotencyKey)
+                ? null
+                : request.IdempotencyKey.Trim();
+            if (idempotencyKey != null && idempotencyKey.Length > 64)
+                return ApiResponse<BookingResponseDto>.ErrorResponse(
+                    "Mã định danh yêu cầu (X-Idempotency-Key) tối đa 64 ký tự.", BookingReasonCodes.InvalidRequest);
+
+            if (idempotencyKey != null)
+            {
+                var existingByKey = (await _bookingRepo.FindAsync(
+                    b => b.UserId == targetUserId && b.IdempotencyKey == idempotencyKey)).FirstOrDefault();
+                if (existingByKey != null)
+                    return await GetBookingByIdAsync(existingByKey.Id);
+            }
+
             // Kiểm tra lệnh cấm mượn phòng (UserRestriction)
             var now = DateTime.UtcNow;
             var activeRestrictions = await _userRestrictionRepo.FindAsync(
@@ -85,19 +101,20 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 var r = activeRestrictions.First();
                 var endStr = r.EndAt.HasValue ? $" đến ngày {r.EndAt.Value.AddHours(7):dd/MM/yyyy HH:mm}" : "";
                 return ApiResponse<BookingResponseDto>.ErrorResponse(
-                    $"Tài khoản hiện đang bị cấm/hạn chế mượn phòng{endStr}. Lý do: {r.Reason}. Vui lòng liên hệ ban quản lý thư viện để được giải quyết biên bản vi phạm.");
+                    $"Tài khoản hiện đang bị cấm/hạn chế mượn phòng{endStr}. Lý do: {r.Reason}. Vui lòng liên hệ ban quản lý thư viện để được giải quyết biên bản vi phạm.", BookingReasonCodes.Restricted);
             }
 
             if (request.Details == null || !request.Details.Any())
-                return ApiResponse<BookingResponseDto>.ErrorResponse("Vui lòng chọn ít nhất một phòng.");
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Vui lòng chọn ít nhất một phòng.", BookingReasonCodes.InvalidRequest);
 
             if (string.IsNullOrWhiteSpace(request.ActivityName) || string.IsNullOrWhiteSpace(request.Purpose))
-                return ApiResponse<BookingResponseDto>.ErrorResponse("Tên hoạt động và mục đích sử dụng là bắt buộc.");
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Tên hoạt động và mục đích sử dụng là bắt buộc.", BookingReasonCodes.InvalidRequest);
             if (request.GuestCount <= 0)
-                return ApiResponse<BookingResponseDto>.ErrorResponse("Số người tham dự phải lớn hơn 0.");
+                return ApiResponse<BookingResponseDto>.ErrorResponse("Số người tham dự phải lớn hơn 0.", BookingReasonCodes.InvalidRequest);
 
             // Validate rooms exist and are Available
             var totalRoomCapacity = 0;
+            var rooms = new List<Domain.Entities.Room>();
             foreach (var detail in request.Details)
             {
                 var room = await _roomRepo.GetByIdAsync(
@@ -106,13 +123,13 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                     r => r.RoomEquipments,
                     r => r.RoomType.Department);
                 if (room == null)
-                    return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng ID {detail.RoomId} không tồn tại.");
+                    return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng ID {detail.RoomId} không tồn tại.", BookingReasonCodes.InvalidRequest);
 
                 var hasMaintenanceEquip = room.RoomEquipments != null && room.RoomEquipments.Any(re =>
                     !re.IsDeleted && HUIT_RoMan.Application.Modules.Room.Services.RoomEquipmentService.IsEquipmentUnderMaintenance(re.Status));
 
                 if (IsRoomUnderMaintenance(room.Status) || hasMaintenanceEquip)
-                    return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng {room.Name} đang bảo trì thiết bị, không thể đặt.");
+                    return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng {room.Name} đang bảo trì thiết bị, không thể đặt.", BookingReasonCodes.Maintenance);
 
                 // Đặt nhiều phòng: sức chứa tối đa là TỔNG số chỗ của tất cả các phòng
                 // đã chọn (nhóm người được chia giữa các phòng), nên không chặn theo
@@ -122,16 +139,17 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                     var guestCount = detail.GuestCount > 0 ? detail.GuestCount : request.GuestCount;
                     if (guestCount <= 0 || guestCount > room.Capacity)
                         return ApiResponse<BookingResponseDto>.ErrorResponse(
-                            $"Số người cho phòng {room.Name} phải từ 1 đến {room.Capacity}.");
+                            $"Số người cho phòng {room.Name} phải từ 1 đến {room.Capacity}.", BookingReasonCodes.Capacity);
                 }
                 totalRoomCapacity += room.Capacity;
+                rooms.Add(room);
 
                 // Ma trận quyền theo vai trò: vai trò lấy từ token ở server,
                 // không tin bất kỳ thông tin role nào do client gửi lên.
                 var roleError = BookingRoomPermissionPolicy.ValidateRoleRoomType(
                     _currentUser.Role, room.RoomType?.Name);
                 if (roleError != null)
-                    return ApiResponse<BookingResponseDto>.ErrorResponse(roleError);
+                    return ApiResponse<BookingResponseDto>.ErrorResponse(roleError, BookingReasonCodes.RoleRoomMismatch);
 
 
 
@@ -139,7 +157,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 {
                     if (room.RoomType?.DepartmentId != _currentUser.DepartmentId.Value)
                     {
-                        return ApiResponse<BookingResponseDto>.ErrorResponse("Bạn chỉ có quyền đặt phòng thuộc đơn vị/khoa do mình quản lý.");
+                        return ApiResponse<BookingResponseDto>.ErrorResponse("Bạn chỉ có quyền đặt phòng thuộc đơn vị/khoa do mình quản lý.", BookingReasonCodes.OutOfDepartmentScope);
                     }
                 }
 
@@ -147,22 +165,22 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 if (isBookingByPeriod)
                 {
                     if (!detail.StartPeriodId.HasValue || !detail.EndPeriodId.HasValue)
-                        return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng {room.Name} yêu cầu phải đặt theo tiết học.");
+                        return ApiResponse<BookingResponseDto>.ErrorResponse($"Phòng {room.Name} yêu cầu phải đặt theo tiết học.", BookingReasonCodes.InvalidPeriod);
 
                     var startPeriod = await _periodRepo.GetByIdAsync(detail.StartPeriodId.Value);
                     var endPeriod = await _periodRepo.GetByIdAsync(detail.EndPeriodId.Value);
 
                     if (startPeriod == null || endPeriod == null)
-                        return ApiResponse<BookingResponseDto>.ErrorResponse("Không tìm thấy thông tin tiết học.");
+                        return ApiResponse<BookingResponseDto>.ErrorResponse("Không tìm thấy thông tin tiết học.", BookingReasonCodes.InvalidPeriod);
 
                     // Mỗi loại phòng có bộ 16 tiết riêng; không cho trộn tiết của
                     // phòng lý thuyết với phòng thực hành.
                     if (startPeriod.RoomTypeId.HasValue && startPeriod.RoomTypeId != room.RoomTypeId)
                         return ApiResponse<BookingResponseDto>.ErrorResponse(
-                            $"{startPeriod.Name} không thuộc lịch tiết của {room.RoomType?.Name}.");
+                            $"{startPeriod.Name} không thuộc lịch tiết của {room.RoomType?.Name}.", BookingReasonCodes.InvalidPeriod);
                     if (endPeriod.RoomTypeId.HasValue && endPeriod.RoomTypeId != room.RoomTypeId)
                         return ApiResponse<BookingResponseDto>.ErrorResponse(
-                            $"{endPeriod.Name} không thuộc lịch tiết của {room.RoomType?.Name}.");
+                            $"{endPeriod.Name} không thuộc lịch tiết của {room.RoomType?.Name}.", BookingReasonCodes.InvalidPeriod);
 
                     // detail.StartAt sent by client is in UTC. Convert to UTC+7 (Vietnam local) to get the correct calendar date.
                     var localDate = detail.StartAt.ToUniversalTime().AddHours(7).Date;
@@ -172,16 +190,16 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 else if (detail.StartPeriodId.HasValue || detail.EndPeriodId.HasValue)
                 {
                     return ApiResponse<BookingResponseDto>.ErrorResponse(
-                        $"Phòng {room.Name} đặt theo khung giờ, không theo tiết học.");
+                        $"Phòng {room.Name} đặt theo khung giờ, không theo tiết học.", BookingReasonCodes.InvalidPeriod);
                 }
 
                 if (detail.EndAt <= detail.StartAt)
-                    return ApiResponse<BookingResponseDto>.ErrorResponse("Thời gian kết thúc phải sau thời gian bắt đầu.");
+                    return ApiResponse<BookingResponseDto>.ErrorResponse("Thời gian kết thúc phải sau thời gian bắt đầu.", BookingReasonCodes.InvalidTimeRange);
 
                 // Không cho đặt giờ đã qua với mọi vai trò (sinh viên còn bị siết
                 // thêm bởi StudentBookingPolicy bên dưới).
                 if (detail.StartAt.ToUniversalTime() <= now)
-                    return ApiResponse<BookingResponseDto>.ErrorResponse("Không thể đặt thời gian đã qua trong ngày.");
+                    return ApiResponse<BookingResponseDto>.ErrorResponse("Không thể đặt thời gian đã qua trong ngày.", BookingReasonCodes.InvalidTimeRange);
 
                 // Giờ phục vụ do quản trị cấu hình chỉ áp dụng cho phòng Thư viện
                 // và cho mọi vai trò (sinh viên, giảng viên, nhân viên, admin).
@@ -190,7 +208,7 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                     var week = await _workingHours.GetWeekAsync();
                     var hoursError = _workingHours.Validate(week, detail.StartAt, detail.EndAt);
                     if (hoursError != null)
-                        return ApiResponse<BookingResponseDto>.ErrorResponse(hoursError);
+                        return ApiResponse<BookingResponseDto>.ErrorResponse(hoursError, BookingReasonCodes.OutsideLibraryHours);
                 }
 
                 if (StudentBookingPolicy.IsStudent(_currentUser.Role))
@@ -201,17 +219,49 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                         DateTime.UtcNow);
 
                     if (windowError != null)
-                        return ApiResponse<BookingResponseDto>.ErrorResponse(windowError);
+                        return ApiResponse<BookingResponseDto>.ErrorResponse(windowError, BookingReasonCodes.InvalidStudentWindow);
 
                     if (IsLibraryRoom(room))
                     {
                         var advanceError = StudentBookingPolicy.ValidateAdvanceWindow(detail.StartAt, now);
                         if (advanceError != null)
-                            return ApiResponse<BookingResponseDto>.ErrorResponse(advanceError);
+                            return ApiResponse<BookingResponseDto>.ErrorResponse(advanceError, BookingReasonCodes.InvalidTimeRange);
                     }
                 }
+            }
 
-                // Check for conflicting approved/pending bookings
+            // nhiều phòng: giới hạn tối đa = tổng sức chứa của các phòng đã chọn
+            if (request.Details.Count > 1 && request.GuestCount > totalRoomCapacity)
+                return ApiResponse<BookingResponseDto>.ErrorResponse(
+                    $"Tổng sức chứa của {request.Details.Count} phòng đã chọn là {totalRoomCapacity} chỗ, không đủ cho {request.GuestCount} người. Vui lòng giảm số người hoặc chọn thêm phòng.", BookingReasonCodes.Capacity);
+
+            // ── Transaction + advisory lock: 2 request đồng thời của cùng sinh viên
+            // phải tuần tự qua bước kiểm hạn mức để không vượt 2 lượt/tuần.
+            // SQLite (môi trường test) không có advisory lock nhưng vẫn chạy trong transaction.
+            await _unitOfWork.BeginTransactionAsync();
+
+            // Hạn mức áp dụng cho user ĐƯỢC ĐẶT HỘ (kể cả khi nhân sự tạo hộ): sinh viên
+            // là user không có hồ sơ nhân sự (Employee); Admin/Employee/Giảng viên đều miễn.
+            var quotaTarget = (await _employeeRepo.FindAsync(e => e.UserId == targetUserId)).Any()
+                ? (int?)null
+                : targetUserId;
+            if (quotaTarget.HasValue)
+            {
+                await _unitOfWork.AcquireBookingQuotaLockAsync(quotaTarget.Value);
+                var quotaError = await EnforceStudentWeeklyQuotaAsync(quotaTarget.Value, request.Details);
+                if (quotaError != null)
+                {
+                    await _unitOfWork.RollbackTransactionAsync();
+                    return ApiResponse<BookingResponseDto>.ErrorResponse(quotaError, BookingReasonCodes.QuotaExceeded);
+                }
+            }
+
+            // FIFO: đơn tới sau thua. Kiểm trùng lịch sau khi đã chốt hạn mức.
+            for (var i = 0; i < request.Details.Count; i++)
+            {
+                var detail = request.Details[i];
+                var room = rooms[i];
+
                 var conflicts = await _bookingDetailRepo.FindAsync(
                     bd => bd.RoomId == detail.RoomId
                        && bd.Status != "Từ chối"
@@ -225,15 +275,14 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                     var roomLabel = room.Name.StartsWith("Phòng", StringComparison.OrdinalIgnoreCase)
                         ? room.Name
                         : $"Phòng {room.Name}";
-                    return ApiResponse<BookingResponseDto>.ErrorResponse(
-                        $"{roomLabel} đã có lịch đặt trùng trong khoảng thời gian này.");
+                    var conflictReason = $"{BookingReasonCodes.ScheduleConflict}: {roomLabel} đã có lịch đặt trùng trong khoảng thời gian này.";
+                    // Lưu vết đơn "Từ chối" kèm mã luật, thông báo + email gợi ý chọn phòng/khung giờ khác.
+                    await RejectRequestForScheduleConflictAsync(targetUserId, request, conflictReason);
+                    // Vết từ chối là dữ liệu có chủ đích → commit trước khi trả lỗi R01.
+                    await _unitOfWork.CommitTransactionAsync();
+                    return ApiResponse<BookingResponseDto>.ErrorResponse(conflictReason, BookingReasonCodes.ScheduleConflict);
                 }
             }
-
-            // nhiều phòng: giới hạn tối đa = tổng sức chứa của các phòng đã chọn
-            if (request.Details.Count > 1 && request.GuestCount > totalRoomCapacity)
-                return ApiResponse<BookingResponseDto>.ErrorResponse(
-                    $"Tổng sức chứa của {request.Details.Count} phòng đã chọn là {totalRoomCapacity} chỗ, không đủ cho {request.GuestCount} người. Vui lòng giảm số người hoặc chọn thêm phòng.");
 
             var isStaff = _currentUser.IsAdmin || _currentUser.Role == "Employee" || _currentUser.Role == "Manager";
 
@@ -273,7 +322,8 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                 CreatedAt = DateTime.UtcNow,
                 ApprovedByUserId = approvedByUserId,
                 ApprovedAt = approvedAt,
-                ApprovalMode = approvalMode
+                ApprovalMode = approvalMode,
+                IdempotencyKey = idempotencyKey
             };
 
             await _bookingRepo.AddAsync(booking);
@@ -310,8 +360,22 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
             }
             catch (ScheduleConflictException)
             {
+                // Ràng buộc EX_BookingDetails_Room_NoOverlap ở DB chặn lịch trùng do
+                // 2 request chạy đồng thời → rollback rồi trả lỗi thân thiện.
+                await _unitOfWork.RollbackTransactionAsync();
                 return ApiResponse<BookingResponseDto>.ErrorResponse(
-                    "Một hoặc nhiều phòng vừa được người khác đặt trong cùng khung giờ. Vui lòng chọn khung giờ khác.");
+                    "Một hoặc nhiều phòng vừa được người khác đặt trong cùng khung giờ. Vui lòng chọn khung giờ khác.", BookingReasonCodes.ScheduleConflict);
+            }
+            catch (DbUpdateException ex) when (idempotencyKey != null && IsIdempotencyKeyViolation(ex))
+            {
+                // 2 request cùng key vào sát nhau: request thắng đã commit, request này
+                // trúng unique index (UserId, IdempotencyKey) → trả về đơn của request thắng.
+                await _unitOfWork.RollbackTransactionAsync();
+                var winner = (await _bookingRepo.FindAsync(
+                    b => b.UserId == targetUserId && b.IdempotencyKey == idempotencyKey)).FirstOrDefault();
+                if (winner != null)
+                    return await GetBookingByIdAsync(winner.Id);
+                throw;
             }
 
             if (autoApproved)
@@ -332,6 +396,8 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
                     await GetEmployeeIdForUserAsync(approvedByUserId.Value),
                     approvalMode!, historyComment, approvedAt ?? DateTime.UtcNow);
             }
+
+            await _unitOfWork.CommitTransactionAsync();
 
             return await GetBookingByIdAsync(booking.Id);
         }
@@ -1512,6 +1578,143 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
 
             var emp = (await _employeeRepo.FindAsync(e => e.UserId == _currentUser.UserId.Value)).FirstOrDefault();
             return new ApprovalActor(_currentUser.UserId.Value, emp?.Id);
+        }
+
+        /// <summary>Nhận diện lỗi unique index (UserId, IdempotencyKey) từ bất kỳ provider nào.</summary>
+        private static bool IsIdempotencyKeyViolation(DbUpdateException ex)
+        {
+            var cursor = ex.InnerException ?? (Exception)ex;
+            while (cursor != null)
+            {
+                if (cursor.Message.Contains("IX_Bookings_UserId_IdempotencyKey", StringComparison.OrdinalIgnoreCase)
+                    || cursor.Message.Contains("IdempotencyKey"))
+                    return true;
+                cursor = cursor.InnerException;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Hạn mức 2 lượt mượn/tuần cho sinh viên: đếm các đơn (trừ "Từ chối"/"Đã hủy")
+        /// có lượt mượn rơi vào cùng tuần Thứ Hai–Chủ Nhật giờ VN với yêu cầu mới,
+        /// tính theo user được đặt hộ (targetUserId). Trả về thông báo lỗi, hoặc null nếu còn hạn mức.
+        /// </summary>
+        private async Task<string?> EnforceStudentWeeklyQuotaAsync(int targetUserId, List<BookingDetailItemDto> details)
+        {
+            var (weekStartUtc, weekEndUtc) = BookingQuotaPolicy.GetVietnamWeekRangeUtc(details.Min(d => d.StartAt));
+
+            var usedDetails = await _bookingDetailRepo.FindAsync(bd =>
+                bd.Booking.UserId == targetUserId
+                && bd.Status != "Từ chối"
+                && bd.Status != "Đã hủy"
+                && bd.StartAt >= weekStartUtc
+                && bd.StartAt < weekEndUtc);
+
+            var usedBookings = usedDetails.Select(bd => bd.BookingId).Distinct().Count();
+            if (usedBookings < BookingQuotaPolicy.MaxBookingsPerWeek)
+                return null;
+
+            var wsLocal = weekStartUtc.AddHours(BookingQuotaPolicy.VietnamUtcOffsetHours);
+            var weLocal = weekEndUtc.AddHours(BookingQuotaPolicy.VietnamUtcOffsetHours);
+            return $"Hạn mức của sinh viên là {BookingQuotaPolicy.MaxBookingsPerWeek} lượt mượn mỗi tuần. " +
+                   $"Bạn đã dùng hết hạn mức cho tuần từ {wsLocal:dd/MM} đến {weLocal.AddDays(-1):dd/MM}. Vui lòng chọn khung giờ ở tuần sau.";
+        }
+
+        /// <summary>
+        /// FIFO: yêu cầu trùng lịch với đơn có trước bị từ chối — lưu thành đơn "Từ chối"
+        /// kèm mã luật trong RejectionReason, gửi notification và email gợi ý.
+        /// Không ghi ApprovalHistory vì đây là chặn validate đầu vào, không phải quyết định duyệt.
+        /// </summary>
+        private async Task RejectRequestForScheduleConflictAsync(
+            int targetUserId,
+            CreateBookingDto request,
+            string conflictReason)
+        {
+            var now = DateTime.UtcNow;
+            var booking = new Domain.Entities.Booking
+            {
+                ActivityName = request.ActivityName,
+                Purpose = request.Purpose,
+                GuestCount = request.GuestCount,
+                Note = request.Note ?? "",
+                Status = "Từ chối",
+                RejectionReason = conflictReason,
+                UserId = targetUserId,
+                RequestedAt = now,
+                CreatedAt = now
+            };
+            await _bookingRepo.AddAsync(booking);
+
+            foreach (var detail in request.Details)
+            {
+                await _bookingDetailRepo.AddAsync(new BookingDetail
+                {
+                    Booking = booking,
+                    RoomId = detail.RoomId,
+                    StartAt = detail.StartAt,
+                    EndAt = detail.EndAt,
+                    StartPeriodId = detail.StartPeriodId,
+                    EndPeriodId = detail.EndPeriodId,
+                    GuestCount = detail.GuestCount > 0 ? detail.GuestCount : request.GuestCount,
+                    Purpose = detail.Purpose ?? request.Purpose,
+                    Status = "Từ chối",
+                    RejectionReason = conflictReason,
+                    CreatedAt = now
+                });
+            }
+            await _unitOfWork.SaveChangesAsync();
+
+            var suggestion = "Vui lòng chọn phòng hoặc khung giờ khác không trùng lịch.";
+            await _notificationRepo.AddAsync(new Domain.Entities.Notification
+            {
+                UserId = targetUserId,
+                Title = "Đơn đặt phòng bị từ chối",
+                Content = $"Đơn '{request.ActivityName}' bị từ chối do trùng lịch ({conflictReason}). {suggestion}",
+                Type = 1,
+                IsRead = false,
+                SentAt = now,
+                CreatedAt = now
+            });
+            await _unitOfWork.SaveChangesAsync();
+
+            await SendConflictRejectionEmailAsync(booking, $"{conflictReason} {suggestion}");
+        }
+
+        private async Task SendConflictRejectionEmailAsync(Domain.Entities.Booking booking, string reason)
+        {
+            if (_emailService == null) return;
+
+            try
+            {
+                var user = booking.User ?? await _userRepo.GetByIdAsync(booking.UserId);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+                var details = booking.BookingDetails?.ToList()
+                    ?? (await _bookingDetailRepo.FindAsync(d => d.BookingId == booking.Id, d => d.Room)).ToList();
+                var rooms = details
+                    .Select(d => d.Room?.Name ?? $"Phòng #{d.RoomId}")
+                    .Distinct()
+                    .ToList();
+                var roomSummary = rooms.Count > 0 ? string.Join(", ", rooms) : null;
+                var startAt = details.OrderBy(d => d.StartAt).Select(d => (DateTime?)d.StartAt).FirstOrDefault();
+                var endAt = details.OrderByDescending(d => d.EndAt).Select(d => (DateTime?)d.EndAt).FirstOrDefault();
+
+                await _emailService.SendBookingApprovalEmailAsync(
+                    user.Email,
+                    user.FullName ?? user.UserName ?? "Quý người dùng",
+                    booking.Id,
+                    booking.ActivityName,
+                    "Từ chối",
+                    reason,
+                    roomSummary,
+                    startAt,
+                    endAt,
+                    null);
+            }
+            catch
+            {
+                // Email lỗi không được làm hỏng phản hồi từ chối
+            }
         }
 
         private async Task<int?> GetEmployeeIdForUserAsync(int userId)

@@ -55,6 +55,10 @@ namespace HUIT_RoMan.Domain.Entities
         [StringLength(10)]
         public string? ApprovalMode { get; set; }
 
+        // Mã định danh yêu cầu chống gửi trùng (header X-Idempotency-Key). NULL = client không gửi.
+        [StringLength(64)]
+        public string? IdempotencyKey { get; set; }
+
 
         [ForeignKey("User")]
         public int UserId { get; set; }

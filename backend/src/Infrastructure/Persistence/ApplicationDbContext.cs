@@ -84,6 +84,13 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 t.HasCheckConstraint("CK_Bookings_Approval_Audit",
                     "(\"ApprovalMode\" IS NULL AND \"ApprovedByUserId\" IS NULL AND \"ApprovedAt\" IS NULL) OR (\"ApprovalMode\" IN ('MANUAL', 'AUTO') AND \"ApprovedByUserId\" IS NOT NULL AND \"ApprovedAt\" IS NOT NULL)");
             });
+
+            // Chống gửi trùng: mỗi user chỉ được gắn một mã idempotency cho một đơn.
+            modelBuilder.Entity<Booking>()
+                .HasIndex(b => new { b.UserId, b.IdempotencyKey })
+                .IsUnique()
+                .HasFilter("\"IdempotencyKey\" IS NOT NULL")
+                .HasDatabaseName("IX_Bookings_UserId_IdempotencyKey");
             modelBuilder.Entity<BookingDetail>().ToTable(t =>
             {
                 t.HasCheckConstraint("CK_BookingDetails_GuestCount_Positive", "\"GuestCount\" > 0");

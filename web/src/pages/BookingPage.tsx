@@ -280,6 +280,8 @@ export default function BookingPage() {
   const expiredSeenRef = useRef<Set<number>>(new Set<number>());
   // Chống double-submit form đặt phòng (click 2 lần → tạo 2 đơn trùng)
   const bookingSubmitLockRef = useRef<boolean>(false);
+ 
+  const bookingIdempotencyKeyRef = useRef<string>(crypto.randomUUID());
 
   // Form hủy đặt phòng 2 bước: chọn lý do → xác nhận cuối (API chỉ gọi sau xác nhận cuối)
   const [cancelFormBooking, setCancelFormBooking] = useState<BookingResponse | null>(null);
@@ -1166,7 +1168,8 @@ export default function BookingPage() {
     bookingSubmitLockRef.current = true;
     try {
       setIsSubmitting(true);
-      const res = await createBookingApi(payload);
+      const res = await createBookingApi(payload, bookingIdempotencyKeyRef.current);
+      bookingIdempotencyKeyRef.current = crypto.randomUUID();
       setSubmitSuccess(
         `Đăng ký mượn phòng thành công! Mã đặt phòng: #${res.id}. Trạng thái hiện tại: "Chờ duyệt".`
       );

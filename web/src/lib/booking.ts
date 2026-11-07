@@ -1059,9 +1059,14 @@ export async function fetchAvailableRoomsApi(
 }
 
 export async function createBookingApi(
-  payload: CreateBookingPayload
+  payload: CreateBookingPayload,
+  idempotencyKey?: string
 ): Promise<BookingResponse> {
-  const res = await api.post("/api/Bookings", payload);
+  const res = await api.post(
+    "/api/Bookings",
+    payload,
+    idempotencyKey ? { headers: { "X-Idempotency-Key": idempotencyKey } } : undefined
+  );
   return (res.data?.data ?? res.data) as BookingResponse;
 }
 

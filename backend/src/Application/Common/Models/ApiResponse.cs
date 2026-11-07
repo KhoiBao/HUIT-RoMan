@@ -5,6 +5,7 @@ namespace HUIT_RoMan.Application.Common.Models
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
         public T? Data { get; set; }
+        public string? Code { get; set; }
 
         public static ApiResponse<T> SuccessResponse(T data, string message = "Success")
         {
@@ -16,13 +17,14 @@ namespace HUIT_RoMan.Application.Common.Models
             };
         }
 
-        public static ApiResponse<T> ErrorResponse(string message)
+        public static ApiResponse<T> ErrorResponse(string message, string? code = null)
         {
             return new ApiResponse<T>
             {
                 Success = false,
                 Message = message,
-                Data = default
+                Data = default,
+                Code = code
             };
         }
     }
