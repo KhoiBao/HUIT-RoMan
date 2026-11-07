@@ -127,6 +127,9 @@ namespace HUIT_RoMan.Infrastructure.Persistence
 
             // 9. Khởi tạo danh mục Loại vi phạm (ViolationTypes)
             await EnsureViolationTypesAsync(dbContext);
+
+            // 10. Khởi tạo dữ liệu mẫu Báo cáo sự cố & Lịch sử bảo trì (IncidentReports)
+            await EnsureIncidentReportsAsync(dbContext);
         }
 
         /// <summary>
@@ -784,6 +787,95 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 await dbContext.ViolationTypes.AddRangeAsync(types);
                 await dbContext.SaveChangesAsync();
             }
+        }
+
+        /// <summary>
+        /// Khởi tạo dữ liệu mẫu Báo cáo sự cố & Lịch sử bảo trì thiết bị, phòng học
+        /// </summary>
+        private static async Task EnsureIncidentReportsAsync(ApplicationDbContext dbContext)
+        {
+            if (await dbContext.IncidentReports.IgnoreQueryFilters().AnyAsync())
+            {
+                return;
+            }
+
+            var roomTv02 = await dbContext.Rooms.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.RoomCode == "TV02");
+            var roomTt01 = await dbContext.Rooms.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.RoomCode == "TT01");
+            var roomTv01 = await dbContext.Rooms.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.RoomCode == "TV01");
+            var adminUser = await dbContext.Users.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.UserName == "admin" || u.Email == "admin@huit.edu.vn")
+                ?? await dbContext.Users.IgnoreQueryFilters().FirstOrDefaultAsync();
+
+            var reports = new List<IncidentReport>
+            {
+                new IncidentReport
+                {
+                    Code = "SC-20261101-001",
+                    TargetType = "Thiết bị",
+                    Category = "Thiết bị hư hỏng",
+                    Severity = "Khẩn cấp",
+                    EquipmentName = "Bảng tương tác thông minh Promethean",
+                    Title = "Bảng tương tác TV02 bị chập nguồn, không lên cảm ứng",
+                    Description = "Bảng tương tác thông minh không nhận nguồn điện khi khởi động, màn hình tối đen. Nghi ngờ lỏng chân cắm hoặc nguồn hỏng.",
+                    Status = "Đang bảo trì",
+                    ReportedByName = "Thư viện viên Ca sáng",
+                    ReporterPhone = "0908123456",
+                    AssignedTechnician = "Nguyễn Văn Kỹ Thuật",
+                    TechnicianNote = "Đã tháo kiểm tra bo nguồn, đang chờ linh kiện thay thế từ hãng",
+                    RepairCost = 450000m,
+                    StaffNote = "Đã tạm dừng nhận đặt phòng TV02 cho đến khi xử lý xong thiết bị",
+                    RoomId = roomTv02?.Id,
+                    ReportedByUserId = adminUser?.Id,
+                    ReportedAt = DateTime.UtcNow.AddDays(-2),
+                    CreatedAt = DateTime.UtcNow.AddDays(-2)
+                },
+                new IncidentReport
+                {
+                    Code = "SC-20261102-002",
+                    TargetType = "Phòng",
+                    Category = "Điện / Chiếu sáng / Điều hòa",
+                    Severity = "Trung bình",
+                    EquipmentName = "Điều hòa Daikin Inverter 2.5HP",
+                    Title = "Điều hòa phòng TT01 làm mát yếu và nhỏ giọt nước",
+                    Description = "Dàn lạnh điều hòa chạy nhưng làm lạnh rất chậm, phía góc phải có hiện tượng rỉ giọt nước xuống sàn.",
+                    Status = "Chờ tiếp nhận",
+                    ReportedByName = "Giảng viên mượn phòng",
+                    ReporterPhone = "0912345678",
+                    AssignedTechnician = null,
+                    TechnicianNote = null,
+                    RepairCost = null,
+                    StaffNote = "Cần phân công kỹ thuật viên bảo dưỡng lưới lọc và thông ống thoát nước",
+                    RoomId = roomTt01?.Id,
+                    ReportedByUserId = adminUser?.Id,
+                    ReportedAt = DateTime.UtcNow.AddDays(-1),
+                    CreatedAt = DateTime.UtcNow.AddDays(-1)
+                },
+                new IncidentReport
+                {
+                    Code = "SC-20261028-003",
+                    TargetType = "Thiết bị",
+                    Category = "Cơ sở vật chất / Bàn ghế",
+                    Severity = "Nhẹ",
+                    EquipmentName = "Ghế xoay văn phòng có tựa",
+                    Title = "Ghế xoay phòng TV01 bị lỏng ben hơi nâng hạ",
+                    Description = "Ghế ngồi bị tụt ben hơi khi người dùng ngồi xuống, chân ghế kêu cọt kẹt.",
+                    Status = "Đã khắc phục",
+                    ReportedByName = "Nguyễn Văn An (SV)",
+                    ReporterPhone = "0934567890",
+                    AssignedTechnician = "Trần Kỹ Thuật Cơ Sở",
+                    TechnicianNote = "Đã siết lại ốc và thay cụm ben hơi mới, kiểm tra độ an toàn tốt.",
+                    RepairCost = 120000m,
+                    StaffNote = "Đã nghiệm thu và đưa ghế trở lại phục vụ sinh viên",
+                    RoomId = roomTv01?.Id,
+                    ReportedByUserId = adminUser?.Id,
+                    ResolvedByUserId = adminUser?.Id,
+                    ReportedAt = DateTime.UtcNow.AddDays(-6),
+                    ResolvedAt = DateTime.UtcNow.AddDays(-5),
+                    CreatedAt = DateTime.UtcNow.AddDays(-6)
+                }
+            };
+
+            await dbContext.IncidentReports.AddRangeAsync(reports);
+            await dbContext.SaveChangesAsync();
         }
     }
 }

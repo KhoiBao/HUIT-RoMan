@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   WrenchIcon,
   AlertTriangleIcon,
@@ -12,6 +13,7 @@ import {
   CheckIcon,
   DoorIcon,
   TvIcon,
+  DotsIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
 import {
@@ -19,13 +21,14 @@ import {
   type IncidentStatus,
   type IncidentCategory,
   type IncidentSeverity,
-  getAllIncidents,
+  type IncidentStats,
+  fetchIncidents,
+  fetchIncidentStats,
   createIncident,
   updateIncident,
   resolveIncident,
   deleteIncident,
   restoreRoomToAvailable,
-  getIncidentStats,
 } from "../../lib/incidents";
 import { api } from "../../lib/api";
 import AdminPagination from "../common/AdminPagination";
@@ -66,6 +69,58 @@ export default function AdminIncidentsTab({
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [selectedIncident, setSelectedIncident] = useState<IncidentReportItem | null>(null);
 
+  // Dropdown Action Menu (3 dots) state & handlers
+  const [rowMenu, setRowMenu] = useState<{
+    key: string | number;
+    top: number;
+    left: number;
+    openUp?: boolean;
+  } | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (rowMenuRef.current?.contains(target)) return;
+      if (target.closest(".btn-table-more")) return;
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [rowMenu]);
+
+  function toggleRowMenu(key: string | number, btn: HTMLElement) {
+    if (rowMenu?.key === key) {
+      setRowMenu(null);
+      return;
+    }
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = 240;
+    const menuHeight = 150;
+    const openUp =
+      rect.bottom + menuHeight + 12 > window.innerHeight &&
+      rect.top > menuHeight + 12;
+    setRowMenu({
+      key,
+      top: openUp ? rect.top - 8 : rect.bottom + 8,
+      left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
+      openUp,
+    });
+  }
+
   // Form State: Create
   const [createForm, setCreateForm] = useState({
     targetType: "Phòng" as "Phòng" | "Thiết bị",
@@ -95,12 +150,25 @@ export default function AdminIncidentsTab({
     restoreRoomToAvailable: true,
   });
 
+  // Statistics
+  const [stats, setStats] = useState<IncidentStats>({
+    total: 0,
+    pending: 0,
+    inMaintenance: 0,
+    resolved: 0,
+    urgent: 0,
+  });
+
   // Load incidents & DB rooms
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = getAllIncidents();
+      const [data, statsData] = await Promise.all([
+        fetchIncidents(),
+        fetchIncidentStats(),
+      ]);
       setIncidents(data);
+      setStats(statsData);
 
       try {
         const res = await api.get("/api/Rooms");
@@ -125,11 +193,6 @@ export default function AdminIncidentsTab({
       setRoomFilter(initialRoomCode);
     }
   }, [initialRoomCode]);
-
-  // Statistics
-  const stats = useMemo(() => {
-    return getIncidentStats();
-  }, [incidents]);
 
   // Filtered List
   const filteredIncidents = useMemo(() => {
@@ -202,7 +265,7 @@ export default function AdminIncidentsTab({
       return;
     }
 
-    const created = createIncident({
+    const created = await createIncident({
       targetType: createForm.targetType,
       roomCode: createForm.roomCode,
       roomId: createForm.roomId,
@@ -215,6 +278,7 @@ export default function AdminIncidentsTab({
       reporterPhone: createForm.reporterPhone || undefined,
       assignedTechnician: createForm.assignedTechnician || undefined,
       status: createForm.assignedTechnician ? "Đang bảo trì" : "Chờ tiếp nhận",
+      setRoomMaintenance: createForm.setRoomMaintenance,
     });
 
     if (createForm.setRoomMaintenance && createForm.roomId) {
@@ -260,7 +324,7 @@ export default function AdminIncidentsTab({
 
     const isMarkingResolved = editForm.status === "Đã khắc phục";
 
-    updateIncident(selectedIncident.id, {
+    await updateIncident(selectedIncident.id, {
       status: editForm.status,
       category: editForm.category,
       severity: editForm.severity,
@@ -270,6 +334,7 @@ export default function AdminIncidentsTab({
       technicianNote: editForm.technicianNote,
       repairCost: Number(editForm.repairCost) || 0,
       resolvedBy: isMarkingResolved ? (editForm.assignedTechnician || "Kỹ thuật viên Thư viện") : undefined,
+      restoreRoomToAvailable: editForm.restoreRoomToAvailable,
     });
 
     if (isMarkingResolved && editForm.restoreRoomToAvailable) {
@@ -319,10 +384,11 @@ export default function AdminIncidentsTab({
 
     if (!isConfirmed) return;
 
-    resolveIncident(incident.id, {
+    await resolveIncident(incident.id, {
       technicianNote: "Đã hoàn tất kiểm tra, sửa chữa và nghiệm thu vận hành bình thường.",
       resolvedBy: "Kỹ thuật viên Thư viện",
       repairCost: incident.repairCost || 0,
+      restoreRoomToAvailable: true,
     });
 
     const res = await restoreRoomToAvailable(incident.roomId, incident.roomCode);
@@ -355,7 +421,7 @@ export default function AdminIncidentsTab({
 
     if (!isConfirmed) return;
 
-    deleteIncident(incident.id);
+    await deleteIncident(incident.id);
     onNotify(`Đã xóa phiếu sự cố ${incident.code}!`, "success");
     loadData();
   };
@@ -676,7 +742,7 @@ export default function AdminIncidentsTab({
                 <th style={{ minWidth: "260px" }}>Mô tả sự cố & Tiến độ kỹ thuật</th>
                 <th style={{ width: "180px" }}>Người báo cáo</th>
                 <th style={{ width: "140px" }}>Trạng thái</th>
-                <th style={{ width: "180px", textAlign: "right" }}>Thao tác</th>
+                <th style={{ width: "90px", textAlign: "right" }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -785,35 +851,69 @@ export default function AdminIncidentsTab({
                     </td>
 
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1.5">
-                        {!isResolved && (
-                          <button
-                            type="button"
-                            className="btn-action-icon btn-action-resolve"
-                            title="Xác nhận khắc phục xong & Mở lại phòng"
-                            onClick={() => handleQuickResolveAndOpenRoom(incident)}
-                          >
-                            <CheckCircleIcon size={14} />
-                          </button>
-                        )}
-
+                      <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
                         <button
                           type="button"
-                          className="btn-action-icon"
-                          title="Chỉnh sửa / Cập nhật tiến độ"
-                          onClick={() => handleOpenEdit(incident)}
+                          className={`btn-table-more ${rowMenu?.key === incident.id ? "active" : ""}`}
+                          title="Thao tác"
+                          aria-label="Thao tác"
+                          onClick={(e) => toggleRowMenu(incident.id, e.currentTarget)}
                         >
-                          <PencilIcon size={14} />
+                          <DotsIcon size={17} />
                         </button>
 
-                        <button
-                          type="button"
-                          className="btn-action-icon btn-action-delete"
-                          title="Xóa phiếu sự cố"
-                          onClick={() => handleDeleteIncident(incident)}
-                        >
-                          <TrashIcon size={14} />
-                        </button>
+                        {rowMenu?.key === incident.id &&
+                          createPortal(
+                            <div
+                              ref={rowMenuRef}
+                              className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                              style={{ top: rowMenu.top, left: rowMenu.left }}
+                              role="menu"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="row-actions-menu-item accent-blue"
+                                onClick={() => {
+                                  setRowMenu(null);
+                                  handleOpenEdit(incident);
+                                }}
+                              >
+                                <PencilIcon size={14} />
+                                <span>Chỉnh sửa / Cập nhật tiến độ</span>
+                              </button>
+
+                              {!isResolved && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item accent-indigo"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    handleQuickResolveAndOpenRoom(incident);
+                                  }}
+                                >
+                                  <CheckCircleIcon size={14} />
+                                  <span>Khắc phục & Mở lại phòng</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="row-actions-menu-item danger"
+                                onClick={() => {
+                                  setRowMenu(null);
+                                  handleDeleteIncident(incident);
+                                }}
+                              >
+                                <TrashIcon size={14} />
+                                <span>Xóa phiếu sự cố</span>
+                              </button>
+                            </div>,
+                            document.body
+                          )}
                       </div>
                     </td>
                   </tr>

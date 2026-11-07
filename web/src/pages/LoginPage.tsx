@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { clearExplicitLogout, getHomePathForRole, validateLoginInput } from "../lib/auth";
+import { clearExplicitLogout, getHomePathForRole, isStaffRole, validateLoginInput } from "../lib/auth";
 import {
   ArrowRightIcon,
   ClockIcon,
@@ -16,7 +16,7 @@ import {
 import ForgotPasswordModal from "../components/ForgotPasswordModal";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, token, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };
   const [identifier, setIdentifier] = useState("");
@@ -24,6 +24,16 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+
+  useEffect(() => {
+    if (token && user) {
+      if (isStaffRole(user.role)) {
+        navigate(getHomePathForRole(user.role), { replace: true });
+      } else {
+        navigate(location.state?.from ?? "/home", { replace: true });
+      }
+    }
+  }, [token, user, navigate, location.state]);
 
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -46,10 +56,14 @@ export default function LoginPage() {
     try {
       const loggedInUser = await login(identifier, password, remember);
       clearExplicitLogout();
-      navigate(
-        location.state?.from ?? getHomePathForRole(loggedInUser?.role),
-        { replace: true },
-      );
+      if (isStaffRole(loggedInUser?.role)) {
+        navigate(getHomePathForRole(loggedInUser?.role), { replace: true });
+      } else {
+        navigate(
+          location.state?.from ?? getHomePathForRole(loggedInUser?.role),
+          { replace: true },
+        );
+      }
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Đăng nhập thất bại");
     } finally {

@@ -1,7 +1,9 @@
 import { useEffect } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import InfoFooter from "./InfoFooter";
 import SiteHeader from "./SiteHeader";
+import { useAuth } from "../auth/AuthContext";
+import { getHomePathForRole, isStaffRole } from "../lib/auth";
 
 function ScrollManager() {
   const { pathname, hash } = useLocation();
@@ -25,9 +27,16 @@ function ScrollManager() {
 
 export default function PortalLayout() {
   const location = useLocation();
+  const { user } = useAuth();
+  const isStaff = isStaffRole(user?.role);
   const isAdminRoute =
     location.pathname.startsWith("/admin") ||
     location.pathname.startsWith("/staff");
+
+  // Quản lý & Nhân viên chỉ được ở trang quản lý, không được về lại trang chủ giống sinh viên và giáo viên
+  if (isStaff && !isAdminRoute) {
+    return <Navigate to={getHomePathForRole(user?.role)} replace />;
+  }
 
   if (isAdminRoute) {
     return (

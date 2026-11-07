@@ -38,6 +38,9 @@ builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.IStoredProce
 builder.Services.Configure<HUIT_RoMan.Application.Common.Models.SmtpSettings>(builder.Configuration.GetSection("SmtpSettings"));
 builder.Services.AddScoped<HUIT_RoMan.Application.Common.Interfaces.IEmailService, HUIT_RoMan.Infrastructure.Services.EmailService>();
 
+// Storage Service (MinIO / S3 Object Storage)
+builder.Services.AddSingleton<HUIT_RoMan.Application.Common.Interfaces.IStorageService, HUIT_RoMan.Infrastructure.Services.MinioStorageService>();
+
 
 // Identity (User : IdentityUser<int> trong Domain)
 builder.Services.AddIdentity<User, IdentityRole<int>>()

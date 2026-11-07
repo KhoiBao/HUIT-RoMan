@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { isStaffRole, getHomePathForRole } from "../lib/auth";
 import {
   BellRingIcon,
   CheckCircleIcon,
@@ -20,7 +22,9 @@ import {
 } from "../lib/notifications";
 
 export default function NotificationCenter() {
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const isStaff = isStaffRole(user?.role);
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -145,6 +149,12 @@ export default function NotificationCenter() {
   const handleNotificationClick = async (item: NotificationItem) => {
     await handleMarkAsRead(item);
     setOpen(false);
+
+    // Nhân viên / Quản lý luôn chuyển về trang quản lý tương ứng
+    if (isStaff) {
+      navigate(getHomePathForRole(user?.role));
+      return;
+    }
 
     // Chuyển hướng tới trang đặt phòng cá nhân nếu là thông báo đặt phòng hoặc nhắc lịch
     if (item.type === 1 || item.type === 2 || item.type === 3) {
@@ -349,10 +359,10 @@ export default function NotificationCenter() {
                 className="roman-notif-view-bookings-link"
                 onClick={() => {
                   setOpen(false);
-                  navigate("/dat-phong?tab=my-bookings");
+                  navigate(isStaff ? getHomePathForRole(user?.role) : "/dat-phong?tab=my-bookings");
                 }}
               >
-                Xem danh sách phòng đã đăng ký →
+                {isStaff ? "Chuyển đến Bảng điều khiển quản lý →" : "Xem danh sách phòng đã đăng ký →"}
               </button>
             </div>
           )}

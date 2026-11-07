@@ -114,6 +114,51 @@ namespace HUIT_RoMan.Tests
         }
 
         [Fact]
+        public async Task BulkApprove_Tu2DonTroDi_ThanhCongTatCa()
+        {
+            using var h = new BookingHarness();
+            var b1 = BookingTestSeed.MakeBooking(h.Db, DateTime.UtcNow.AddDays(1), status: "Chờ duyệt");
+            var b2 = BookingTestSeed.MakeBooking(h.Db, DateTime.UtcNow.AddDays(2), status: "Chờ duyệt");
+
+            h.CurrentUser.UserId = BookingTestSeed.AdminId;
+            h.CurrentUser.Role = "admin";
+            h.CurrentUser.IsAdmin = true;
+
+            var res = await h.BookingService.BulkApproveBookingsAsync(new BulkApproveBookingsRequestDto
+            {
+                BookingIds = new System.Collections.Generic.List<int> { b1.Id, b2.Id }
+            });
+
+            Assert.True(res.Success);
+            Assert.NotNull(res.Data);
+            Assert.Equal(2, res.Data.ApprovedCount);
+            Assert.Equal(0, res.Data.FailedCount);
+        }
+
+        [Fact]
+        public async Task BulkCancel_Tu2DonTroDi_ThanhCongTatCa()
+        {
+            using var h = new BookingHarness();
+            var b1 = BookingTestSeed.MakeBooking(h.Db, DateTime.UtcNow.AddDays(1), status: "Đã duyệt");
+            var b2 = BookingTestSeed.MakeBooking(h.Db, DateTime.UtcNow.AddDays(2), status: "Đã duyệt");
+
+            h.CurrentUser.UserId = BookingTestSeed.AdminId;
+            h.CurrentUser.Role = "admin";
+            h.CurrentUser.IsAdmin = true;
+
+            var res = await h.BookingService.BulkCancelBookingsAsync(new BulkCancelBookingsRequestDto
+            {
+                BookingIds = new System.Collections.Generic.List<int> { b1.Id, b2.Id },
+                Reason = "Điều chỉnh kỹ thuật toàn bộ phòng"
+            });
+
+            Assert.True(res.Success);
+            Assert.NotNull(res.Data);
+            Assert.Equal(2, res.Data.CancelledCount);
+            Assert.Equal(0, res.Data.FailedCount);
+        }
+
+        [Fact]
         public async Task EmailService_KhiSmtpTat_MockModeHoatDongBinhThuong()
         {
             var options = Options.Create(new SmtpSettings

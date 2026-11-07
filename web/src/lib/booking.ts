@@ -1138,9 +1138,16 @@ export interface AutoApprovalSetting {
   pendingCount: number;
 }
 
+export interface BulkApproveFailureItem {
+  bookingId: number;
+  activityName?: string | null;
+  reason: string;
+}
+
 export interface BulkApproveResult {
   approvedCount: number;
   failedCount: number;
+  failures?: BulkApproveFailureItem[];
 }
 
 /** Lấy cấu hình duyệt tự động hiện tại */
@@ -1158,5 +1165,71 @@ export async function updateAutoApprovalSettingApi(enabled: boolean): Promise<Au
 /** Duyệt toàn bộ yêu cầu đang chờ duyệt trong phạm vi quản lý */
 export async function approvePendingBookingsApi(): Promise<BulkApproveResult> {
   const res = await api.post("/api/Bookings/auto-approval/approve-pending");
+  if (res.data && res.data.success === false) {
+    throw new Error(res.data.message || "Không thể duyệt toàn bộ đơn.");
+  }
   return (res.data?.data ?? res.data) as BulkApproveResult;
+}
+
+export interface BulkRejectResult {
+  rejectedCount: number;
+  failedCount: number;
+  failures?: BulkApproveFailureItem[];
+}
+
+export interface BulkCancelResult {
+  cancelledCount: number;
+  failedCount: number;
+  failures?: BulkApproveFailureItem[];
+}
+
+/** Từ chối toàn bộ yêu cầu đang chờ duyệt trong phạm vi quản lý */
+export async function rejectPendingBookingsApi(reason?: string): Promise<BulkRejectResult> {
+  const res = await api.post("/api/Bookings/auto-approval/reject-pending", { reason });
+  if (res.data && res.data.success === false) {
+    throw new Error(res.data.message || "Không thể từ chối/hủy toàn bộ đơn.");
+  }
+  return (res.data?.data ?? res.data) as BulkRejectResult;
+}
+
+/** Hủy duyệt hàng loạt các đơn đã chọn (dành cho quản lý/nhân sự) */
+export async function bulkCancelBookingsApi(bookingIds: number[], reason?: string): Promise<BulkCancelResult> {
+  const res = await api.post("/api/Bookings/bulk-cancel", { bookingIds, reason });
+  if (res.data && res.data.success === false) {
+    throw new Error(res.data.message || "Không thể hủy hàng loạt đơn.");
+  }
+  return (res.data?.data ?? res.data) as BulkCancelResult;
+}
+
+/** Duyệt hàng loạt các đơn đã chọn (dành cho quản lý/nhân sự) */
+export async function bulkApproveBookingsApi(bookingIds: number[]): Promise<BulkApproveResult> {
+  const res = await api.post("/api/Bookings/bulk-approve", { bookingIds });
+  if (res.data && res.data.success === false) {
+    throw new Error(res.data.message || "Không thể duyệt hàng loạt đơn.");
+  }
+  return (res.data?.data ?? res.data) as BulkApproveResult;
+}
+
+/** Quản lý / Nhân sự hủy duyệt toàn bộ một đơn đặt phòng */
+export async function cancelBookingByStaffApi(bookingId: number, reason: string): Promise<boolean> {
+  const res = await api.patch(`/api/Bookings/${bookingId}/cancel`, {
+    reason: "OTHER",
+    reasonDetail: reason,
+  });
+  if (res.data && res.data.success === false) {
+    throw new Error(res.data.message || "Không thể hủy duyệt đơn đặt phòng.");
+  }
+  return true;
+}
+
+/** Quản lý / Nhân sự hủy duyệt một phòng trong đơn */
+export async function cancelBookingDetailByStaffApi(detailId: number, reason: string): Promise<boolean> {
+  const res = await api.patch(`/api/Bookings/details/${detailId}/cancel`, {
+    reason: "OTHER",
+    reasonDetail: reason,
+  });
+  if (res.data && res.data.success === false) {
+    throw new Error(res.data.message || "Không thể hủy duyệt phòng trong đơn.");
+  }
+  return true;
 }

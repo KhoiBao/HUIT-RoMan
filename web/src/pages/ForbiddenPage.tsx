@@ -1,11 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { formatRole } from "../lib/auth";
+import { formatRole, isStaffRole, getHomePathForRole } from "../lib/auth";
 import { LockIcon, ArrowRightIcon, CalendarIcon } from "../components/Icon";
 
 export default function ForbiddenPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const isStaff = isStaffRole(user?.role);
 
   const roleName = formatRole(user?.role);
 
@@ -47,18 +48,20 @@ export default function ForbiddenPage() {
             <button
               type="button"
               className="btn-primary"
-              onClick={() => navigate("/home")}
+              onClick={() => navigate(isStaff ? getHomePathForRole(user?.role) : "/home")}
             >
-              Quay về Trang chủ
+              {isStaff ? "Quay về Trang quản lý" : "Quay về Trang chủ"}
             </button>
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={() => navigate("/lich-phong")}
-            >
-              <CalendarIcon size={16} />
-              Xem Lịch phòng
-            </button>
+            {!isStaff && (
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => navigate("/lich-phong")}
+              >
+                <CalendarIcon size={16} />
+                Xem Lịch phòng
+              </button>
+            )}
             <button
               type="button"
               className="btn-ghost-logout"

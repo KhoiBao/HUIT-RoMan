@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../../lib/api";
 import { formatRole } from "../../lib/auth";
 import { useAuth } from "../../auth/AuthContext";
@@ -10,6 +11,10 @@ import {
   RefreshCwIcon,
   XIcon,
   CheckIcon,
+  DotsIcon,
+  PencilIcon,
+  TrashIcon,
+  InfoIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
 import AdminPagination from "../common/AdminPagination";
@@ -89,6 +94,58 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
   const [editDeptId, setEditDeptId] = useState<number | "">("");
 
   const [submitting, setSubmitting] = useState<boolean>(false);
+
+  // Dropdown Action Menu (3 dots) state & handlers
+  const [rowMenu, setRowMenu] = useState<{
+    key: number;
+    top: number;
+    left: number;
+    openUp?: boolean;
+  } | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (rowMenuRef.current?.contains(target)) return;
+      if (target.closest(".btn-table-more")) return;
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [rowMenu]);
+
+  function toggleRowMenu(key: number, btn: HTMLElement) {
+    if (rowMenu?.key === key) {
+      setRowMenu(null);
+      return;
+    }
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = 230;
+    const menuHeight = 150;
+    const openUp =
+      rect.bottom + menuHeight + 12 > window.innerHeight &&
+      rect.top > menuHeight + 12;
+    setRowMenu({
+      key,
+      top: openUp ? rect.top - 8 : rect.bottom + 8,
+      left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
+      openUp,
+    });
+  }
 
   const fetchEmployees = async () => {
     try {
@@ -487,7 +544,7 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                 <th>Email liên hệ</th>
                 <th>Đơn vị công tác</th>
                 <th>Trạng thái</th>
-                <th>Thao tác</th>
+                <th style={{ width: "90px", textAlign: "right" }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -559,22 +616,70 @@ export default function AdminEmployeesTab({ onNotify }: Props) {
                       );
                     })()}
                   </td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <div className="table-action-btns">
+                  <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
                       <button
                         type="button"
-                        className="btn-action-icon"
-                        onClick={() => openEdit(e)}
+                        className={`btn-table-more ${rowMenu?.key === e.id ? "active" : ""}`}
+                        title="Thao tác"
+                        aria-label="Thao tác"
+                        onClick={(evt) => toggleRowMenu(e.id, evt.currentTarget)}
                       >
-                        Sửa
+                        <DotsIcon size={17} />
                       </button>
-                      <button
-                        type="button"
-                        className="btn-action-icon btn-action-delete"
-                        onClick={() => handleDelete(e)}
-                      >
-                        <XIcon size={14} />
-                      </button>
+
+                      {rowMenu?.key === e.id &&
+                        createPortal(
+                          <div
+                            ref={rowMenuRef}
+                            className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                            style={{ top: rowMenu.top, left: rowMenu.left }}
+                            role="menu"
+                            onClick={(evt) => evt.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="row-actions-menu-item accent-blue"
+                              onClick={() => {
+                                setRowMenu(null);
+                                openEdit(e);
+                              }}
+                            >
+                              <PencilIcon size={14} />
+                              <span>Chỉnh sửa thông tin nhân sự</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="row-actions-menu-item accent-indigo"
+                              onClick={() => {
+                                setRowMenu(null);
+                                const codeToCopy = e.cardCode || e.code || e.userName;
+                                navigator.clipboard.writeText(codeToCopy);
+                                onNotify(`Đã sao chép mã ${codeToCopy} vào bộ nhớ tạm!`, "info");
+                              }}
+                            >
+                              <InfoIcon size={14} />
+                              <span>Sao chép mã thẻ / NV</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="row-actions-menu-item danger"
+                              onClick={() => {
+                                setRowMenu(null);
+                                handleDelete(e);
+                              }}
+                            >
+                              <TrashIcon size={14} />
+                              <span>Xóa hồ sơ nhân sự</span>
+                            </button>
+                          </div>,
+                          document.body
+                        )}
                     </div>
                   </td>
                 </tr>

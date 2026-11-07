@@ -29,6 +29,15 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         /// <summary>Duyệt toàn bộ đơn đang chờ trong phạm vi quản lý.</summary>
         Task<ApiResponse<BulkApproveResultDto>> ApprovePendingBookingsAsync();
 
+        /// <summary>Từ chối toàn bộ đơn đang chờ trong phạm vi quản lý.</summary>
+        Task<ApiResponse<BulkRejectResultDto>> RejectPendingBookingsAsync(BulkRejectPendingRequestDto request);
+
+        /// <summary>Hủy hàng loạt các đơn đã chọn.</summary>
+        Task<ApiResponse<BulkCancelResultDto>> BulkCancelBookingsAsync(BulkCancelBookingsRequestDto request);
+
+        /// <summary>Duyệt hàng loạt các đơn đã chọn.</summary>
+        Task<ApiResponse<BulkApproveResultDto>> BulkApproveBookingsAsync(BulkApproveBookingsRequestDto request);
+
         /// <summary>Hủy đơn (chỉ người tạo hoặc Admin). Kèm lý do hủy bắt buộc với sinh viên.</summary>
         Task<ApiResponse<bool>> CancelBookingAsync(int id, CancelBookingRequest? request = null, DateTime? nowUtc = null);
 

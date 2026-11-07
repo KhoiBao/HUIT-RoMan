@@ -228,7 +228,7 @@ export default function AdminDashboardPage() {
         // ignore
       }
       try {
-        const stats = getIncidentStats();
+        const stats = await getIncidentStats();
         setActiveIncidentsCount(stats.pending + stats.inMaintenance);
       } catch {
         // ignore

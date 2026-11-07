@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../../lib/api";
 import {
   TvIcon,
@@ -14,6 +15,7 @@ import {
   ChevronDownIcon,
   PencilIcon,
   TrashIcon,
+  DotsIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useAuth } from "../../auth/AuthContext";
@@ -333,6 +335,58 @@ export default function AdminEquipmentsManagementTab({ onNotify, onSwitchTab }: 
   const [editStatus, setEditStatus] = useState<string>("Đang hoạt động");
 
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+
+  // Dropdown Action Menu (3 dots) state & handlers
+  const [rowMenu, setRowMenu] = useState<{
+    key: string | number;
+    top: number;
+    left: number;
+    openUp?: boolean;
+  } | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (rowMenuRef.current?.contains(target)) return;
+      if (target.closest(".btn-table-more")) return;
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [rowMenu]);
+
+  function toggleRowMenu(key: string | number, btn: HTMLElement) {
+    if (rowMenu?.key === key) {
+      setRowMenu(null);
+      return;
+    }
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = 230;
+    const menuHeight = 160;
+    const openUp =
+      rect.bottom + menuHeight + 12 > window.innerHeight &&
+      rect.top > menuHeight + 12;
+    setRowMenu({
+      key,
+      top: openUp ? rect.top - 8 : rect.bottom + 8,
+      left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
+      openUp,
+    });
+  }
 
   // Assign to room modal
   const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
@@ -1212,7 +1266,7 @@ export default function AdminEquipmentsManagementTab({ onNotify, onSwitchTab }: 
                     <th>Còn trong kho</th>
                     <th>Mô tả chi tiết</th>
                     <th>Trạng thái</th>
-                    <th>Thao tác</th>
+                    <th style={{ width: "90px", textAlign: "right" }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1254,26 +1308,83 @@ export default function AdminEquipmentsManagementTab({ onNotify, onSwitchTab }: 
                           onChangeStatus={handleQuickChangeStatus}
                         />
                       </td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
                           <button
                             type="button"
-                            className="btn-shift-action btn-shift-edit"
-                            onClick={() => handleOpenEdit(e)}
-                            title="Chỉnh sửa thông số và số lượng kho"
+                            className={`btn-table-more ${rowMenu?.key === `warehouse-${e.id}` ? "active" : ""}`}
+                            title="Thao tác"
+                            aria-label="Thao tác"
+                            onClick={(evt) => toggleRowMenu(`warehouse-${e.id}`, evt.currentTarget)}
                           >
-                            <PencilIcon size={12} />
-                            <span>Sửa</span>
+                            <DotsIcon size={17} />
                           </button>
-                          <button
-                            type="button"
-                            className="btn-shift-action btn-shift-delete"
-                            onClick={() => handleDeleteEquipment(e)}
-                            title="Xóa thiết bị khỏi kho"
-                          >
-                            <TrashIcon size={12} />
-                            <span>Xóa</span>
-                          </button>
+
+                          {rowMenu?.key === `warehouse-${e.id}` &&
+                            createPortal(
+                              <div
+                                ref={rowMenuRef}
+                                className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                                style={{ top: rowMenu.top, left: rowMenu.left }}
+                                role="menu"
+                                onClick={(evt) => evt.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item accent-blue"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    handleOpenEdit(e);
+                                  }}
+                                >
+                                  <PencilIcon size={14} />
+                                  <span>Chỉnh sửa thông số & số lượng</span>
+                                </button>
+
+                                {isUnderMaintenance(e.status) ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item accent-blue"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      handleQuickChangeStatus(e, "Đang hoạt động");
+                                    }}
+                                  >
+                                    <CheckIcon size={14} />
+                                    <span>Hoàn tất bảo trì & Hoạt động lại</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item accent-amber"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      handleQuickChangeStatus(e, "Đang bảo trì");
+                                    }}
+                                  >
+                                    <WrenchIcon size={14} />
+                                    <span>Chuyển sang Đang bảo trì</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item danger"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    handleDeleteEquipment(e);
+                                  }}
+                                >
+                                  <TrashIcon size={14} />
+                                  <span>Xóa thiết bị khỏi kho</span>
+                                </button>
+                              </div>,
+                              document.body
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -1341,7 +1452,7 @@ export default function AdminEquipmentsManagementTab({ onNotify, onSwitchTab }: 
                     <th>Tên thiết bị</th>
                     <th>Số lượng trang bị</th>
                     <th>Tình trạng thực tế</th>
-                    <th style={{ width: "140px", textAlign: "right" }}>Thao tác</th>
+                    <th style={{ width: "90px", textAlign: "right" }}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1361,18 +1472,71 @@ export default function AdminEquipmentsManagementTab({ onNotify, onSwitchTab }: 
                           onChangeStatus={handleUpdateRoomEquipStatus}
                         />
                       </td>
-                      <td style={{ textAlign: "right" }}>
-                        <button
-                          type="button"
-                          className="btn-shift-action btn-shift-delete"
-                          onClick={() =>
-                            handleRemoveFromRoom(req.equipmentId, req.equipmentName)
-                          }
-                          title="Thu hồi thiết bị khỏi phòng"
-                        >
-                          <TrashIcon size={12} />
-                          <span>Thu hồi</span>
-                        </button>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
+                          <button
+                            type="button"
+                            className={`btn-table-more ${rowMenu?.key === `room-${req.equipmentId}` ? "active" : ""}`}
+                            title="Thao tác"
+                            aria-label="Thao tác"
+                            onClick={(evt) => toggleRowMenu(`room-${req.equipmentId}`, evt.currentTarget)}
+                          >
+                            <DotsIcon size={17} />
+                          </button>
+
+                          {rowMenu?.key === `room-${req.equipmentId}` &&
+                            createPortal(
+                              <div
+                                ref={rowMenuRef}
+                                className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                                style={{ top: rowMenu.top, left: rowMenu.left }}
+                                role="menu"
+                                onClick={(evt) => evt.stopPropagation()}
+                              >
+                                {isUnderMaintenance(req.status) ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item accent-blue"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      handleUpdateRoomEquipStatus(req, "Đang hoạt động");
+                                    }}
+                                  >
+                                    <CheckIcon size={14} />
+                                    <span>Đánh dấu Đang hoạt động</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item accent-amber"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      handleUpdateRoomEquipStatus(req, "Đang bảo trì");
+                                    }}
+                                  >
+                                    <WrenchIcon size={14} />
+                                    <span>Báo hỏng / Chuyển bảo trì</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item danger"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    handleRemoveFromRoom(req.equipmentId, req.equipmentName);
+                                  }}
+                                >
+                                  <TrashIcon size={14} />
+                                  <span>Thu hồi thiết bị khỏi phòng</span>
+                                </button>
+                              </div>,
+                              document.body
+                            )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1417,7 +1581,7 @@ export default function AdminEquipmentsManagementTab({ onNotify, onSwitchTab }: 
                   <th>Tên danh mục thiết bị</th>
                   <th>Mô tả quy cách</th>
                   <th style={{ width: "130px", textAlign: "center" }}>Số thiết bị</th>
-                  <th style={{ width: "140px", textAlign: "right" }}>Thao tác</th>
+                  <th style={{ width: "90px", textAlign: "right" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -1460,26 +1624,55 @@ export default function AdminEquipmentsManagementTab({ onNotify, onSwitchTab }: 
                             {attachedCount} thiết bị
                           </span>
                         </td>
-                        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", justifyContent: "flex-end" }}>
+                        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
                             <button
                               type="button"
-                              className="btn-shift-action btn-shift-edit"
-                              onClick={() => handleOpenEditCategory(c)}
-                              title="Chỉnh sửa danh mục thiết bị"
+                              className={`btn-table-more ${rowMenu?.key === `cat-${c.id}` ? "active" : ""}`}
+                              title="Thao tác"
+                              aria-label="Thao tác"
+                              onClick={(evt) => toggleRowMenu(`cat-${c.id}`, evt.currentTarget)}
                             >
-                              <PencilIcon size={12} />
-                              <span>Sửa</span>
+                              <DotsIcon size={17} />
                             </button>
-                            <button
-                              type="button"
-                              className="btn-shift-action btn-shift-delete"
-                              onClick={() => handleDeleteCategory(c)}
-                              title="Xóa danh mục thiết bị"
-                            >
-                              <TrashIcon size={12} />
-                              <span>Xóa</span>
-                            </button>
+
+                            {rowMenu?.key === `cat-${c.id}` &&
+                              createPortal(
+                                <div
+                                  ref={rowMenuRef}
+                                  className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                                  style={{ top: rowMenu.top, left: rowMenu.left }}
+                                  role="menu"
+                                  onClick={(evt) => evt.stopPropagation()}
+                                >
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item accent-blue"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      handleOpenEditCategory(c);
+                                    }}
+                                  >
+                                    <PencilIcon size={14} />
+                                    <span>Chỉnh sửa danh mục</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item danger"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      handleDeleteCategory(c);
+                                    }}
+                                  >
+                                    <TrashIcon size={14} />
+                                    <span>Xóa danh mục thiết bị</span>
+                                  </button>
+                                </div>,
+                                document.body
+                              )}
                           </div>
                         </td>
                       </tr>

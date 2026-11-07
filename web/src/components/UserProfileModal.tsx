@@ -14,6 +14,9 @@ import {
   ClockIcon,
   DoorIcon,
   RefreshCwIcon,
+  EyeIcon,
+  DownloadIcon,
+  FileTextIcon,
 } from "./Icon";
 import {
   checkMyEligibility,
@@ -535,7 +538,7 @@ export default function UserProfileModal({
                 ) : (
                   <div className="user-profile-violations-list">
                     {myViolations.map((v) => {
-                      const isPending = v.status === "Chờ xử lý";
+                      const isPending = v.status === "Chờ xử lý" || v.status === "Đang xử lý";
                       const isResolved = v.status === "Đã xử lý";
                       const isFined = v.status === "Đã nộp phạt";
 
@@ -616,6 +619,40 @@ export default function UserProfileModal({
                               </div>
                             )}
                           </div>
+
+                          {v.attachments && v.attachments.length > 0 && (
+                            <div className="user-violation-attachments">
+                              <span className="violation-att-label">Tệp biên bản / Minh chứng ({v.attachments.length}):</span>
+                              <div className="violation-att-list">
+                                {v.attachments.map((att) => (
+                                  <div key={att.id} className="violation-att-item">
+                                    <span className="att-name" title={att.originalFileName}>
+                                      <FileTextIcon size={12} /> {att.originalFileName}
+                                    </span>
+                                    <div className="att-btns">
+                                      <a
+                                        href={att.viewUrl || `/api/Violations/attachments/${att.id}/view`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn-att-view"
+                                        title="Xem trực tiếp trong tab mới"
+                                      >
+                                        <EyeIcon size={12} /> Xem
+                                      </a>
+                                      <a
+                                        href={att.downloadUrl || `/api/Violations/attachments/${att.id}/download`}
+                                        download={att.originalFileName}
+                                        className="btn-att-download"
+                                        title="Tải tệp về máy"
+                                      >
+                                        <DownloadIcon size={12} /> Tải
+                                      </a>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

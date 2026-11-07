@@ -1,115 +1,195 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-  getAllIncidents,
-  getIncidentById,
-  getIncidentsByRoom,
+  fetchIncidents,
   createIncident,
   updateIncident,
   resolveIncident,
   deleteIncident,
-  resetToDefaultIncidents,
   getIncidentStats,
-  DEFAULT_INCIDENTS,
+  restoreRoomToAvailable,
 } from "./incidents";
+import { api } from "./api";
+
+vi.mock("./api", () => ({
+  api: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  },
+}));
 
 describe("incidents.ts", () => {
   beforeEach(() => {
-    localStorage.clear();
+    vi.clearAllMocks();
   });
 
-  it("returns default incidents when storage is empty", () => {
-    const list = getAllIncidents();
-    expect(list.length).toBe(DEFAULT_INCIDENTS.length);
-    expect(list.some((item) => item.roomCode === "B202")).toBe(true);
-  });
-
-  it("creates a new incident and prepends it", () => {
-    const newItem = createIncident({
-      roomCode: "B202",
-      roomName: "Phòng học nhóm B202",
-      description: "Hỏng máy chiếu khi trả phòng",
-      severity: "Khẩn cấp",
-      category: "Thiết bị hư hỏng",
+  it("fetches incidents from API and maps correctly", async () => {
+    (api.get as any).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: [
+          {
+            id: 1,
+            code: "SC-20261101-001",
+            targetType: "Phòng",
+            roomCode: "TV02",
+            roomName: "Phòng TV02",
+            category: "Thiết bị hư hỏng",
+            severity: "Khẩn cấp",
+            description: "Bảng tương tác bị lỗi",
+            status: "Đang bảo trì",
+            reportedByName: "Thư viện viên",
+            createdAt: "2026-11-01T00:00:00Z",
+          },
+        ],
+      },
     });
 
+    const list = await fetchIncidents();
+    expect(list.length).toBe(1);
+    expect(list[0].id).toBe("1");
+    expect(list[0].roomCode).toBe("TV02");
+    expect(list[0].status).toBe("Đang bảo trì");
+    expect(api.get).toHaveBeenCalledWith("/api/IncidentReports", { params: {} });
+  });
+
+  it("creates a new incident via POST /api/IncidentReports", async () => {
+    (api.post as any).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          id: 5,
+          code: "SC-20261107-005",
+          roomCode: "B202",
+          description: "Hỏng máy chiếu",
+          status: "Chờ tiếp nhận",
+          category: "Thiết bị hư hỏng",
+          severity: "Khẩn cấp",
+        },
+      },
+    });
+
+    const newItem = await createIncident({
+      roomCode: "B202",
+      description: "Hỏng máy chiếu",
+      category: "Thiết bị hư hỏng",
+      severity: "Khẩn cấp",
+    });
+
+    expect(newItem.id).toBe("5");
     expect(newItem.roomCode).toBe("B202");
-    expect(newItem.code).toMatch(/^#SC-/);
-    expect(newItem.status).toBe("Chờ tiếp nhận");
-
-    const all = getAllIncidents();
-    expect(all[0].id).toBe(newItem.id);
+    expect(newItem.code).toBe("SC-20261107-005");
+    expect(api.post).toHaveBeenCalledWith(
+      "/api/IncidentReports",
+      expect.objectContaining({
+        roomCode: "B202",
+        category: "Thiết bị hư hỏng",
+      })
+    );
   });
 
-  it("finds incident by ID or code", () => {
-    const item = getIncidentById("INC-20261102-001");
-    expect(item).toBeDefined();
-    expect(item?.roomCode).toBe("B202");
+  it("updates an incident via PUT /api/IncidentReports/{id}", async () => {
+    (api.put as any).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          id: 1,
+          code: "SC-20261101-001",
+          roomCode: "TV02",
+          status: "Đang bảo trì",
+          assignedTechnician: "KTV. Lê Hoàng",
+        },
+      },
+    });
 
-    const byCode = getIncidentById("#SC-20261102-001");
-    expect(byCode?.id).toBe("INC-20261102-001");
-  });
-
-  it("filters incidents by room code", () => {
-    const items = getIncidentsByRoom("B202");
-    expect(items.length).toBeGreaterThanOrEqual(1);
-    expect(items[0].roomCode).toBe("B202");
-  });
-
-  it("updates an incident successfully", () => {
-    const updated = updateIncident("INC-20261102-001", {
+    const updated = await updateIncident(1, {
       status: "Đang bảo trì",
       assignedTechnician: "KTV. Lê Hoàng",
-      technicianNote: "Đang thay thế linh kiện",
     });
 
     expect(updated).not.toBeNull();
     expect(updated?.status).toBe("Đang bảo trì");
     expect(updated?.assignedTechnician).toBe("KTV. Lê Hoàng");
+    expect(api.put).toHaveBeenCalledWith(
+      "/api/IncidentReports/1",
+      expect.objectContaining({
+        status: "Đang bảo trì",
+      })
+    );
   });
 
-  it("resolves an incident and marks status as 'Đã khắc phục'", () => {
-    const resolved = resolveIncident("INC-20261102-001", {
-      technicianNote: "Đã sửa xong máy chiếu và thay dây cáp mới.",
+  it("resolves an incident via POST /api/IncidentReports/{id}/resolve", async () => {
+    (api.post as any).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          id: 1,
+          code: "SC-20261101-001",
+          roomCode: "TV02",
+          status: "Đang khắc phục",
+          repairCost: 150000,
+        },
+      },
+    });
+
+    const resolved = await resolveIncident("1", {
+      technicianNote: "Đã sửa xong",
       repairCost: 150000,
-      resolvedBy: "KTV. Lê Hoàng",
     });
 
     expect(resolved).not.toBeNull();
-    expect(resolved?.status).toBe("Đã khắc phục");
-    expect(resolved?.resolvedAt).toBeDefined();
+    expect(resolved?.status).toBe("Đang khắc phục");
     expect(resolved?.repairCost).toBe(150000);
+    expect(api.post).toHaveBeenCalledWith(
+      "/api/IncidentReports/1/resolve",
+      expect.objectContaining({
+        technicianNote: "Đã sửa xong",
+        repairCost: 150000,
+      })
+    );
   });
 
-  it("deletes an incident", () => {
-    const deleted = deleteIncident("INC-20261028-003");
+  it("deletes an incident via DELETE /api/IncidentReports/{id}", async () => {
+    (api.delete as any).mockResolvedValueOnce({ status: 200 });
+
+    const deleted = await deleteIncident("2");
     expect(deleted).toBe(true);
-
-    const all = getAllIncidents();
-    expect(all.some((i) => i.id === "INC-20261028-003")).toBe(false);
+    expect(api.delete).toHaveBeenCalledWith("/api/IncidentReports/2");
   });
 
-  it("remains empty and does not restore when all incidents are deleted", () => {
-    resetToDefaultIncidents();
-    const all = getAllIncidents();
-    for (const item of all) {
-      deleteIncident(item.id);
-    }
-    const emptyList = getAllIncidents();
-    expect(emptyList.length).toBe(0);
-  });
-
-  it("calculates incident statistics correctly", () => {
-    resetToDefaultIncidents();
-    createIncident({
-      roomCode: "B301",
-      description: "Đang sửa chữa bảng tương tác",
-      status: "Đang bảo trì",
+  it("fetches incident statistics correctly", async () => {
+    (api.get as any).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          total: 10,
+          pending: 3,
+          inMaintenance: 2,
+          resolved: 5,
+          urgent: 1,
+        },
+      },
     });
-    const stats = getIncidentStats();
-    expect(stats.total).toBe(DEFAULT_INCIDENTS.length + 1);
-    expect(stats.pending).toBeGreaterThanOrEqual(1);
-    expect(stats.inMaintenance).toBeGreaterThanOrEqual(1);
+
+    const stats = await getIncidentStats();
+    expect(stats.total).toBe(10);
+    expect(stats.pending).toBe(3);
+    expect(stats.inMaintenance).toBe(2);
+    expect(stats.resolved).toBe(5);
+    expect(stats.urgent).toBe(1);
+  });
+
+  it("restores room to available via PATCH /api/Rooms/{id}/status", async () => {
+    (api.patch as any).mockResolvedValueOnce({ data: { success: true } });
+
+    const result = await restoreRoomToAvailable(10, "TV02");
+    expect(result.success).toBe(true);
+    expect(api.patch).toHaveBeenCalledWith("/api/Rooms/10/status", {
+      status: "Trống",
+      reason: "Đã hoàn tất bảo trì / khắc phục sự cố kỹ thuật.",
+    });
   });
 });
-

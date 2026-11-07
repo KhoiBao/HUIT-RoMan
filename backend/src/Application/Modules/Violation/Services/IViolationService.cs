@@ -36,5 +36,10 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
         Task<ApiResponse<IEnumerable<SessionReminderDto>>> GetRemindersAsync(int? sessionId = null, int? userId = null, int? departmentId = null);
         Task<ApiResponse<SessionReminderDto>> AddReminderAsync(CreateSessionReminderDto request);
         Task<ApiResponse<bool>> ClearRemindersForSessionAsync(int sessionId);
+
+        // ── Attachments (Lưu trữ ảnh, file Word/PDF trên MinIO) ───────────
+        Task<ApiResponse<ViolationAttachmentDto>> UploadAttachmentAsync(int violationRecordId, System.IO.Stream stream, string fileName, string contentType, long fileSize, int? uploadedByUserId);
+        Task<ApiResponse<bool>> DeleteAttachmentAsync(int attachmentId);
+        Task<(System.IO.Stream? Stream, string ContentType, string FileName)> DownloadAttachmentAsync(int attachmentId);
     }
 }

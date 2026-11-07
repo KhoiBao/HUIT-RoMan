@@ -203,7 +203,7 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
                 Description = "Hệ thống tự động ghi nhận: không xác nhận trả phòng đúng giờ kết thúc đã đăng ký, phiên bị tự đóng.",
                 Severity = vt01.Severity,
                 PenaltyApplied = vt01.DefaultPenalty ?? "Nhắc nhở / Cảnh cáo lần đầu",
-                Status = "Chờ xử lý",
+                Status = vt01.Severity >= 3 ? "Đang xử lý" : "Đã xử lý",
                 CreatedAt = nowUtc
             });
 

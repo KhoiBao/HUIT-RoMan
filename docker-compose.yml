@@ -34,6 +34,11 @@ services:
       JwtSettings__Issuer: HUIT-RoMan-API
       JwtSettings__Audience: HUIT-RoMan-Client
       Database__AutoMigrate: "true"
+      StorageSettings__Endpoint: ${MINIO_ENDPOINT:-minio:9000}
+      StorageSettings__AccessKey: ${MINIO_ROOT_USER:-huit_admin}
+      StorageSettings__SecretKey: ${MINIO_ROOT_PASSWORD:-HuitRoMan@2026}
+      StorageSettings__BucketName: ${MINIO_BUCKET_NAME:-violations}
+      StorageSettings__UseSsl: "false"
     ports:
       - "${API_PORT:-5056}:8080"
     depends_on:
@@ -55,5 +60,20 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  minio:
+    image: minio/minio:latest
+    container_name: huit-roman-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-huit_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-HuitRoMan@2026}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  minio_data:

@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { AuthProvider } from "./auth/AuthContext";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { RequireAuth, RequireStaff } from "./auth/RequireAuth";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -9,6 +9,15 @@ import AdminDashboardPage from "./pages/AdminDashboardPage";
 import PortalLayout from "./components/PortalLayout";
 import { LiveChatWidget } from "./components/chat/LiveChatWidget";
 import { ConfirmProvider } from "./context/ConfirmContext";
+import { getHomePathForRole, isStaffRole } from "./lib/auth";
+
+function RootRedirect() {
+  const { user } = useAuth();
+  if (isStaffRole(user?.role)) {
+    return <Navigate to={getHomePathForRole(user?.role)} replace />;
+  }
+  return <Navigate to="/home" replace />;
+}
 
 export default function App() {
   return (
@@ -45,8 +54,8 @@ export default function App() {
                 }
               />
             </Route>
-            <Route path="/" element={<Navigate to="/home" replace />} />
-            <Route path="*" element={<Navigate to="/home" replace />} />
+            <Route path="/" element={<RootRedirect />} />
+            <Route path="*" element={<RootRedirect />} />
           </Routes>
           <LiveChatWidget />
         </ConfirmProvider>

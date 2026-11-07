@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../../lib/api";
 import {
   ChevronLeftIcon,
@@ -13,6 +14,9 @@ import {
   ClockIcon,
   RefreshCwIcon,
   XIcon,
+  DotsIcon,
+  PencilIcon,
+  TrashIcon,
 } from "../Icon";
 import AdminEquipmentsModal from "./AdminEquipmentsModal";
 import { useConfirm } from "../../context/ConfirmContext";
@@ -104,6 +108,58 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
 
   // Equipment modal target
   const [equipmentTarget, setEquipmentTarget] = useState<RoomItem | null>(null);
+
+  // Dropdown Action Menu (3 dots) state & handlers
+  const [rowMenu, setRowMenu] = useState<{
+    key: number;
+    top: number;
+    left: number;
+    openUp?: boolean;
+  } | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (rowMenuRef.current?.contains(target)) return;
+      if (target.closest(".btn-table-more")) return;
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [rowMenu]);
+
+  function toggleRowMenu(key: number, btn: HTMLElement) {
+    if (rowMenu?.key === key) {
+      setRowMenu(null);
+      return;
+    }
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = 230;
+    const menuHeight = 180;
+    const openUp =
+      rect.bottom + menuHeight + 12 > window.innerHeight &&
+      rect.top > menuHeight + 12;
+    setRowMenu({
+      key,
+      top: openUp ? rect.top - 8 : rect.bottom + 8,
+      left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
+      openUp,
+    });
+  }
 
   // Create / Edit modal state
   const [modalMode, setModalMode] = useState<"create" | "edit" | null>(null);
@@ -304,21 +360,6 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
   // Toggle Room Status: Trống <=> Bảo trì
   const handleToggleStatus = async (r: RoomItem) => {
     const isUnderMaintenance = r.status === "Bảo trì" || r.status === "Maintenance";
-
-    // Nếu phòng đang bảo trì và có thiết bị hỏng/đang bảo trì bên trong:
-    if (isUnderMaintenance && (r.hasMaintenanceEquipment || (r.maintenanceEquipments && r.maintenanceEquipments.length > 0))) {
-      const equipNames = r.maintenanceEquipments && r.maintenanceEquipments.length > 0
-        ? r.maintenanceEquipments.join(", ")
-        : "thiết bị";
-      await alert({
-        title: "Không thể mở lại phòng",
-        message: `Phòng ${r.roomCode} hiện có thiết bị đang trong tình trạng bảo trì/hỏng hóc (${equipNames}).`,
-        subMessage: "Quy tắc: Khi trong phòng có thiết bị bảo trì, phòng bắt buộc phải ở trạng thái Bảo trì. Vui lòng bấm vào nút \"Thiết bị\" để chuyển tình trạng thiết bị về \"Hoạt động tốt\" (hoặc thu hồi thiết bị) trước khi mở lại phòng.",
-        type: "warning",
-      });
-      return;
-    }
-
 
     // Nếu phòng đang bảo trì và có thiết bị hỏng/đang bảo trì bên trong:
     if (isUnderMaintenance && (r.hasMaintenanceEquipment || (r.maintenanceEquipments && r.maintenanceEquipments.length > 0))) {
@@ -580,7 +621,7 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
                   <th>Sức chứa</th>
                   <th>Trạng thái</th>
                   <th>Quy cách mượn</th>
-                  <th>Thao tác</th>
+                  <th style={{ width: "90px", textAlign: "right" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -617,75 +658,108 @@ export default function AdminRoomsManagementTab({ onNotify, onSwitchTab }: Props
                         {r.isBookingByPeriod ? "Theo Tiết học" : "Theo Giờ tự do"}
                       </span>
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="table-action-btns">
-                        {/* Equipment button */}
+                    <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
                         <button
                           type="button"
-                          className="btn-action-icon btn-equip-glow"
-                          title="Quản lý thiết bị trong phòng"
-                          onClick={() => setEquipmentTarget(r)}
+                          className={`btn-table-more ${rowMenu?.key === r.id ? "active" : ""}`}
+                          title="Thao tác"
+                          aria-label="Thao tác"
+                          onClick={(e) => toggleRowMenu(r.id, e.currentTarget)}
                         >
-                          <TvIcon size={16} /> Thiết bị
+                          <DotsIcon size={17} />
                         </button>
 
-                        {/* Incidents button */}
-                        {(r.status === "Maintenance" || r.status === "Bảo trì") && onSwitchTab && (
-                          <button
-                            type="button"
-                            className="btn-action-icon"
-                            title="Xem phiếu báo cáo sự cố của phòng này"
-                            style={{ color: "#d97706", borderColor: "#fcd34d" }}
-                            onClick={() => onSwitchTab("incidents")}
-                          >
-                            <AlertTriangleIcon size={14} /> Sự cố
-                          </button>
-                        )}
+                        {rowMenu?.key === r.id &&
+                          createPortal(
+                            <div
+                              ref={rowMenuRef}
+                              className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                              style={{ top: rowMenu.top, left: rowMenu.left }}
+                              role="menu"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="row-actions-menu-item accent-blue"
+                                onClick={() => {
+                                  setRowMenu(null);
+                                  setEquipmentTarget(r);
+                                }}
+                              >
+                                <TvIcon size={14} />
+                                <span>Quản lý thiết bị trong phòng</span>
+                              </button>
 
-                        {/* Status toggle button */}
-                        <button
-                          type="button"
-                          className={`btn-action-icon ${
-                            r.status === "Maintenance" || r.status === "Bảo trì"
-                              ? "btn-status-restore"
-                              : "btn-status-wrench"
-                          }`}
-                          title={
-                            r.hasMaintenanceEquipment
-                              ? `Phòng có thiết bị bảo trì (${r.maintenanceEquipments?.join(", ") || ""})`
-                              : r.status === "Maintenance" || r.status === "Bảo trì"
-                              ? "Mở lại phòng (Sẵn sàng)"
-                              : "Chuyển sang Bảo trì"
-                          }
-                          onClick={() => handleToggleStatus(r)}
-                        >
-                          <WrenchIcon size={14} />
-                          {r.status === "Maintenance" || r.status === "Bảo trì" ? "Mở phòng" : "Bảo trì"}
-                        </button>
+                              {(r.status === "Maintenance" || r.status === "Bảo trì") && onSwitchTab && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item accent-amber"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    onSwitchTab("incidents");
+                                  }}
+                                >
+                                  <AlertTriangleIcon size={14} />
+                                  <span>Xem phiếu sự cố phòng</span>
+                                </button>
+                              )}
 
-                        {/* Edit */}
-                        {canManageRooms && (
-                          <button
-                            type="button"
-                            className="btn-action-icon"
-                            title="Chỉnh sửa thông tin phòng"
-                            onClick={() => openEditModal(r)}
-                          >
-                            Sửa
-                          </button>
-                        )}
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className={`row-actions-menu-item ${
+                                  r.status === "Maintenance" || r.status === "Bảo trì"
+                                    ? "accent-blue"
+                                    : "accent-amber"
+                                }`}
+                                onClick={() => {
+                                  setRowMenu(null);
+                                  handleToggleStatus(r);
+                                }}
+                              >
+                                <WrenchIcon size={14} />
+                                <span>
+                                  {r.status === "Maintenance" || r.status === "Bảo trì"
+                                    ? "Mở lại phòng (Sẵn sàng)"
+                                    : "Chuyển sang Bảo trì"}
+                                </span>
+                              </button>
 
-                        {/* Delete */}
-                        {canManageRooms && (
-                          <button
-                            type="button"
-                            className="btn-action-icon btn-action-delete"
-                            title="Xóa mềm phòng"
-                            onClick={() => handleDeleteRoom(r)}
-                          >
-                            <XIcon size={14} />
-                          </button>
-                        )}
+                              {canManageRooms && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item accent-indigo"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    openEditModal(r);
+                                  }}
+                                >
+                                  <PencilIcon size={14} />
+                                  <span>Chỉnh sửa thông tin phòng</span>
+                                </button>
+                              )}
+
+                              {canManageRooms && (
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item danger"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    handleDeleteRoom(r);
+                                  }}
+                                >
+                                  <TrashIcon size={14} />
+                                  <span>Xóa phòng</span>
+                                </button>
+                              )}
+                            </div>,
+                            document.body
+                          )}
                       </div>
                     </td>
                   </tr>

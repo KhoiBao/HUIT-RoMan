@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../../lib/api";
 import {
   ClipboardCheckIcon,
@@ -16,6 +17,8 @@ import {
   ZapIcon,
   SlashIcon,
   HistoryIcon,
+  DotsIcon,
+  InfoIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
 import {
@@ -24,6 +27,11 @@ import {
   fetchAutoApprovalSettingApi,
   updateAutoApprovalSettingApi,
   approvePendingBookingsApi,
+  rejectPendingBookingsApi,
+  bulkCancelBookingsApi,
+  bulkApproveBookingsApi,
+  cancelBookingByStaffApi,
+  cancelBookingDetailByStaffApi,
   type AutoApprovalSetting,
 } from "../../lib/booking";
 import { ApprovalHistoryModal } from "../ApprovalHistoryModal";
@@ -89,7 +97,7 @@ export default function AdminBookingApprovalTab({
   onNotify,
   canManageAutoApproval = false,
 }: Props) {
-  const { alert } = useConfirm();
+  const { alert, confirm } = useConfirm();
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -125,6 +133,82 @@ export default function AdminBookingApprovalTab({
   const [autoSaving, setAutoSaving] = useState<boolean>(false);
   /** "on" = đang chờ xác nhận bật kèm duyệt yêu cầu tồn */
   const [autoConfirm, setAutoConfirm] = useState<"on" | null>(null);
+
+  // Bulk Selection State
+  const [selectedBookingIds, setSelectedBookingIds] = useState<number[]>([]);
+
+  // Cancel / Revoke Approval State (Hủy duyệt toàn bộ / từng phòng / hàng loạt)
+  const CANCEL_REASON_PRESETS = [
+    "Phòng cần sửa chữa, bảo trì thiết bị hoặc cơ sở vật chất đột xuất",
+    "Khu học thuật tạm đóng cửa theo chỉ đạo của nhà trường",
+    "Trùng lịch sự kiện, hội thảo hoặc thi cử của nhà trường",
+    "Người mượn liên hệ xin hủy / thay đổi kế hoạch",
+    "Quản lý điều chỉnh lại kế hoạch vận hành phòng",
+    "OTHER",
+  ];
+  const [cancelTarget, setCancelTarget] = useState<{
+    type: "booking" | "detail" | "all_pending" | "bulk_selected";
+    id?: number;
+    booking?: BookingItem;
+    detail?: BookingDetail;
+    title: string;
+    count?: number;
+  } | null>(null);
+  const [cancelReasonPreset, setCancelReasonPreset] = useState<string>(CANCEL_REASON_PRESETS[0]);
+  const [customCancelDetail, setCustomCancelDetail] = useState<string>("");
+  const [submittingCancel, setSubmittingCancel] = useState<boolean>(false);
+
+  // Dropdown Action Menu (3 dots) state & handlers
+  const [rowMenu, setRowMenu] = useState<{
+    key: number;
+    top: number;
+    left: number;
+    openUp?: boolean;
+  } | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (rowMenuRef.current?.contains(target)) return;
+      if (target.closest(".btn-table-more")) return;
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [rowMenu]);
+
+  function toggleRowMenu(key: number, btn: HTMLElement) {
+    if (rowMenu?.key === key) {
+      setRowMenu(null);
+      return;
+    }
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = 230;
+    const menuHeight = 150;
+    const openUp =
+      rect.bottom + menuHeight + 12 > window.innerHeight &&
+      rect.top > menuHeight + 12;
+    setRowMenu({
+      key,
+      top: openUp ? rect.top - 8 : rect.bottom + 8,
+      left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
+      openUp,
+    });
+  }
 
   useEffect(() => {
     if (!approveTarget) return;
@@ -162,6 +246,18 @@ export default function AdminBookingApprovalTab({
     }
   };
 
+  const formatFailuresSummary = (
+    failures?: Array<{ bookingId: number; activityName?: string | null; reason: string }>
+  ) => {
+    if (!failures || failures.length === 0) return "";
+    const firstFailures = failures
+      .slice(0, 3)
+      .map((f) => `Đơn #${f.bookingId}${f.activityName ? ` (${f.activityName})` : ""}: ${f.reason}`)
+      .join("; ");
+    const remaining = failures.length > 3 ? ` và ${failures.length - 3} đơn khác` : "";
+    return ` (Chi tiết: ${firstFailures}${remaining})`;
+  };
+
   const applyAutoSetting = async (enabled: boolean, approvePending: boolean) => {
     try {
       setAutoSaving(true);
@@ -171,7 +267,7 @@ export default function AdminBookingApprovalTab({
         const result = await approvePendingBookingsApi();
         onNotify(
           result.failedCount > 0
-            ? `Đã bật duyệt tự động. Duyệt được ${result.approvedCount} yêu cầu, ${result.failedCount} yêu cầu lỗi.`
+            ? `Đã bật duyệt tự động. Duyệt được ${result.approvedCount} yêu cầu, ${result.failedCount} yêu cầu không thể duyệt${formatFailuresSummary(result.failures)}.`
             : `Đã bật duyệt tự động và duyệt ${result.approvedCount} yêu cầu.`,
           result.failedCount > 0 ? "warning" : "success"
         );
@@ -456,6 +552,178 @@ export default function AdminBookingApprovalTab({
     }
   };
 
+  // Open Cancel / Revoke Approval Modal
+  const openCancelModal = (
+    type: "booking" | "detail" | "all_pending" | "bulk_selected",
+    id?: number,
+    title = "",
+    extra?: { booking?: BookingItem; detail?: BookingDetail; count?: number }
+  ) => {
+    setCancelTarget({
+      type,
+      id,
+      title,
+      booking: extra?.booking,
+      detail: extra?.detail,
+      count: extra?.count,
+    });
+    setCancelReasonPreset(CANCEL_REASON_PRESETS[0]);
+    setCustomCancelDetail("");
+  };
+
+  // Submit Cancel / Revoke Approval
+  const submitCancelApproval = async () => {
+    if (!cancelTarget) return;
+
+    const finalReason =
+      cancelReasonPreset === "OTHER"
+        ? customCancelDetail.trim()
+        : customCancelDetail.trim()
+        ? `${cancelReasonPreset}: ${customCancelDetail.trim()}`
+        : cancelReasonPreset;
+
+    if (!finalReason) {
+      await alert({
+        title: "Thiếu lý do hủy duyệt",
+        message: "Vui lòng chọn hoặc nhập lý do hủy duyệt để gửi thông báo cho sinh viên.",
+        type: "warning",
+      });
+      return;
+    }
+
+    try {
+      setSubmittingCancel(true);
+
+      if (cancelTarget.type === "booking" && cancelTarget.id) {
+        await cancelBookingByStaffApi(cancelTarget.id, finalReason);
+        onNotify(`Đã hủy duyệt toàn bộ đơn #${cancelTarget.id} thành công!`, "info");
+      } else if (cancelTarget.type === "detail" && cancelTarget.id) {
+        await cancelBookingDetailByStaffApi(cancelTarget.id, finalReason);
+        onNotify(`Đã hủy duyệt phòng #${cancelTarget.id} thành công!`, "info");
+      } else if (cancelTarget.type === "all_pending") {
+        const res = await rejectPendingBookingsApi(finalReason);
+        onNotify(
+          res.failedCount > 0
+            ? `Đã từ chối/hủy ${res.rejectedCount} đơn đang chờ (${res.failedCount} đơn không thể xử lý${formatFailuresSummary(res.failures)}).`
+            : `Đã từ chối/hủy toàn bộ ${res.rejectedCount} đơn đang chờ duyệt thành công!`,
+          res.failedCount > 0 ? "warning" : "info"
+        );
+      } else if (cancelTarget.type === "bulk_selected") {
+        if (selectedBookingIds.length === 0) return;
+        const res = await bulkCancelBookingsApi(selectedBookingIds, finalReason);
+        onNotify(
+          res.failedCount > 0
+            ? `Đã hủy duyệt ${res.cancelledCount} đơn đã chọn (${res.failedCount} đơn không thể hủy${formatFailuresSummary(res.failures)}).`
+            : `Đã hủy duyệt toàn bộ ${res.cancelledCount} đơn đã chọn thành công!`,
+          res.failedCount > 0 ? "warning" : "info"
+        );
+        setSelectedBookingIds([]);
+      }
+
+      setCancelTarget(null);
+      await fetchBookings();
+    } catch (err: any) {
+      console.error("Cancel approval error:", err);
+      onNotify(
+        err.response?.data?.message || err.message || "Lỗi xử lý hủy duyệt từ máy chủ.",
+        "warning"
+      );
+    } finally {
+      setSubmittingCancel(false);
+    }
+  };
+
+  // Bulk Approve Selected
+  const handleBulkApproveSelected = async () => {
+    if (selectedBookingIds.length === 0) return;
+    const pendingSelected = bookings
+      .filter((b) => selectedBookingIds.includes(b.id) && b.status === "Chờ duyệt")
+      .map((b) => b.id);
+
+    if (pendingSelected.length === 0) {
+      onNotify("Không có đơn nào ở trạng thái Chờ duyệt trong các đơn đã chọn.", "warning");
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: "Duyệt hàng loạt đơn đã chọn",
+      message: `Bạn có chắc chắn muốn DUYỆT ${pendingSelected.length} đơn đặt phòng đã chọn?`,
+      confirmText: "Duyệt đơn đã chọn",
+      type: "info",
+    });
+    if (!confirmed) return;
+
+    try {
+      setSubmittingAction(true);
+      const res = await bulkApproveBookingsApi(pendingSelected);
+      onNotify(
+        res.failedCount > 0
+          ? `Đã duyệt ${res.approvedCount} đơn (${res.failedCount} đơn không thể duyệt${formatFailuresSummary(res.failures)}).`
+          : `Đã duyệt thành công toàn bộ ${res.approvedCount} đơn đã chọn!`,
+        res.failedCount > 0 ? "warning" : "success"
+      );
+      setSelectedBookingIds([]);
+      await fetchBookings();
+    } catch (err: any) {
+      onNotify(err.response?.data?.message || err.message || "Lỗi duyệt hàng loạt.", "warning");
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  // Approve all pending
+  const handleApproveAllPending = async () => {
+    if (stats.pending === 0) {
+      onNotify("Không có đơn nào đang chờ duyệt.", "info");
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: "Duyệt toàn bộ yêu cầu",
+      message: `Bạn có chắc chắn muốn DUYỆT TOÀN BỘ ${stats.pending} đơn đặt phòng đang chờ duyệt?`,
+      confirmText: "Duyệt tất cả",
+      type: "info",
+    });
+    if (!confirmed) return;
+
+    try {
+      setSubmittingAction(true);
+      const res = await approvePendingBookingsApi();
+      onNotify(
+        res.failedCount > 0
+          ? `Đã duyệt ${res.approvedCount} đơn (${res.failedCount} đơn không thể duyệt${formatFailuresSummary(res.failures)}).`
+          : `Đã duyệt toàn bộ ${res.approvedCount} đơn đang chờ duyệt thành công!`,
+        res.failedCount > 0 ? "warning" : "success"
+      );
+      await fetchBookings();
+    } catch (err: any) {
+      onNotify(err.response?.data?.message || err.message || "Lỗi duyệt toàn bộ đơn.", "warning");
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
+  // Selection toggle
+  const toggleSelectBooking = (id: number) => {
+    setSelectedBookingIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const isAllPageSelected =
+    pagedBookings.length > 0 &&
+    pagedBookings.every((b) => selectedBookingIds.includes(b.id));
+
+  const toggleSelectAllPage = () => {
+    if (isAllPageSelected) {
+      const pageIds = new Set(pagedBookings.map((b) => b.id));
+      setSelectedBookingIds((prev) => prev.filter((id) => !pageIds.has(id)));
+    } else {
+      const pageIds = pagedBookings.map((b) => b.id);
+      setSelectedBookingIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Chờ duyệt":
@@ -652,6 +920,58 @@ export default function AdminBookingApprovalTab({
         </div>
       </div>
 
+      {/* Quick Bulk Action Bar */}
+      {stats.pending > 0 && (
+        <div
+          className="admin-bulk-quick-bar"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 16px",
+            backgroundColor: "#fffbeb",
+            border: "1px solid #fef3c7",
+            borderRadius: "8px",
+            marginBottom: "16px",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", color: "#92400e" }}>
+            <HourglassIcon size={16} />
+            <span>
+              Đang có <strong>{stats.pending}</strong> yêu cầu đặt phòng chờ xét duyệt
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              type="button"
+              className="btn-action-approve"
+              style={{ fontSize: "13px", padding: "6px 12px" }}
+              onClick={handleApproveAllPending}
+              disabled={submittingAction}
+              title="Duyệt toàn bộ các đơn đang chờ"
+            >
+              <CheckCircleIcon size={14} /> Duyệt toàn bộ ({stats.pending})
+            </button>
+            <button
+              type="button"
+              className="btn-action-cancel-approval"
+              style={{ fontSize: "13px", padding: "6px 12px" }}
+              onClick={() =>
+                openCancelModal("all_pending", undefined, "Hủy duyệt / Từ chối toàn bộ đơn đang chờ", {
+                  count: stats.pending,
+                })
+              }
+              disabled={submittingAction || submittingCancel}
+              title="Hủy duyệt / Từ chối toàn bộ các đơn đang chờ"
+            >
+              <XIcon size={14} /> Hủy duyệt toàn bộ ({stats.pending})
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filter and Search Bar */}
       <div className="admin-filter-bar">
         <div className="admin-search-box">
@@ -786,6 +1106,42 @@ export default function AdminBookingApprovalTab({
         </div>
       ) : (
         <>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "4px 8px",
+              marginBottom: "10px",
+              fontSize: "13px",
+              color: "#64748b",
+            }}
+          >
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                cursor: "pointer",
+                userSelect: "none",
+                fontWeight: 500,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isAllPageSelected}
+                onChange={toggleSelectAllPage}
+                style={{ width: "16px", height: "16px", cursor: "pointer" }}
+              />
+              <span>Chọn tất cả trên trang này ({pagedBookings.length} đơn)</span>
+            </label>
+            {selectedBookingIds.length > 0 && (
+              <span style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600 }}>
+                Đã chọn tổng cộng {selectedBookingIds.length} đơn
+              </span>
+            )}
+          </div>
+
           <div className="admin-booking-cards-list">
             {pagedBookings.map((b) => {
             const isExpanded = expandedId === b.id;
@@ -806,7 +1162,20 @@ export default function AdminBookingApprovalTab({
                   title="Bấm vào để xem chi tiết / thu gọn các phòng đăng ký"
                 >
                   <div className="booking-card-id-col">
-                    <span className="booking-code-badge">#{b.id}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedBookingIds.includes(b.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelectBooking(b.id);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Chọn đơn #${b.id}`}
+                        style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                      />
+                      <span className="booking-code-badge">#{b.id}</span>
+                    </div>
                     {getStatusBadge(b.status)}
                   </div>
 
@@ -823,6 +1192,14 @@ export default function AdminBookingApprovalTab({
                       <span className="meta-sep">•</span>
                       <span className="meta-item">
                         Quy mô: <strong>{b.guestCount} người</strong>
+                      </span>
+                      <span className="meta-sep">•</span>
+                      <span className="meta-item">
+                        <DoorIcon size={14} />
+                        <strong>{b.details.length} phòng</strong>
+                        {b.details.length > 0
+                          ? ` (${b.details.map((d) => d.roomCode).join(", ")})`
+                          : ""}
                       </span>
                       <span className="meta-sep">•</span>
                       <span className="meta-item">
@@ -897,24 +1274,76 @@ export default function AdminBookingApprovalTab({
 
                     <button
                       type="button"
-                      className="btn-action-expand"
-                      onClick={() =>
-                        setExpandedId(isExpanded ? null : b.id)
-                      }
+                      className={`btn-table-more ${rowMenu?.key === b.id ? "active" : ""}`}
+                      title="Thêm chức năng"
+                      aria-label="Thêm chức năng"
+                      onClick={(e) => toggleRowMenu(b.id, e.currentTarget)}
                     >
-                      {isExpanded ? "Thu gọn" : `Xem chi tiết (${b.details.length} phòng)`}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn-action-expand"
-                      onClick={() => setHistoryTarget(b)}
-                      title="Xem lịch sử duyệt đặt phòng"
-                    >
-                      <HistoryIcon size={13} /> Lịch sử duyệt
+                      <DotsIcon size={17} />
                     </button>
                   </div>
                 </div>
+
+                {rowMenu?.key === b.id &&
+                  createPortal(
+                    <div
+                      ref={rowMenuRef}
+                      className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                      style={{ top: rowMenu.top, left: rowMenu.left }}
+                      role="menu"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="row-actions-menu-item"
+                        onClick={() => {
+                          setRowMenu(null);
+                          setExpandedId(isExpanded ? null : b.id);
+                        }}
+                      >
+                        <InfoIcon size={14} />
+                        <span>{isExpanded ? "Thu gọn danh sách phòng" : "Chi tiết đặt phòng"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="row-actions-menu-item accent-indigo"
+                        onClick={() => {
+                          setRowMenu(null);
+                          setHistoryTarget(b);
+                        }}
+                      >
+                        <HistoryIcon size={14} />
+                        <span>Lịch sử duyệt</span>
+                      </button>
+
+                      {!isPending &&
+                        (b.status === "Đã duyệt" || b.status === "Duyệt một phần") &&
+                        !b.checkedInAt && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="row-actions-menu-item danger"
+                            onClick={() => {
+                              setRowMenu(null);
+                              openCancelModal(
+                                "booking",
+                                b.id,
+                                `Hủy duyệt toàn bộ đơn #${b.id} (${b.activityName || "Mượn phòng"})`,
+                                { booking: b }
+                              );
+                            }}
+                            disabled={submittingAction || submittingCancel}
+                          >
+                            <XIcon size={14} />
+                            <span>Hủy duyệt toàn bộ</span>
+                          </button>
+                        )}
+                    </div>,
+                    document.body
+                  )}
 
                 {/* Expanded Details list */}
                 {isExpanded && (
@@ -986,20 +1415,22 @@ export default function AdminBookingApprovalTab({
                                 </span>
                               </td>
                               <td>
-                                {getStatusBadge(detail.status)}
-                                {detail.rejectionReason && (
-                                  <div className="detail-reject-reason-tooltip" title={detail.rejectionReason}>
-                                    Lý do: {detail.rejectionReason}
-                                  </div>
-                                )}
-                                {detail.approvedByName && detail.status === "Đã duyệt" && (
-                                  <div className="detail-approver-line">
-                                    Duyệt bởi {detail.approvedByName}
-                                    {detail.approvedAt
-                                      ? ` • ${formatDateTime(detail.approvedAt)}`
-                                      : ""}
-                                  </div>
-                                )}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                                  {getStatusBadge(detail.status)}
+                                  {detail.rejectionReason && (
+                                    <div className="detail-reject-reason-tooltip" title={detail.rejectionReason}>
+                                      Lý do: {detail.rejectionReason}
+                                    </div>
+                                  )}
+                                  {detail.approvedByName && detail.status === "Đã duyệt" && (
+                                    <div className="detail-approver-line">
+                                      Duyệt bởi {detail.approvedByName}
+                                      {detail.approvedAt
+                                        ? ` • ${formatDateTime(detail.approvedAt)}`
+                                        : ""}
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
                                 {detail.status === "Chờ duyệt" ? (
@@ -1041,8 +1472,27 @@ export default function AdminBookingApprovalTab({
                                       <XIcon size={12} /> Từ chối
                                     </button>
                                   </div>
+                                ) : detail.status === "Đã duyệt" && !b.checkedInAt ? (
+                                  <div className="table-row-actions">
+                                    <button
+                                      type="button"
+                                      className="btn-mini-cancel-approval"
+                                      onClick={() =>
+                                        openCancelModal(
+                                          "detail",
+                                          detail.id,
+                                          `Hủy duyệt phòng ${detail.roomCode} (đơn #${b.id})`,
+                                          { booking: b, detail }
+                                        )
+                                      }
+                                      disabled={submittingCancel}
+                                      title="Hủy duyệt riêng phòng này"
+                                    >
+                                      <XIcon size={12} /> Hủy duyệt phòng
+                                    </button>
+                                  </div>
                                 ) : (
-                                  <span className="text-slate-400 text-xs italic">Đã xử lý</span>
+                                  <span style={{ color: "#94a3b8", fontSize: "14px", fontWeight: 500, paddingRight: "8px" }}>—</span>
                                 )}
                               </td>
                             </tr>
@@ -1067,6 +1517,51 @@ export default function AdminBookingApprovalTab({
           }}
           itemLabel="yêu cầu đặt phòng"
         />
+
+        {/* Floating Bulk Action Bar */}
+        {selectedBookingIds.length > 0 && (
+          <div className="admin-floating-bulk-bar">
+            <div className="admin-floating-bulk-count">
+              <span>
+                Đã chọn: <strong>{selectedBookingIds.length}</strong> đơn đặt phòng
+              </span>
+            </div>
+            <div className="admin-floating-bulk-actions">
+              <button
+                type="button"
+                className="btn-bulk-approve"
+                onClick={handleBulkApproveSelected}
+                disabled={submittingAction || submittingCancel}
+                title="Duyệt các đơn Chờ duyệt đã chọn"
+              >
+                <CheckCircleIcon size={15} /> Duyệt đơn đã chọn
+              </button>
+              <button
+                type="button"
+                className="btn-bulk-cancel"
+                onClick={() =>
+                  openCancelModal(
+                    "bulk_selected",
+                    undefined,
+                    `Hủy duyệt ${selectedBookingIds.length} đơn đã chọn`,
+                    { count: selectedBookingIds.length }
+                  )
+                }
+                disabled={submittingAction || submittingCancel}
+                title="Hủy duyệt / Thu hồi phê duyệt các đơn đã chọn"
+              >
+                <XIcon size={15} /> Hủy duyệt đơn đã chọn
+              </button>
+              <button
+                type="button"
+                className="btn-bulk-dismiss"
+                onClick={() => setSelectedBookingIds([])}
+              >
+                Bỏ chọn
+              </button>
+            </div>
+          </div>
+        )}
       </>
       )}
 
@@ -1333,6 +1828,153 @@ export default function AdminBookingApprovalTab({
                 disabled={submittingAction}
               >
                 {submittingAction ? "Đang xử lý..." : "Xác nhận từ chối"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel / Revoke Approval Modal */}
+      {cancelTarget && (
+        <div
+          className="admin-modal-overlay"
+          role="presentation"
+          onClick={() => !submittingCancel && setCancelTarget(null)}
+        >
+          <div
+            className="admin-modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-approval-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "520px" }}
+          >
+            <div className="modal-header">
+              <h3 id="cancel-approval-modal-title" className="modal-title color-red">
+                <AlertTriangleIcon size={18} className="mr-1 inline-block" /> {cancelTarget.title}
+              </h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setCancelTarget(null)}
+                disabled={submittingCancel}
+                aria-label="Đóng hộp thoại"
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p className="modal-prompt-text">
+                {cancelTarget.type === "all_pending"
+                  ? `Bạn đang chuẩn bị HỦY DUYỆT / TỪ CHỐI toàn bộ ${
+                      cancelTarget.count || stats.pending
+                    } đơn đang chờ duyệt. Thao tác này sẽ giải phóng phòng và gửi thông báo/email cho sinh viên.`
+                  : cancelTarget.type === "bulk_selected"
+                  ? `Bạn đang chuẩn bị HỦY DUYỆT ${
+                      cancelTarget.count || selectedBookingIds.length
+                    } đơn đã chọn. Thao tác này sẽ thu hồi phê duyệt, giải phóng các phòng đã được giữ và gửi thông báo cho sinh viên.`
+                  : cancelTarget.type === "booking"
+                  ? `Thao tác này sẽ thu hồi phê duyệt, HỦY TOÀN BỘ các phòng trong đơn #${cancelTarget.id}, giải phóng phòng trống trên lịch và thông báo cho sinh viên.`
+                  : `Thao tác này sẽ thu hồi phê duyệt riêng phòng này, giải phóng lịch phòng và thông báo lý do cho sinh viên.`}
+              </p>
+
+              <div className="form-group-admin" style={{ marginTop: "14px" }}>
+                <label style={{ fontWeight: 600, color: "#334155", display: "block", marginBottom: "6px" }}>
+                  Lý do hủy duyệt (*):
+                </label>
+                <select
+                  className="admin-select"
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    marginBottom: "8px",
+                    fontSize: "13px",
+                  }}
+                  value={cancelReasonPreset}
+                  onChange={(e) => setCancelReasonPreset(e.target.value)}
+                  disabled={submittingCancel}
+                >
+                  {CANCEL_REASON_PRESETS.map((preset) => (
+                    <option key={preset} value={preset}>
+                      {preset === "OTHER" ? "Lý do khác (tự nhập chi tiết)..." : preset}
+                    </option>
+                  ))}
+                </select>
+
+                <textarea
+                  rows={3}
+                  className="admin-textarea"
+                  style={{
+                    width: "100%",
+                    padding: "8px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    resize: "vertical",
+                  }}
+                  placeholder={
+                    cancelReasonPreset === "OTHER"
+                      ? "Nhập lý do cụ thể gửi đến người mượn..."
+                      : "Ghi chú thêm chi tiết (tùy chọn)..."
+                  }
+                  value={customCancelDetail}
+                  onChange={(e) => setCustomCancelDetail(e.target.value)}
+                  disabled={submittingCancel}
+                />
+              </div>
+
+              <div
+                className="confirm-sub-note note-warning"
+                style={{
+                  marginTop: "12px",
+                  display: "flex",
+                  gap: "8px",
+                  alignItems: "flex-start",
+                  padding: "8px 12px",
+                  background: "#fef3c7",
+                  borderRadius: "6px",
+                  color: "#92400e",
+                  fontSize: "12px",
+                }}
+              >
+                <AlertTriangleIcon size={15} style={{ flexShrink: 0, marginTop: "2px" }} />
+                <span>
+                  Lý do hủy sẽ được lưu vào Lịch sử duyệt và gửi trực tiếp qua thông báo hệ thống / email đến người mượn.
+                </span>
+              </div>
+            </div>
+
+            <div
+              className="modal-footer"
+              style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}
+            >
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setCancelTarget(null)}
+                disabled={submittingCancel}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                className="btn-confirm-reject"
+                onClick={submitCancelApproval}
+                disabled={submittingCancel}
+                style={{
+                  backgroundColor: "#dc2626",
+                  color: "#fff",
+                  border: "none",
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {submittingCancel ? "Đang xử lý..." : "Xác nhận hủy duyệt"}
               </button>
             </div>
           </div>

@@ -64,7 +64,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.DTOs
         public int Severity { get; set; }
         public string SeverityText { get; set; } = string.Empty;
         public string PenaltyApplied { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty; // "Chờ xử lý", "Đã xử lý", "Đã nộp phạt", "Hủy bỏ"
+        public string Status { get; set; } = string.Empty; // "Đang xử lý", "Chờ xử lý", "Đã xử lý", "Đã nộp phạt", "Hủy bỏ"
 
         // User (Borrower) info
         public int UserId { get; set; }
@@ -91,7 +91,25 @@ namespace HUIT_RoMan.Application.Modules.Violation.DTOs
         public int RestrictDays { get; set; }
         public DateTime? RestrictionEndAt { get; set; }
 
+        // Tệp đính kèm (ảnh hiện trường, file Word/PDF lưu trên MinIO)
+        public List<ViolationAttachmentDto> Attachments { get; set; } = new List<ViolationAttachmentDto>();
+
         public DateTime CreatedAt { get; set; }
+    }
+
+    public class ViolationAttachmentDto
+    {
+        public int Id { get; set; }
+        public int ViolationRecordId { get; set; }
+        public string FileKey { get; set; } = string.Empty;
+        public string OriginalFileName { get; set; } = string.Empty;
+        public string ContentType { get; set; } = string.Empty;
+        public long FileSize { get; set; }
+        public string DownloadUrl { get; set; } = string.Empty;
+        public string ViewUrl { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public int? UploadedByUserId { get; set; }
+        public string? UploadedByName { get; set; }
     }
 
     public class RecordViolationDto
@@ -118,12 +136,12 @@ namespace HUIT_RoMan.Application.Modules.Violation.DTOs
         /// <summary>Số ngày cấm mượn phòng (nếu có; 0 = không cấm)</summary>
         public int RestrictDays { get; set; } = 0;
 
-        public string Status { get; set; } = "Chờ xử lý"; // "Chờ xử lý", "Đã xử lý"
+        public string Status { get; set; } = string.Empty; // Tự động: Mức 3,4 -> "Đang xử lý", Mức 1,2 -> "Đã xử lý"
     }
 
     public class UpdateViolationRecordDto
     {
-        public string? Status { get; set; } // "Chờ xử lý", "Đã xử lý", "Đã nộp phạt", "Hủy bỏ"
+        public string? Status { get; set; } // "Đang xử lý", "Chờ xử lý", "Đã xử lý", "Đã nộp phạt", "Hủy bỏ"
         public string? PenaltyApplied { get; set; }
         public string? Description { get; set; }
         public int? Severity { get; set; }

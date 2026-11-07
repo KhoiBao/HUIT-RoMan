@@ -20,7 +20,7 @@ export interface ViolationRecordItem {
   severity: number;
   severityText: string;
   penaltyApplied: string;
-  status: string; // "Chờ xử lý" | "Đã xử lý" | "Đã nộp phạt" | "Hủy bỏ"
+  status: string; // "Đang xử lý" | "Chờ xử lý" | "Đã xử lý" | "Đã nộp phạt" | "Hủy bỏ"
   userId: number;
   userName: string;
   userFullName: string;
@@ -38,7 +38,22 @@ export interface ViolationRecordItem {
   isRestricted: boolean;
   restrictDays: number;
   restrictionEndAt?: string;
+  attachments?: ViolationAttachmentItem[];
   createdAt: string;
+}
+
+export interface ViolationAttachmentItem {
+  id: number;
+  violationRecordId: number;
+  fileKey: string;
+  originalFileName: string;
+  contentType: string;
+  fileSize: number;
+  downloadUrl: string;
+  viewUrl?: string;
+  createdAt: string;
+  uploadedByUserId?: number;
+  uploadedByName?: string;
 }
 
 export interface UserRestrictionItem {
@@ -215,6 +230,45 @@ export async function updateViolation(
 export async function deleteViolation(id: number): Promise<boolean> {
   const res = await api.delete(`/api/Violations/${id}`);
   return res.data?.success ?? true;
+}
+
+export async function uploadViolationAttachment(
+  violationId: number,
+  file: File
+): Promise<ViolationAttachmentItem> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await api.post(`/api/Violations/${violationId}/attachments`, formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+  return res.data?.data || res.data;
+}
+
+export async function deleteViolationAttachment(attachmentId: number): Promise<boolean> {
+  const res = await api.delete(`/api/Violations/attachments/${attachmentId}`);
+  return res.data?.success ?? true;
+}
+
+export function getAttachmentDownloadUrl(attachmentId: number): string {
+  return `/api/Violations/attachments/${attachmentId}/download`;
+}
+
+export function getAttachmentViewUrl(attachmentId: number): string {
+  return `/api/Violations/attachments/${attachmentId}/view`;
+}
+
+export function isImageAttachment(fileName?: string, contentType?: string): boolean {
+  if (contentType && contentType.startsWith("image/")) return true;
+  if (!fileName) return false;
+  return /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(fileName);
+}
+
+export function isPdfAttachment(fileName?: string, contentType?: string): boolean {
+  if (contentType === "application/pdf") return true;
+  if (!fileName) return false;
+  return /\.pdf$/i.test(fileName);
 }
 
 export async function fetchRestrictions(params?: {

@@ -161,7 +161,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Bật/tắt duyệt tự động</summary>
         [HttpPut("auto-approval")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> UpdateAutoApproval([FromBody] UpdateAutoApprovalSettingDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -172,10 +172,40 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Duyệt toàn bộ đơn đang chờ duyệt trong phạm vi quản lý</summary>
         [HttpPost("auto-approval/approve-pending")]
-        [Authorize(Roles = "Admin,Manager")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> ApprovePending()
         {
             var response = await _bookingService.ApprovePendingBookingsAsync();
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
+        /// <summary>Từ chối toàn bộ đơn đang chờ duyệt trong phạm vi quản lý</summary>
+        [HttpPost("auto-approval/reject-pending")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        public async Task<IActionResult> RejectPending([FromBody] BulkRejectPendingRequestDto? request)
+        {
+            var response = await _bookingService.RejectPendingBookingsAsync(request ?? new BulkRejectPendingRequestDto());
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
+        /// <summary>Hủy hàng loạt các đơn đã chọn (dành cho quản lý/nhân sự)</summary>
+        [HttpPost("bulk-cancel")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        public async Task<IActionResult> BulkCancel([FromBody] BulkCancelBookingsRequestDto request)
+        {
+            var response = await _bookingService.BulkCancelBookingsAsync(request);
+            if (!response.Success) return BadRequest(response);
+            return Ok(response);
+        }
+
+        /// <summary>Duyệt hàng loạt các đơn đã chọn (dành cho quản lý/nhân sự)</summary>
+        [HttpPost("bulk-approve")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        public async Task<IActionResult> BulkApprove([FromBody] BulkApproveBookingsRequestDto request)
+        {
+            var response = await _bookingService.BulkApproveBookingsAsync(request);
             if (!response.Success) return BadRequest(response);
             return Ok(response);
         }

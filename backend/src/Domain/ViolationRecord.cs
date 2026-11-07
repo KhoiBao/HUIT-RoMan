@@ -31,5 +31,8 @@ namespace HUIT_RoMan.Domain.Entities
         [ForeignKey("ViolationType")]
         public int ViolationTypeId { get; set; }
         public virtual ViolationType ViolationType { get; set; }
+
+        // Tệp đính kèm (ảnh chụp hiện trường, biên bản Word/PDF lưu trên MinIO)
+        public virtual ICollection<ViolationAttachment> Attachments { get; set; } = new List<ViolationAttachment>();
     }
 }

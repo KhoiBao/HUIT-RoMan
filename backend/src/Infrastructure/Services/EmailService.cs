@@ -102,10 +102,10 @@ namespace HUIT_RoMan.Infrastructure.Services
 
       var subject = $"[HUIT] Đơn đặt phòng #{bookingId} {subjectPrefix} - {activityName}";
 
-      var badgeBg = isApproved ? "#ecfdf5" : isRejected ? "#fef2f2" : isPartial ? "#eff6ff" : "#fffbeb";
-      var badgeBorder = isApproved ? "#10b981" : isRejected ? "#ef4444" : isPartial ? "#3b82f6" : "#f59e0b";
-      var badgeText = isApproved ? "#047857" : isRejected ? "#b91c1c" : isPartial ? "#1d4ed8" : "#b45309";
-      var statusHeading = isApproved ? "ĐÃ PHÊ DUYỆT" : isRejected ? "TỪ CHỐI YÊU CẦU" : isPartial ? "DUYỆT MỘT PHẦN" : "ĐÃ HỦY BỞI QUẢN TRỊ";
+      var badgeBg = isApproved ? "#ecfdf5" : isRejected ? "#fef2f2" : isPartial ? "#eff6ff" : isCancelled ? "#fef2f2" : "#fffbeb";
+      var badgeBorder = isApproved ? "#10b981" : isRejected ? "#ef4444" : isPartial ? "#3b82f6" : isCancelled ? "#ef4444" : "#f59e0b";
+      var badgeText = isApproved ? "#047857" : isRejected ? "#b91c1c" : isPartial ? "#1d4ed8" : isCancelled ? "#b91c1c" : "#b45309";
+      var statusHeading = isApproved ? "ĐÃ PHÊ DUYỆT" : isRejected ? "TỪ CHỐI YÊU CẦU" : isPartial ? "DUYỆT MỘT PHẦN" : isCancelled ? "ĐÃ HỦY BỞI QUẢN TRỊ" : "CẬP NHẬT TRẠNG THÁI";
 
       // Giờ Việt Nam (UTC+7)
       string timeStr = "Theo chi tiết đơn đặt phòng";
@@ -233,6 +233,16 @@ namespace HUIT_RoMan.Infrastructure.Services
       <div class=""notice-box"">
         <strong> Gợi ý tiếp theo:</strong><br />
         Đơn đặt phòng này không thể đáp ứng do phòng bận hoặc lý do nêu trên. Bạn có thể truy cập hệ thống để tra cứu phòng trống khác hoặc chọn khung giờ khác phù hợp hơn.
+      </div>");
+      }
+      else if (isCancelled)
+      {
+        sb.Append(@"
+      <div class=""notice-box"" style=""border-left-color: #ef4444; background: #fef2f2;"">
+        <strong style=""color: #b91c1c;""> Thông báo hủy phòng từ Ban Quản lý / Nhà trường:</strong><br />
+        • Đơn / phòng đặt đã bị hủy do trường hợp đột xuất, khẩn cấp hoặc điều chỉnh kỹ thuật phòng (chi tiết lý do xem bên trên).<br />
+        • Khung giờ phòng đã được giải phóng trên hệ thống. Bạn vui lòng không đến nhận phòng đối với phòng này.<br />
+        • Bạn có thể chủ động tra cứu phòng trống khác trên hệ thống để đăng ký lại, hoặc liên hệ trực tiếp với Cán bộ phụ trách quản lý phòng nếu cần hỗ trợ khẩn cấp.
       </div>");
       }
 
@@ -366,7 +376,7 @@ namespace HUIT_RoMan.Infrastructure.Services
         </tr>
         <tr>
           <td class=""info-label"">Trạng thái:</td>
-          <td class=""info-val"">Chờ xử lý</td>
+          <td class=""info-val"">{(severityLevel >= 3 ? "Đang xử lý" : "Đã xử lý")}</td>
         </tr>
       </table>");
 
@@ -375,10 +385,10 @@ namespace HUIT_RoMan.Infrastructure.Services
         <strong>Lưu ý:</strong><br />
         • Biên bản này được hệ thống <strong>tự động ghi nhận</strong> do phiên mượn phòng quá giờ kết thúc mà không xác nhận trả phòng.<br />
         • Vui lòng chấp hành hình thức xử lý nêu trên. Nếu bạn cho rằng biên bản lập nhầm, hãy liên hệ Ban Quản trị Phòng Dùng Chung &amp; Thiết bị Thư viện để được kiểm tra lại.
-      </div>" : @"
+      </div>" : $@"
       <div class=""notice-box"">
         <strong>Lưu ý:</strong><br />
-        • Biên bản do cán bộ quản lý lập trực tiếp trên hệ thống và đang ở trạng thái <strong>Chờ xử lý</strong>.<br />
+        • Biên bản do cán bộ quản lý lập trực tiếp trên hệ thống và đang ở trạng thái <strong>{(severityLevel >= 3 ? "Đang xử lý" : "Đã xử lý")}</strong>.<br />
         • Vui lòng chấp hành hình thức xử lý nêu trên. Nếu bạn cho rằng biên bản lập nhầm, hãy liên hệ Ban Quản trị Phòng Dùng Chung &amp; Thiết bị Thư viện để được kiểm tra lại.
       </div>");
 

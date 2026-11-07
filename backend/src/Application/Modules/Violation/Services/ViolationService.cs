@@ -25,12 +25,15 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
         private readonly UserManager<User> _userManager;
         private readonly ICurrentUserService _currentUser;
         private readonly IEmailService _emailService;
+        private readonly IStorageService _storageService;
+        private readonly IRepository<ViolationAttachment> _violationAttachmentRepo;
 
         public ViolationService(
             IUnitOfWork unitOfWork,
             UserManager<User> userManager,
             ICurrentUserService currentUser,
-            IEmailService emailService)
+            IEmailService emailService,
+            IStorageService storageService)
         {
             _unitOfWork = unitOfWork;
             _violationTypeRepo = _unitOfWork.Repository<ViolationType>();
@@ -41,9 +44,11 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
             _bookingRepo = _unitOfWork.Repository<Domain.Entities.Booking>();
             _notificationRepo = _unitOfWork.Repository<Domain.Entities.Notification>();
             _sessionReminderRepo = _unitOfWork.Repository<SessionReminder>();
+            _violationAttachmentRepo = _unitOfWork.Repository<ViolationAttachment>();
             _userManager = userManager;
             _currentUser = currentUser;
             _emailService = emailService;
+            _storageService = storageService;
         }
 
         private static string GetSeverityText(int severity) => severity switch
@@ -176,7 +181,8 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 vr => vr.UsageSession,
                 vr => vr.UsageSession.BookingDetail,
                 vr => vr.UsageSession.BookingDetail.Room,
-                vr => vr.UsageSession.BookingDetail.Room.RoomType);
+                vr => vr.UsageSession.BookingDetail.Room.RoomType,
+                vr => vr.Attachments);
 
             var query = records.AsEnumerable();
 
@@ -192,7 +198,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 query = query.Where(vr =>
                     vr.UsageSession != null
                         ? vr.UsageSession.BookingDetail?.Room?.RoomType?.DepartmentId == targetDeptId.Value
-                        : vr.User?.DepartmentId == targetDeptId.Value);
+                        : (targetDeptId.Value == 3 || vr.User?.DepartmentId == targetDeptId.Value));
             }
 
             // Keyword Search
@@ -227,7 +233,17 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 query = query.Where(vr => vr.Severity == filter.Severity.Value);
 
             if (!string.IsNullOrWhiteSpace(filter.Status) && filter.Status != "ALL")
-                query = query.Where(vr => string.Equals(vr.Status, filter.Status, StringComparison.OrdinalIgnoreCase));
+            {
+                if (filter.Status.Equals("Đang xử lý", StringComparison.OrdinalIgnoreCase) ||
+                    filter.Status.Equals("Chờ xử lý", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(vr => vr.Status == "Đang xử lý" || vr.Status == "Chờ xử lý");
+                }
+                else
+                {
+                    query = query.Where(vr => string.Equals(vr.Status, filter.Status, StringComparison.OrdinalIgnoreCase));
+                }
+            }
 
             if (filter.FromDate.HasValue)
                 query = query.Where(vr => vr.IncidentTime >= filter.FromDate.Value.ToUniversalTime());
@@ -273,6 +289,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                         IsRestricted = hasRestr,
                         RestrictDays = hasRestr && r?.EndAt != null ? Math.Max(0, (int)Math.Ceiling((r.EndAt.Value - DateTime.UtcNow).TotalDays)) : 0,
                         RestrictionEndAt = hasRestr ? r?.EndAt : null,
+                        Attachments = MapAttachments(vr.Attachments),
                         CreatedAt = vr.CreatedAt
                     };
                 }).ToList();
@@ -289,7 +306,8 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 vr => vr.UsageSession,
                 vr => vr.UsageSession.BookingDetail,
                 vr => vr.UsageSession.BookingDetail.Room,
-                vr => vr.UsageSession.BookingDetail.Room.RoomType);
+                vr => vr.UsageSession.BookingDetail.Room.RoomType,
+                vr => vr.Attachments);
 
             var query = records.Where(vr => vr.UserId == userId && !vr.IsDeleted);
 
@@ -330,6 +348,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                         IsRestricted = hasRestr,
                         RestrictDays = hasRestr && activeRestrictions?.EndAt != null ? Math.Max(0, (int)Math.Ceiling((activeRestrictions.EndAt.Value - DateTime.UtcNow).TotalDays)) : 0,
                         RestrictionEndAt = hasRestr ? activeRestrictions?.EndAt : null,
+                        Attachments = MapAttachments(vr.Attachments),
                         CreatedAt = vr.CreatedAt
                     };
                 }).ToList();
@@ -346,7 +365,8 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 v => v.ViolationType,
                 v => v.UsageSession,
                 v => v.UsageSession.BookingDetail,
-                v => v.UsageSession.BookingDetail.Room);
+                v => v.UsageSession.BookingDetail.Room,
+                v => v.Attachments);
 
             if (vr == null) return ApiResponse<ViolationRecordDto>.ErrorResponse("Không tìm thấy biên bản vi phạm.");
 
@@ -382,6 +402,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 IsRestricted = activeRestriction != null,
                 RestrictDays = activeRestriction?.EndAt != null ? Math.Max(0, (int)Math.Ceiling((activeRestriction.EndAt.Value - DateTime.UtcNow).TotalDays)) : 0,
                 RestrictionEndAt = activeRestriction?.EndAt,
+                Attachments = MapAttachments(vr.Attachments),
                 CreatedAt = vr.CreatedAt
             };
 
@@ -409,15 +430,38 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
 
             // 4. Generate unique violation code: VP-yyyyMMdd-XXX
             var todayStr = DateTime.UtcNow.ToString("yyyyMMdd");
-            var countToday = (await _violationRecordRepo.FindAsync(
-                r => r.CreatedAt.Date == DateTime.UtcNow.Date ||
-                     (r.Code != null && r.Code.StartsWith($"VP-{todayStr}"))
-            )).Count();
+            var codePrefix = $"VP-{todayStr}-";
+            var existingCodes = (await _violationRecordRepo.FindAsync(
+                r => r.Code != null && r.Code.StartsWith(codePrefix)
+            )).Select(r => r.Code).ToHashSet();
 
-            var newCode = $"VP-{todayStr}-{(countToday + 1):D3}";
+            int nextNum = existingCodes.Count + 1;
+            while (existingCodes.Contains($"{codePrefix}{nextNum:D3}"))
+            {
+                nextNum++;
+            }
+            var newCode = $"{codePrefix}{nextNum:D3}";
 
             // 5. Create Violation Record
-            var incidentTime = request.IncidentTime?.ToUniversalTime() ?? DateTime.UtcNow;
+            DateTime incidentTime;
+            if (request.IncidentTime.HasValue)
+            {
+                var dt = request.IncidentTime.Value;
+                incidentTime = dt.Kind switch
+                {
+                    DateTimeKind.Utc => dt,
+                    DateTimeKind.Local => dt.ToUniversalTime(),
+                    _ => DateTime.SpecifyKind(dt, DateTimeKind.Utc)
+                };
+            }
+            else
+            {
+                incidentTime = DateTime.UtcNow;
+            }
+
+            var severity = request.Severity > 0 ? request.Severity : vt.Severity;
+            // Mức độ cao (>= 3) mặc định 'Đang xử lý', mức độ nhẹ/trung bình (<= 2) mặc định 'Đã xử lý'
+            var defaultStatus = severity >= 3 ? "Đang xử lý" : "Đã xử lý";
             var record = new ViolationRecord
             {
                 Code = newCode,
@@ -426,9 +470,9 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 UsageSessionId = session?.Id,
                 IncidentTime = incidentTime,
                 Description = request.Description.Trim(),
-                Severity = request.Severity > 0 ? request.Severity : vt.Severity,
+                Severity = severity,
                 PenaltyApplied = !string.IsNullOrWhiteSpace(request.PenaltyApplied) ? request.PenaltyApplied.Trim() : vt.DefaultPenalty ?? "Cảnh cáo",
-                Status = string.IsNullOrWhiteSpace(request.Status) ? "Chờ xử lý" : request.Status,
+                Status = string.IsNullOrWhiteSpace(request.Status) || request.Status == "Chờ xử lý" ? defaultStatus : request.Status,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -466,35 +510,49 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 !string.IsNullOrWhiteSpace(room.Name) && !string.IsNullOrWhiteSpace(room.RoomCode) && room.Name != room.RoomCode
                     ? $"{room.RoomCode} — {room.Name}" : (room.Name ?? room.RoomCode);
 
-            // Thông báo in-app + email cho người bị lập biên bản
-            var restrictionNote = restrictionEndAt.HasValue
-                ? $" Bạn bị tạm cấm mượn phòng đến {restrictionEndAt.Value.ToUniversalTime().AddHours(7):HH:mm dd/MM/yyyy}."
-                : "";
-            await _notificationRepo.AddAsync(new Domain.Entities.Notification
+            // Thông báo in-app + email cho người bị lập biên bản (bọc try-catch để sự cố gửi mail/notif không ảnh hưởng việc lưu biên bản)
+            try
             {
-                UserId = request.UserId,
-                Title = $"Biên bản vi phạm {record.Code}",
-                Content = $"{vt.Name} — mức {GetSeverityText(record.Severity)}, hình thức xử lý: {record.PenaltyApplied}.{restrictionNote}",
-                Type = 1,
-                IsRead = false,
-                SentAt = DateTime.UtcNow,
-                CreatedAt = DateTime.UtcNow
-            });
-            await _unitOfWork.SaveChangesAsync();
+                var restrictionNote = restrictionEndAt.HasValue
+                    ? $" Bạn bị tạm cấm mượn phòng đến {restrictionEndAt.Value.ToUniversalTime().AddHours(7):HH:mm dd/MM/yyyy}."
+                    : "";
+                await _notificationRepo.AddAsync(new Domain.Entities.Notification
+                {
+                    UserId = request.UserId,
+                    Title = $"Biên bản vi phạm {record.Code}",
+                    Content = $"{vt.Name} — mức {GetSeverityText(record.Severity)}, hình thức xử lý: {record.PenaltyApplied}.{restrictionNote}",
+                    Type = 1,
+                    IsRead = false,
+                    SentAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _unitOfWork.SaveChangesAsync();
+            }
+            catch
+            {
+                // Thông báo in-app thất bại không chặn lưu biên bản
+            }
 
             if (!string.IsNullOrWhiteSpace(user.Email))
             {
-                await _emailService.SendViolationNotificationEmailAsync(
-                    user.Email,
-                    user.FullName ?? user.UserName ?? "người dùng",
-                    record.Code,
-                    vt.Name,
-                    record.Description,
-                    GetSeverityText(record.Severity),
-                    record.PenaltyApplied,
-                    roomLabel,
-                    record.IncidentTime,
-                    autoRecorded: false);
+                try
+                {
+                    await _emailService.SendViolationNotificationEmailAsync(
+                        user.Email,
+                        user.FullName ?? user.UserName ?? "người dùng",
+                        record.Code,
+                        vt.Name,
+                        record.Description,
+                        GetSeverityText(record.Severity),
+                        record.PenaltyApplied,
+                        roomLabel,
+                        record.IncidentTime,
+                        autoRecorded: false);
+                }
+                catch
+                {
+                    // Gửi email thất bại không chặn lưu biên bản
+                }
             }
 
             var dto = new ViolationRecordDto
@@ -537,7 +595,8 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 v => v.ViolationType,
                 v => v.UsageSession,
                 v => v.UsageSession.BookingDetail,
-                v => v.UsageSession.BookingDetail.Room);
+                v => v.UsageSession.BookingDetail.Room,
+                v => v.Attachments);
 
             if (record == null) return ApiResponse<ViolationRecordDto>.ErrorResponse("Không tìm thấy biên bản vi phạm.");
 
@@ -601,11 +660,11 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 var deptUserIds = deptViolations
                     .Where(vr => vr.UsageSession != null
                         ? vr.UsageSession.BookingDetail?.Room?.RoomType?.DepartmentId == targetDeptId.Value
-                        : vr.User?.DepartmentId == targetDeptId.Value)
+                        : (targetDeptId.Value == 3 || vr.User?.DepartmentId == targetDeptId.Value))
                     .Select(vr => vr.UserId)
                     .ToHashSet();
 
-                query = query.Where(ur => deptUserIds.Contains(ur.UserId) || ur.User?.DepartmentId == targetDeptId.Value);
+                query = query.Where(ur => deptUserIds.Contains(ur.UserId) || (targetDeptId.Value == 3 && ur.Reason != null && ur.Reason.StartsWith("[Biên bản #")) || ur.User?.DepartmentId == targetDeptId.Value);
             }
 
             // Filter status
@@ -818,7 +877,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                 query = query.Where(vr =>
                     vr.UsageSession != null
                         ? vr.UsageSession.BookingDetail?.Room?.RoomType?.DepartmentId == targetDeptId.Value
-                        : vr.User?.DepartmentId == targetDeptId.Value);
+                        : (targetDeptId.Value == 3 || vr.User?.DepartmentId == targetDeptId.Value));
             }
 
             var filteredRecords = query.ToList();
@@ -831,7 +890,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
             if (targetDeptId.HasValue)
             {
                 var deptUserIds = filteredRecords.Select(r => r.UserId).ToHashSet();
-                activeRestrictionsQuery = activeRestrictionsQuery.Where(ur => deptUserIds.Contains(ur.UserId));
+                activeRestrictionsQuery = activeRestrictionsQuery.Where(ur => deptUserIds.Contains(ur.UserId) || (targetDeptId.Value == 3 && ur.Reason != null && ur.Reason.StartsWith("[Biên bản #")) || ur.User?.DepartmentId == targetDeptId.Value);
             }
 
             var activeRestrictions = activeRestrictionsQuery.Select(ur => ur.UserId).Distinct().Count();
@@ -839,7 +898,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
             var stats = new ViolationStatsDto
             {
                 TotalRecords = filteredRecords.Count,
-                PendingRecords = filteredRecords.Count(r => r.Status == "Chờ xử lý"),
+                PendingRecords = filteredRecords.Count(r => r.Status == "Chờ xử lý" || r.Status == "Đang xử lý"),
                 ResolvedRecords = filteredRecords.Count(r => r.Status == "Đã xử lý" || r.Status == "Đã nộp phạt"),
                 ActiveRestrictions = activeRestrictions,
                 SevereRecords = filteredRecords.Count(r => r.Severity >= 3)
@@ -1101,7 +1160,7 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
                     Severity = 2,
                     PenaltyApplied = "Lập biên bản vi phạm do tái phạm sau 3 lần nhắc nhở & Cấm mượn phòng 3 ngày",
                     RestrictDays = 3,
-                    Status = "Chờ xử lý"
+                    Status = "Đã xử lý"
                 });
 
                 if (vrRes.Success && vrRes.Data != null)
@@ -1186,6 +1245,109 @@ namespace HUIT_RoMan.Application.Modules.Violation.Services
             }
             await _unitOfWork.SaveChangesAsync();
             return ApiResponse<bool>.SuccessResponse(true, "Đã xóa toàn bộ nhắc nhở của phiên sử dụng.");
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // VIOLATION ATTACHMENTS (MINIO / S3 STORAGE)
+        // ─────────────────────────────────────────────────────────────────
+
+        private static List<ViolationAttachmentDto> MapAttachments(IEnumerable<ViolationAttachment>? attachments)
+        {
+            return attachments?.Where(a => !a.IsDeleted).Select(a => new ViolationAttachmentDto
+            {
+                Id = a.Id,
+                ViolationRecordId = a.ViolationRecordId,
+                FileKey = a.FileKey,
+                OriginalFileName = a.OriginalFileName,
+                ContentType = a.ContentType,
+                FileSize = a.FileSize,
+                DownloadUrl = $"/api/Violations/attachments/{a.Id}/download",
+                ViewUrl = $"/api/Violations/attachments/{a.Id}/view",
+                CreatedAt = a.CreatedAt,
+                UploadedByUserId = a.UploadedByUserId,
+                UploadedByName = a.UploadedByUser?.FullName ?? a.UploadedByUser?.UserName
+            }).ToList() ?? new List<ViolationAttachmentDto>();
+        }
+
+        public async Task<ApiResponse<ViolationAttachmentDto>> UploadAttachmentAsync(
+            int violationRecordId,
+            Stream stream,
+            string fileName,
+            string contentType,
+            long fileSize,
+            int? uploadedByUserId)
+        {
+            var record = await _violationRecordRepo.GetByIdAsync(violationRecordId);
+            if (record == null)
+                return ApiResponse<ViolationAttachmentDto>.ErrorResponse("Biên bản vi phạm không tồn tại.");
+
+            if (fileSize <= 0)
+                return ApiResponse<ViolationAttachmentDto>.ErrorResponse("Tệp tin rỗng, không thể tải lên.");
+
+            if (fileSize > 25 * 1024 * 1024)
+                return ApiResponse<ViolationAttachmentDto>.ErrorResponse("Dung lượng tệp vượt quá mức cho phép (tối đa 25MB).");
+
+            var fileKey = await _storageService.UploadFileAsync(
+                stream,
+                fileName,
+                contentType,
+                "violations",
+                $"violations/{record.Code}");
+
+            var attachment = new ViolationAttachment
+            {
+                ViolationRecordId = record.Id,
+                FileKey = fileKey,
+                OriginalFileName = fileName,
+                ContentType = contentType,
+                FileSize = fileSize,
+                UploadedByUserId = uploadedByUserId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _violationAttachmentRepo.AddAsync(attachment);
+            await _unitOfWork.SaveChangesAsync();
+
+            var user = uploadedByUserId.HasValue ? await _userManager.FindByIdAsync(uploadedByUserId.Value.ToString()) : null;
+
+            return ApiResponse<ViolationAttachmentDto>.SuccessResponse(new ViolationAttachmentDto
+            {
+                Id = attachment.Id,
+                ViolationRecordId = attachment.ViolationRecordId,
+                FileKey = attachment.FileKey,
+                OriginalFileName = attachment.OriginalFileName,
+                ContentType = attachment.ContentType,
+                FileSize = attachment.FileSize,
+                DownloadUrl = $"/api/Violations/attachments/{attachment.Id}/download",
+                ViewUrl = $"/api/Violations/attachments/{attachment.Id}/view",
+                CreatedAt = attachment.CreatedAt,
+                UploadedByUserId = attachment.UploadedByUserId,
+                UploadedByName = user?.FullName ?? user?.UserName
+            }, "Tải lên tệp đính kèm thành công.");
+        }
+
+        public async Task<ApiResponse<bool>> DeleteAttachmentAsync(int attachmentId)
+        {
+            var attachment = await _violationAttachmentRepo.GetByIdAsync(attachmentId);
+            if (attachment == null)
+                return ApiResponse<bool>.ErrorResponse("Tệp đính kèm không tồn tại.");
+
+            await _storageService.DeleteFileAsync("violations", attachment.FileKey);
+
+            _violationAttachmentRepo.Remove(attachment);
+            await _unitOfWork.SaveChangesAsync();
+
+            return ApiResponse<bool>.SuccessResponse(true, "Đã xóa tệp đính kèm thành công.");
+        }
+
+        public async Task<(Stream? Stream, string ContentType, string FileName)> DownloadAttachmentAsync(int attachmentId)
+        {
+            var attachment = await _violationAttachmentRepo.GetByIdAsync(attachmentId);
+            if (attachment == null)
+                return (null, string.Empty, string.Empty);
+
+            var stream = await _storageService.DownloadFileAsync("violations", attachment.FileKey);
+            return (stream, attachment.ContentType, attachment.OriginalFileName);
         }
     }
 }

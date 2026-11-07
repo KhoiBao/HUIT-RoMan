@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, type FormEvent } from "react";
+import { useState, useEffect, useMemo, useRef, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   fetchViolations,
   fetchViolationTypes,
@@ -7,14 +8,21 @@ import {
   recordViolation,
   updateViolation,
   deleteViolation,
+  uploadViolationAttachment,
+  deleteViolationAttachment,
   createViolationType,
   updateViolationType,
   deleteViolationType,
   liftRestriction,
   createRestriction,
+  isImageAttachment,
+  isPdfAttachment,
+  getAttachmentViewUrl,
+  getAttachmentDownloadUrl,
   type ViolationRecordItem,
   type ViolationTypeItem,
   type UserRestrictionItem,
+  type ViolationAttachmentItem,
   type ViolationStats,
 } from "../../lib/violations";
 import { api } from "../../lib/api";
@@ -36,6 +44,14 @@ import {
   MegaphoneIcon,
   FlameIcon,
   ScaleIcon,
+  DownloadIcon,
+  FileTextIcon,
+  TrashIcon,
+  EyeIcon,
+  ExternalLinkIcon,
+  DotsIcon,
+  InfoIcon,
+  PencilIcon,
 } from "../Icon";
 import { getAllReminders, fetchReminders, type SessionReminderItem } from "../../lib/reminders";
 import {
@@ -117,6 +133,13 @@ const QUICK_PENALTY_PILLS = [
   "Cấm mượn phòng 30 ngày & Trừ điểm rèn luyện",
 ];
 
+function formatFileSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function AdminViolationsTab({
   onNotify,
   initialSessionForViolation,
@@ -141,7 +164,14 @@ export default function AdminViolationsTab({
 
   // List of active/recent usage sessions for picker in violation modal
   const [sessionsList, setSessionsList] = useState<
-    Array<{ id: number; roomCode: string; roomName: string; userFullName: string }>
+    Array<{
+      id: number;
+      roomCode: string;
+      roomName: string;
+      userFullName: string;
+      userId?: number;
+      userCardCode?: string;
+    }>
   >([]);
 
   // Navigation Sub-tabs: 'records' | 'restrictions' | 'reminders' | 'types'
@@ -199,6 +229,58 @@ export default function AdminViolationsTab({
   const [reminderLevelFilter, setReminderLevelFilter] = useState<string>("ALL");
   const [reminderPage, setReminderPage] = useState<number>(1);
   const [reminderPageSize, setReminderPageSize] = useState<number>(10);
+
+  // Dropdown Action Menu (3 dots) state & handlers
+  const [rowMenu, setRowMenu] = useState<{
+    key: string | number;
+    top: number;
+    left: number;
+    openUp?: boolean;
+  } | null>(null);
+  const rowMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!rowMenu) return;
+    const close = () => setRowMenu(null);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (rowMenuRef.current?.contains(target)) return;
+      if (target.closest(".btn-table-more")) return;
+      close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [rowMenu]);
+
+  function toggleRowMenu(key: string | number, btn: HTMLElement) {
+    if (rowMenu?.key === key) {
+      setRowMenu(null);
+      return;
+    }
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = 230;
+    const menuHeight = 160;
+    const openUp =
+      rect.bottom + menuHeight + 12 > window.innerHeight &&
+      rect.top > menuHeight + 12;
+    setRowMenu({
+      key,
+      top: openUp ? rect.top - 8 : rect.bottom + 8,
+      left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
+      openUp,
+    });
+  }
 
   const refreshReminders = async () => {
     try {
@@ -309,8 +391,16 @@ export default function AdminViolationsTab({
   const [formSeverity, setFormSeverity] = useState<number>(1);
   const [formPenaltyApplied, setFormPenaltyApplied] = useState("");
   const [formRestrictDays, setFormRestrictDays] = useState<number>(0);
-  const [formStatus, setFormStatus] = useState<string>("Chờ xử lý");
+  const [formStatus, setFormStatus] = useState<string>("Đã xử lý");
   const [submittingRecord, setSubmittingRecord] = useState(false);
+
+  // Attachments state (MinIO / S3)
+  const [creationFiles, setCreationFiles] = useState<File[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<ViolationAttachmentItem | null>(null);
+  const [previewImageFailed, setPreviewImageFailed] = useState(false);
+  const detailFileInputRef = useRef<HTMLInputElement>(null);
+  const creationFileInputRef = useRef<HTMLInputElement>(null);
 
   // Modal: Detail & Handle Violation
   const [selectedRecord, setSelectedRecord] =
@@ -374,6 +464,8 @@ export default function AdminViolationsTab({
             roomCode: s.roomCode || s.bookingDetail?.room?.roomCode || "",
             roomName: s.roomName || s.bookingDetail?.room?.name || "",
             userFullName: s.userFullName || s.user?.fullName || "",
+            userId: s.userId || s.user?.id || s.bookingDetail?.booking?.userId || 0,
+            userCardCode: s.userCardCode || s.user?.cardCode || "",
           }))
         );
       }
@@ -381,7 +473,8 @@ export default function AdminViolationsTab({
       if (tList.length > 0 && formViolationTypeId === 0) {
         setFormViolationTypeId(tList[0].id);
         setFormSeverity(tList[0].severity);
-        setFormPenaltyApplied(tList[0].defaultPenalty || "");
+        setFormPenaltyApplied(tList[0].defaultPenalty || "Cảnh cáo");
+        setFormStatus(tList[0].severity >= 3 ? "Đang xử lý" : "Đã xử lý");
       }
     } catch (err: any) {
       console.error("Error loading violation data:", err);
@@ -427,28 +520,51 @@ export default function AdminViolationsTab({
   useEffect(() => {
     if (initialSessionForViolation) {
       setFormUserId(initialSessionForViolation.userId);
+      setFormUserSearch(initialSessionForViolation.userName || "");
       setFormUsageSessionId(String(initialSessionForViolation.sessionId));
       setFormDescription(
         `Ghi nhận vi phạm tại phòng ${initialSessionForViolation.roomCode} (${initialSessionForViolation.roomName}) trong phiên sử dụng #${initialSessionForViolation.sessionId}.`
       );
+      setFormStatus(formSeverity >= 3 ? "Đang xử lý" : "Đã xử lý");
       setShowRecordModal(true);
       if (onClearInitialSession) onClearInitialSession();
     }
   }, [initialSessionForViolation]);
 
-  // When changing violation type in form, auto-suggest severity and penalty
+  // When changing violation type in form, auto-suggest severity, penalty and status
   const handleTypeChange = (typeId: number) => {
     setFormViolationTypeId(typeId);
     const vt = violationTypes.find((t) => t.id === typeId);
     if (vt) {
       setFormSeverity(vt.severity);
-      setFormPenaltyApplied(vt.defaultPenalty || "");
+      setFormPenaltyApplied(vt.defaultPenalty || "Cảnh cáo");
       if (vt.severity >= 3) {
         setFormRestrictDays(14);
+        setFormStatus("Đang xử lý");
       } else if (vt.severity === 2) {
         setFormRestrictDays(3);
+        setFormStatus("Đã xử lý");
       } else {
         setFormRestrictDays(0);
+        setFormStatus("Đã xử lý");
+      }
+    }
+  };
+
+  // When changing usage session in modal: auto sync User & Description
+  const handleSessionChange = (sessionIdStr: string) => {
+    setFormUsageSessionId(sessionIdStr);
+    if (!sessionIdStr) return;
+    const sess = sessionsList.find((s) => String(s.id) === sessionIdStr);
+    if (sess) {
+      if (sess.userId) {
+        setFormUserId(sess.userId);
+        setFormUserSearch(`${sess.userFullName}${sess.userCardCode ? ` (${sess.userCardCode})` : ""}`);
+      }
+      if (!formDescription.trim()) {
+        setFormDescription(
+          `Ghi nhận vi phạm tại phòng ${sess.roomCode} (${sess.roomName}) trong phiên sử dụng #${sess.id}.`
+        );
       }
     }
   };
@@ -466,11 +582,15 @@ export default function AdminViolationsTab({
         v.severity !== Number(selectedSeverityFilter)
       )
         return false;
-      if (
-        selectedStatusFilter !== "ALL" &&
-        v.status.toLowerCase() !== selectedStatusFilter.toLowerCase()
-      )
-        return false;
+      if (selectedStatusFilter !== "ALL") {
+        const filterLower = selectedStatusFilter.toLowerCase();
+        const statusLower = (v.status || "").toLowerCase();
+        if (filterLower === "đang xử lý" || filterLower === "chờ xử lý") {
+          if (statusLower !== "đang xử lý" && statusLower !== "chờ xử lý") return false;
+        } else if (statusLower !== filterLower) {
+          return false;
+        }
+      }
       if (recordDateFilter && (!v.incidentTime || !v.incidentTime.startsWith(recordDateFilter))) {
         return false;
       }
@@ -672,7 +792,7 @@ export default function AdminViolationsTab({
 
     try {
       setSubmittingRecord(true);
-      await recordViolation({
+      const createdRecord = await recordViolation({
         userId: formUserId,
         violationTypeId: formViolationTypeId,
         usageSessionId: formUsageSessionId
@@ -688,11 +808,22 @@ export default function AdminViolationsTab({
         status: formStatus,
       });
 
+      // Tải lên các tệp đính kèm lên MinIO nếu có
+      if (creationFiles.length > 0 && createdRecord?.id) {
+        for (const file of creationFiles) {
+          try {
+            await uploadViolationAttachment(createdRecord.id, file);
+          } catch (uploadErr) {
+            console.error("Lỗi tải tệp đính kèm lên MinIO:", uploadErr);
+          }
+        }
+      }
+
       onNotify(
         `Ghi nhận biên bản vi phạm thành công! ${formRestrictDays > 0
           ? `Đã tự động áp dụng lệnh cấm mượn phòng ${formRestrictDays} ngày.`
           : ""
-        }`,
+        }${creationFiles.length > 0 ? ` (Đã tải ${creationFiles.length} tệp lên MinIO)` : ""}`,
         "success"
       );
       setShowRecordModal(false);
@@ -700,10 +831,15 @@ export default function AdminViolationsTab({
       loadAllData();
     } catch (err: any) {
       console.error("Failed to record violation:", err);
-      onNotify(
-        err.response?.data?.message || "Không thể lưu biên bản vi phạm.",
-        "warning"
-      );
+      const serverMsg =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        (err.response?.data?.errors
+          ? Object.values(err.response.data.errors).flat().join(", ")
+          : null) ||
+        err.message ||
+        "Không thể lưu biên bản vi phạm.";
+      onNotify(serverMsg, "warning");
     } finally {
       setSubmittingRecord(false);
     }
@@ -716,11 +852,99 @@ export default function AdminViolationsTab({
     setFormIncidentTime(new Date().toISOString().slice(0, 16));
     setFormDescription("");
     setFormRestrictDays(0);
-    setFormStatus("Chờ xử lý");
+    setCreationFiles([]);
     if (violationTypes.length > 0) {
-      setFormViolationTypeId(violationTypes[0].id);
-      setFormSeverity(violationTypes[0].severity);
-      setFormPenaltyApplied(violationTypes[0].defaultPenalty || "");
+      const firstType = violationTypes[0];
+      setFormViolationTypeId(firstType.id);
+      setFormSeverity(firstType.severity);
+      setFormPenaltyApplied(firstType.defaultPenalty || "Cảnh cáo");
+      setFormStatus(firstType.severity >= 3 ? "Đang xử lý" : "Đã xử lý");
+    } else {
+      setFormPenaltyApplied("Cảnh cáo");
+      setFormStatus("Đã xử lý");
+    }
+  };
+
+  // Upload tệp đính kèm trực tiếp vào biên bản trong modal chi tiết
+  const handleUploadDetailFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedRecord) return;
+    try {
+      setUploadingAttachment(true);
+      const newAtt = await uploadViolationAttachment(selectedRecord.id, file);
+      onNotify(`Đã tải tệp "${file.name}" lên MinIO thành công!`, "success");
+      setSelectedRecord((prev) =>
+        prev
+          ? {
+            ...prev,
+            attachments: [...(prev.attachments || []), newAtt],
+          }
+          : null
+      );
+      setViolations((prevList) =>
+        prevList.map((v) =>
+          v.id === selectedRecord.id
+            ? { ...v, attachments: [...(v.attachments || []), newAtt] }
+            : v
+        )
+      );
+    } catch (err: any) {
+      onNotify(err.response?.data?.message || "Không thể tải lên tệp đính kèm.", "warning");
+    } finally {
+      setUploadingAttachment(false);
+      if (detailFileInputRef.current) detailFileInputRef.current.value = "";
+    }
+  };
+
+  // Xóa tệp đính kèm khỏi MinIO và CSDL
+  const handleDeleteAttachment = async (attId: number, fileName: string) => {
+    const confirmed = await confirm({
+      title: "Xóa tệp đính kèm",
+      message: `Bạn có chắc chắn muốn xóa tệp "${fileName}" khỏi hệ thống lưu trữ MinIO?`,
+      confirmText: "Xóa tệp",
+      type: "danger",
+    });
+    if (!confirmed || !selectedRecord) return;
+    try {
+      await deleteViolationAttachment(attId);
+      onNotify(`Đã xóa tệp "${fileName}" thành công.`, "info");
+      setSelectedRecord((prev) =>
+        prev
+          ? {
+            ...prev,
+            attachments: (prev.attachments || []).filter((a) => a.id !== attId),
+          }
+          : null
+      );
+      setViolations((prevList) =>
+        prevList.map((v) =>
+          v.id === selectedRecord.id
+            ? {
+              ...v,
+              attachments: (v.attachments || []).filter((a) => a.id !== attId),
+            }
+            : v
+        )
+      );
+    } catch (err: any) {
+      onNotify(err.response?.data?.message || "Không thể xóa tệp đính kèm.", "warning");
+    }
+  };
+
+  // Xem trước tệp đính kèm (Ảnh phóng to / PDF trực tiếp / Tải file Word)
+  const handleViewAttachment = (att: ViolationAttachmentItem) => {
+    setPreviewImageFailed(false);
+    if (isImageAttachment(att.originalFileName, att.contentType) || isPdfAttachment(att.originalFileName, att.contentType)) {
+      setPreviewAttachment(att);
+    } else {
+      onNotify(`Tệp "${att.originalFileName}" không hỗ trợ xem trực tiếp trên trình duyệt. Đang tải về máy...`, "info");
+      const url = att.downloadUrl || getAttachmentDownloadUrl(att.id);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = att.originalFileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   };
 
@@ -1132,6 +1356,7 @@ export default function AdminViolationsTab({
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
+      case "Đang xử lý":
       case "Chờ xử lý":
         return "admin-status-pill pill-pending";
       case "Đã xử lý":
@@ -1451,7 +1676,7 @@ export default function AdminViolationsTab({
                   className="filter-select"
                 >
                   <option value="ALL">Tất cả trạng thái</option>
-                  <option value="Chờ xử lý">Chờ xử lý</option>
+                  <option value="Đang xử lý">Đang xử lý / Chờ xử lý</option>
                   <option value="Đã xử lý">Đã xử lý</option>
                   <option value="Đã nộp phạt">Đã nộp phạt</option>
                   <option value="Hủy bỏ">Hủy bỏ</option>
@@ -1517,7 +1742,7 @@ export default function AdminViolationsTab({
                   <th style={{ width: "120px", whiteSpace: "nowrap" }}>Mức độ</th>
                   <th>Hình thức xử lý / Phạt</th>
                   <th style={{ width: "135px", whiteSpace: "nowrap" }}>Trạng thái</th>
-                  <th style={{ width: "130px", textAlign: "right", whiteSpace: "nowrap" }}>Thao tác</th>
+                  <th style={{ width: "90px", textAlign: "right", whiteSpace: "nowrap" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -1563,6 +1788,21 @@ export default function AdminViolationsTab({
                           <span className="room-ref-badge" title="Phòng liên quan">
                             <DoorIcon size={12} /> {v.roomCode}
                           </span>
+                        )}
+                        {v.attachments && v.attachments.length > 0 && (
+                          <div>
+                            <button
+                              type="button"
+                              className="attachment-table-pill"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewAttachment(v.attachments![0]);
+                              }}
+                              title={`Có ${v.attachments.length} tệp đính kèm. Bấm để xem tệp`}
+                            >
+                              <FileTextIcon size={11} /> {v.attachments.length} tệp
+                            </button>
+                          </div>
                         )}
                       </td>
                       <td>
@@ -1610,26 +1850,85 @@ export default function AdminViolationsTab({
                         </span>
                       </td>
                       <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        <div className="table-actions-inline">
+                        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
                           <button
                             type="button"
-                            className="btn-table-action btn-action-view"
-                            onClick={() => openDetailModal(v)}
-                            title="Xem chi tiết & Cập nhật tiến độ xử lý"
+                            className={`btn-table-more ${rowMenu?.key === `rec-${v.id}` ? "active" : ""}`}
+                            title="Thao tác"
+                            aria-label="Thao tác"
+                            onClick={(evt) => toggleRowMenu(`rec-${v.id}`, evt.currentTarget)}
                           >
-                            Xử lý
+                            <DotsIcon size={17} />
                           </button>
-                          {isAdmin && (
-                            <button
-                              type="button"
-                              className="btn-table-action btn-action-delete"
-                              onClick={() => handleDeleteViolation(v)}
-                              title="Xóa biên bản này"
-                              aria-label={`Xóa biên bản ${v.code}`}
-                            >
-                              <XIcon size={14} />
-                            </button>
-                          )}
+
+                          {rowMenu?.key === `rec-${v.id}` &&
+                            createPortal(
+                              <div
+                                ref={rowMenuRef}
+                                className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                                style={{ top: rowMenu.top, left: rowMenu.left }}
+                                role="menu"
+                                onClick={(evt) => evt.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item accent-blue"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    openDetailModal(v);
+                                  }}
+                                >
+                                  <FileTextIcon size={14} />
+                                  <span>Chi tiết & Cập nhật xử lý</span>
+                                </button>
+
+                                {v.attachments && v.attachments.length > 0 && (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item accent-indigo"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      handleViewAttachment(v.attachments![0]);
+                                    }}
+                                  >
+                                    <EyeIcon size={14} />
+                                    <span>Xem tệp đính kèm ({v.attachments.length})</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    navigator.clipboard.writeText(v.code);
+                                    onNotify(`Đã sao chép mã biên bản ${v.code}!`, "info");
+                                  }}
+                                >
+                                  <InfoIcon size={14} />
+                                  <span>Sao chép mã biên bản</span>
+                                </button>
+
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item danger"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      handleDeleteViolation(v);
+                                    }}
+                                  >
+                                    <TrashIcon size={14} />
+                                    <span>Xóa biên bản này</span>
+                                  </button>
+                                )}
+                              </div>,
+                              document.body
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -1723,7 +2022,7 @@ export default function AdminViolationsTab({
                   <th>Ngày kết thúc</th>
                   <th style={{ width: "140px" }}>Thời hạn còn lại</th>
                   <th style={{ width: "135px", whiteSpace: "nowrap" }}>Trạng thái</th>
-                  <th style={{ width: "130px", textAlign: "right" }}>Thao tác</th>
+                  <th style={{ width: "90px", textAlign: "right" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -1793,20 +2092,60 @@ export default function AdminViolationsTab({
                           {r.isActive ? "Đang hiệu lực" : r.status}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                        {r.isActive && (
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
                           <button
                             type="button"
-                            className="btn-table-action btn-action-lift"
-                            onClick={() => {
-                              setLiftTarget(r);
-                              setLiftReason("");
-                            }}
-                            title="Gỡ bỏ lệnh cấm mượn phòng trước hạn cho người dùng này"
+                            className={`btn-table-more ${rowMenu?.key === `rest-${r.id}` ? "active" : ""}`}
+                            title="Thao tác"
+                            aria-label="Thao tác"
+                            onClick={(evt) => toggleRowMenu(`rest-${r.id}`, evt.currentTarget)}
                           >
-                            Gỡ cấm sớm
+                            <DotsIcon size={17} />
                           </button>
-                        )}
+
+                          {rowMenu?.key === `rest-${r.id}` &&
+                            createPortal(
+                              <div
+                                ref={rowMenuRef}
+                                className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                                style={{ top: rowMenu.top, left: rowMenu.left }}
+                                role="menu"
+                                onClick={(evt) => evt.stopPropagation()}
+                              >
+                                {r.isActive && (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item accent-blue"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      setLiftTarget(r);
+                                      setLiftReason("");
+                                    }}
+                                  >
+                                    <ShieldCheckIcon size={14} />
+                                    <span>Gỡ bỏ lệnh cấm sớm</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item accent-indigo"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    navigator.clipboard.writeText(r.userCardCode);
+                                    onNotify(`Đã sao chép MSSV / Mã thẻ ${r.userCardCode}!`, "info");
+                                  }}
+                                >
+                                  <InfoIcon size={14} />
+                                  <span>Sao chép MSSV / Mã thẻ</span>
+                                </button>
+                              </div>,
+                              document.body
+                            )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -2179,7 +2518,7 @@ export default function AdminViolationsTab({
                   <th style={{ width: "110px", textAlign: "center" }}>
                     Số lần vi phạm
                   </th>
-                  <th style={{ width: "120px", textAlign: "right" }}>Thao tác</th>
+                  <th style={{ width: "90px", textAlign: "right" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -2230,25 +2569,57 @@ export default function AdminViolationsTab({
                       <td style={{ textAlign: "center" }}>
                         <span className="record-count-badge">{vt.recordCount}</span>
                       </td>
-                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
-                        <div className="table-actions-inline">
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
                           <button
                             type="button"
-                            className="btn-table-action btn-action-edit"
-                            onClick={() => openEditTypeModal(vt)}
+                            className={`btn-table-more ${rowMenu?.key === `type-${vt.id}` ? "active" : ""}`}
+                            title="Thao tác"
+                            aria-label="Thao tác"
+                            onClick={(evt) => toggleRowMenu(`type-${vt.id}`, evt.currentTarget)}
                           >
-                            Sửa
+                            <DotsIcon size={17} />
                           </button>
-                          {isAdmin && (
-                            <button
-                              type="button"
-                              className="btn-table-action btn-action-delete"
-                              onClick={() => handleDeleteType(vt)}
-                              title="Xóa quy chế vi phạm"
-                            >
-                              <XIcon size={14} />
-                            </button>
-                          )}
+
+                          {rowMenu?.key === `type-${vt.id}` &&
+                            createPortal(
+                              <div
+                                ref={rowMenuRef}
+                                className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                                style={{ top: rowMenu.top, left: rowMenu.left }}
+                                role="menu"
+                                onClick={(evt) => evt.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item accent-blue"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    openEditTypeModal(vt);
+                                  }}
+                                >
+                                  <PencilIcon size={14} />
+                                  <span>Chỉnh sửa quy chế</span>
+                                </button>
+
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="row-actions-menu-item danger"
+                                    onClick={() => {
+                                      setRowMenu(null);
+                                      handleDeleteType(vt);
+                                    }}
+                                  >
+                                    <TrashIcon size={14} />
+                                    <span>Xóa quy chế vi phạm</span>
+                                  </button>
+                                )}
+                              </div>,
+                              document.body
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -2353,7 +2724,7 @@ export default function AdminViolationsTab({
                   <th style={{ width: "140px" }}>Mức độ áp dụng</th>
                   <th style={{ width: "150px" }}>Thời hạn cấm mượn</th>
                   <th>Mô tả chi tiết &amp; Hướng dẫn thi hành</th>
-                  <th style={{ width: "120px", textAlign: "right" }}>Thao tác</th>
+                  <th style={{ width: "90px", textAlign: "right" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -2410,23 +2781,55 @@ export default function AdminViolationsTab({
                       <td>
                         <p className="type-desc">{p.description || "—"}</p>
                       </td>
-                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
-                        <div className="table-actions-inline">
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end" }}>
                           <button
                             type="button"
-                            className="btn-table-action btn-action-edit"
-                            onClick={() => openEditPenaltyModal(p)}
+                            className={`btn-table-more ${rowMenu?.key === `pen-${p.id}` ? "active" : ""}`}
+                            title="Thao tác"
+                            aria-label="Thao tác"
+                            onClick={(evt) => toggleRowMenu(`pen-${p.id}`, evt.currentTarget)}
                           >
-                            Sửa
+                            <DotsIcon size={17} />
                           </button>
-                          <button
-                            type="button"
-                            className="btn-table-action btn-action-delete"
-                            onClick={() => handleDeletePenalty(p)}
-                            title="Xóa hình phạt"
-                          >
-                            <XIcon size={14} />
-                          </button>
+
+                          {rowMenu?.key === `pen-${p.id}` &&
+                            createPortal(
+                              <div
+                                ref={rowMenuRef}
+                                className={`row-actions-menu ${rowMenu.openUp ? "open-up" : ""}`}
+                                style={{ top: rowMenu.top, left: rowMenu.left }}
+                                role="menu"
+                                onClick={(evt) => evt.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item accent-blue"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    openEditPenaltyModal(p);
+                                  }}
+                                >
+                                  <PencilIcon size={14} />
+                                  <span>Chỉnh sửa hình phạt</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="row-actions-menu-item danger"
+                                  onClick={() => {
+                                    setRowMenu(null);
+                                    handleDeletePenalty(p);
+                                  }}
+                                >
+                                  <TrashIcon size={14} />
+                                  <span>Xóa hình phạt</span>
+                                </button>
+                              </div>,
+                              document.body
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -2543,7 +2946,15 @@ export default function AdminViolationsTab({
                   </label>
                   <select
                     value={formSeverity}
-                    onChange={(e) => setFormSeverity(Number(e.target.value))}
+                    onChange={(e) => {
+                      const sev = Number(e.target.value);
+                      setFormSeverity(sev);
+                      if (sev >= 3) {
+                        setFormStatus("Đang xử lý");
+                      } else {
+                        setFormStatus("Đã xử lý");
+                      }
+                    }}
                     className="admin-input-text"
                   >
                     <option value={1}>Mức 1 - Nhẹ (Nhắc nhở)</option>
@@ -2555,6 +2966,7 @@ export default function AdminViolationsTab({
                       Mức 4 - Rất nghiêm trọng (Kỷ luật nặng)
                     </option>
                   </select>
+
                 </div>
 
                 {/* Incident Time */}
@@ -2574,12 +2986,12 @@ export default function AdminViolationsTab({
                 {/* Usage Session (optional) */}
                 <div className="form-group">
                   <label className="admin-field-label">
-                    Phiên sử dụng / Phòng liên quan (Tùy chọn)
+                    Phiên sử dụng / Phòng liên quan (Đồng bộ người mượn)
                   </label>
                   {sessionsList.length > 0 ? (
                     <select
                       value={formUsageSessionId}
-                      onChange={(e) => setFormUsageSessionId(e.target.value)}
+                      onChange={(e) => handleSessionChange(e.target.value)}
                       className="admin-input-text"
                     >
                       <option value="">-- Không gắn phiên / Vi phạm ngoài phòng --</option>
@@ -2594,7 +3006,7 @@ export default function AdminViolationsTab({
                       type="number"
                       placeholder="Nhập mã phiên sử dụng (VD: 5)"
                       value={formUsageSessionId}
-                      onChange={(e) => setFormUsageSessionId(e.target.value)}
+                      onChange={(e) => handleSessionChange(e.target.value)}
                       className="admin-input-text"
                     />
                   )}
@@ -2668,20 +3080,6 @@ export default function AdminViolationsTab({
                   />
                 </div>
 
-                {/* Initial Status */}
-                <div className="form-group">
-                  <label className="admin-field-label">Trạng thái xử lý ban đầu</label>
-                  <select
-                    value={formStatus}
-                    onChange={(e) => setFormStatus(e.target.value)}
-                    className="admin-input-text"
-                  >
-                    <option value="Chờ xử lý">Chờ xử lý (Chưa thi hành phạt)</option>
-                    <option value="Đã xử lý">Đã xử lý (Đã nhắc nhở / cam kết)</option>
-                    <option value="Đã nộp phạt">Đã nộp phạt / Đã bồi thường</option>
-                  </select>
-                </div>
-
                 {/* Restrict Days Options */}
                 <div className="form-group-col-2 restriction-quick-picker-box">
                   <label className="admin-field-label">
@@ -2704,6 +3102,66 @@ export default function AdminViolationsTab({
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* MinIO File Attachments */}
+                <div className="form-group-col-2 violation-attachment-upload-box">
+                  <div className="attachment-upload-header">
+                    <div>
+                      <label className="admin-field-label">
+                        Tệp đính kèm / Minh chứng vi phạm (Không bắt buộc - Tùy chọn)
+                      </label>
+                      <p className="field-hint">
+                        (Tùy chọn) Hỗ trợ ảnh chụp hiện trường (.jpg, .png, .webp) và biên bản văn bản (.pdf, .docx, .xlsx). Không bắt buộc đính kèm tệp khi lập biên bản.
+                      </p>
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        className="btn-select-attachment"
+                        onClick={() => creationFileInputRef.current?.click()}
+                      >
+                        <PlusIcon size={14} /> Chọn tệp đính kèm
+                      </button>
+                      <input
+                        ref={creationFileInputRef}
+                        type="file"
+                        multiple
+                        accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.doc,.xls,.xlsx"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (files.length > 0) {
+                            setCreationFiles((prev) => [...prev, ...files]);
+                          }
+                          if (creationFileInputRef.current) creationFileInputRef.current.value = "";
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {creationFiles.length > 0 && (
+                    <div className="attachment-queued-list">
+                      {creationFiles.map((file, idx) => (
+                        <div key={`${file.name}-${idx}`} className="attachment-queued-chip">
+                          <FileTextIcon size={14} />
+                          <span className="file-name" title={file.name}>
+                            {file.name} ({formatFileSize(file.size)})
+                          </span>
+                          <button
+                            type="button"
+                            className="btn-remove-queued-file"
+                            onClick={() =>
+                              setCreationFiles((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                            title="Bỏ chọn tệp này"
+                          >
+                            <XIcon size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2809,6 +3267,7 @@ export default function AdminViolationsTab({
                   className="admin-input-text"
                   required
                 >
+                  <option value="Đang xử lý">Đang xử lý</option>
                   <option value="Chờ xử lý">Chờ xử lý</option>
                   <option value="Đã xử lý">Đã xử lý (Đã làm việc / cam kết)</option>
                   <option value="Đã nộp phạt">Đã nộp phạt / Khắc phục xong</option>
@@ -2841,6 +3300,117 @@ export default function AdminViolationsTab({
                   <option value={3}>Mức 3 - Nghiêm trọng</option>
                   <option value={4}>Mức 4 - Rất nghiêm trọng</option>
                 </select>
+              </div>
+
+              {/* Attachments Section (MinIO Object Storage) */}
+              <div className="violation-attachments-section">
+                <div className="attachments-section-header">
+                  <div>
+                    <h4 className="attachments-section-title">
+                      <FileTextIcon size={16} /> Tệp đính kèm & Minh chứng (MinIO)
+                    </h4>
+                    <p className="attachments-section-subtitle">
+                      Ảnh hiện trường, biên bản ký nhận, tài liệu vi phạm (.png, .jpg, .docx, .pdf)
+                    </p>
+                  </div>
+                  <div>
+                    <input
+                      ref={detailFileInputRef}
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.docx,.doc,.xls,.xlsx"
+                      style={{ display: "none" }}
+                      onChange={handleUploadDetailFile}
+                    />
+                    <button
+                      type="button"
+                      className="btn-upload-attachment"
+                      disabled={uploadingAttachment}
+                      onClick={() => detailFileInputRef.current?.click()}
+                    >
+                      <PlusIcon size={14} />
+                      {uploadingAttachment ? "Đang tải lên MinIO..." : "Tải thêm tệp"}
+                    </button>
+                  </div>
+                </div>
+
+                {(!selectedRecord.attachments || selectedRecord.attachments.length === 0) ? (
+                  <div className="attachment-empty-box">
+                    <p>Chưa có tệp minh chứng hoặc ảnh vi phạm nào được tải lên.</p>
+                  </div>
+                ) : (
+                  <div className="attachment-cards-grid">
+                    {selectedRecord.attachments.map((att) => {
+                      const isImg = isImageAttachment(att.originalFileName, att.contentType);
+                      const isPdf = isPdfAttachment(att.originalFileName, att.contentType);
+                      const viewHref = att.viewUrl || getAttachmentViewUrl(att.id);
+                      const downloadHref = att.downloadUrl || getAttachmentDownloadUrl(att.id);
+
+                      return (
+                        <div key={att.id} className="attachment-card-item">
+                          <div className="attachment-card-left">
+                            {isImg ? (
+                              <div
+                                className="attachment-thumb-box"
+                                onClick={() => handleViewAttachment(att)}
+                                title="Bấm để xem ảnh phóng to"
+                              >
+                                <img
+                                  src={viewHref}
+                                  alt={att.originalFileName}
+                                  className="attachment-thumb-img"
+                                  loading="lazy"
+                                />
+                              </div>
+                            ) : (
+                              <div className={`attachment-icon-pill ${isPdf ? "pdf" : "doc"}`}>
+                                <FileTextIcon size={16} />
+                              </div>
+                            )}
+                            <div className="attachment-info">
+                              <span
+                                className="attachment-filename"
+                                title={att.originalFileName}
+                                onClick={() => handleViewAttachment(att)}
+                                style={{ cursor: "pointer" }}
+                              >
+                                {att.originalFileName}
+                              </span>
+                              <span className="attachment-meta">
+                                {formatFileSize(att.fileSize)} • {formatDateTime24h(att.createdAt)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="attachment-actions">
+                            <button
+                              type="button"
+                              className="btn-view-att"
+                              title="Xem trực tiếp (Ảnh / PDF)"
+                              onClick={() => handleViewAttachment(att)}
+                            >
+                              <EyeIcon size={13} /> Xem
+                            </button>
+                            <a
+                              href={downloadHref}
+                              download={att.originalFileName}
+                              className="btn-download-att"
+                              title="Tải tệp về máy tính"
+                            >
+                              <DownloadIcon size={13} /> Tải
+                            </a>
+                            <button
+                              type="button"
+                              className="btn-delete-att"
+                              title="Xóa tệp khỏi MinIO"
+                              onClick={() => handleDeleteAttachment(att.id, att.originalFileName)}
+                            >
+                              <TrashIcon size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="admin-modal-footer">
@@ -3420,6 +3990,111 @@ export default function AdminViolationsTab({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Preview Attachment Modal (Lightbox) ──────────────── */}
+      {previewAttachment && (
+        <div
+          className="admin-modal-overlay preview-attachment-overlay"
+          onClick={() => setPreviewAttachment(null)}
+        >
+          <div
+            className="preview-attachment-dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="preview-dialog-header">
+              <div className="preview-header-info">
+                <FileTextIcon size={18} className="preview-header-icon" />
+                <div>
+                  <h4 className="preview-filename" title={previewAttachment.originalFileName}>
+                    {previewAttachment.originalFileName}
+                  </h4>
+                  <span className="preview-filemeta">
+                    {formatFileSize(previewAttachment.fileSize)} • Đăng tải: {formatDateTime24h(previewAttachment.createdAt)}
+                  </span>
+                </div>
+              </div>
+              <div className="preview-header-actions">
+                <a
+                  href={previewAttachment.viewUrl || getAttachmentViewUrl(previewAttachment.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-preview-action"
+                  title="Mở trong tab trình duyệt mới"
+                >
+                  <ExternalLinkIcon size={14} /> Mở tab mới
+                </a>
+                <a
+                  href={previewAttachment.downloadUrl || getAttachmentDownloadUrl(previewAttachment.id)}
+                  download={previewAttachment.originalFileName}
+                  className="btn-preview-action btn-preview-download"
+                  title="Tải tệp về máy tính"
+                >
+                  <DownloadIcon size={14} /> Tải xuống
+                </a>
+                <button
+                  type="button"
+                  className="btn-preview-close"
+                  onClick={() => setPreviewAttachment(null)}
+                  title="Đóng xem trước"
+                >
+                  <XIcon size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="preview-dialog-body">
+              {isImageAttachment(previewAttachment.originalFileName, previewAttachment.contentType) ? (
+                <div className="preview-image-container">
+                  {!previewImageFailed ? (
+                    <img
+                      src={previewAttachment.viewUrl || getAttachmentViewUrl(previewAttachment.id)}
+                      alt={previewAttachment.originalFileName}
+                      className="preview-full-image"
+                      onError={() => setPreviewImageFailed(true)}
+                    />
+                  ) : (
+                    <div className="preview-generic-box">
+                      <FileTextIcon size={48} className="text-muted" />
+                      <p className="preview-generic-name">{previewAttachment.originalFileName}</p>
+                      <p className="preview-generic-hint">
+                        Không thể hiển thị bản xem trước ảnh. Vui lòng nhấn nút bên dưới để tải tệp về máy tính hoặc mở trong tab mới.
+                      </p>
+                      <a
+                        href={previewAttachment.downloadUrl || getAttachmentDownloadUrl(previewAttachment.id)}
+                        download={previewAttachment.originalFileName}
+                        className="btn-primary-download"
+                      >
+                        <DownloadIcon size={16} /> Tải tệp về máy
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ) : isPdfAttachment(previewAttachment.originalFileName, previewAttachment.contentType) ? (
+                <iframe
+                  src={previewAttachment.viewUrl || getAttachmentViewUrl(previewAttachment.id)}
+                  title={previewAttachment.originalFileName}
+                  className="preview-pdf-iframe"
+                />
+              ) : (
+                <div className="preview-generic-box">
+                  <FileTextIcon size={48} className="text-muted" />
+                  <p className="preview-generic-name">{previewAttachment.originalFileName}</p>
+                  <p className="preview-generic-hint">
+                    Tệp tài liệu văn bản không hỗ trợ xem trực tiếp trên trình duyệt. Vui lòng tải về máy để mở.
+                  </p>
+                  <a
+                    href={previewAttachment.downloadUrl || getAttachmentDownloadUrl(previewAttachment.id)}
+                    download={previewAttachment.originalFileName}
+                    className="btn-primary-download"
+                  >
+                    <DownloadIcon size={16} /> Tải tệp về máy
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

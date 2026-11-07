@@ -25,6 +25,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
         public DbSet<UsageSession> UsageSessions { get; set; }
         public DbSet<ViolationType> ViolationTypes { get; set; }
         public DbSet<ViolationRecord> ViolationRecords { get; set; }
+        public DbSet<ViolationAttachment> ViolationAttachments { get; set; }
         public DbSet<Feedback> Feedbacks { get; set; }
         public DbSet<EquipmentCategory> EquipmentCategories { get; set; }
         public DbSet<Equipment> Equipments { get; set; }
@@ -47,6 +48,14 @@ namespace HUIT_RoMan.Infrastructure.Persistence
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Bỏ các bảng ASP.NET Identity dư thừa khi sử dụng JWT Authentication:
+            // Hệ thống dùng JWT token mang trực tiếp claims (mssv, role, department),
+            // không dùng cookie claims, external OAuth logins hay Identity 2FA tokens lưu trong DB.
+            modelBuilder.Ignore<IdentityUserClaim<int>>();
+            modelBuilder.Ignore<IdentityRoleClaim<int>>();
+            modelBuilder.Ignore<IdentityUserLogin<int>>();
+            modelBuilder.Ignore<IdentityUserToken<int>>();
 
             // Mã phòng duy nhất giữa các phòng đang hoạt động; phòng đã xóa mềm
             // không chặn việc tái sử dụng mã khi seed lại.

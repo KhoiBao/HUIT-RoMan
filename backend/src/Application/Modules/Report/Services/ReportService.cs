@@ -174,14 +174,14 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
                 violationsQuery = violationsQuery.Where(v =>
                     v.UsageSession != null
                         ? v.UsageSession.BookingDetail?.Room?.RoomType?.DepartmentId == targetDeptId.Value
-                        : v.User?.DepartmentId == targetDeptId.Value);
+                        : (targetDeptId.Value == 3 || v.User?.DepartmentId == targetDeptId.Value));
             }
 
             var violations = violationsQuery.ToList();
 
             int totalViolations = violations.Count;
             int resolved = violations.Count(v => v.Status == "Đã xử lý" || v.Status == "Đã nộp phạt");
-            int pendingViolations = violations.Count(v => v.Status == "Chờ xử lý");
+            int pendingViolations = violations.Count(v => v.Status == "Chờ xử lý" || v.Status == "Đang xử lý");
             int severe = violations.Count(v => v.Severity >= 3);
 
             var now = DateTime.UtcNow;
@@ -192,7 +192,7 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
             if (targetDeptId.HasValue)
             {
                 var deptUserIds = violations.Select(v => v.UserId).ToHashSet();
-                activeRestrictionsQuery = activeRestrictionsQuery.Where(ur => deptUserIds.Contains(ur.UserId));
+                activeRestrictionsQuery = activeRestrictionsQuery.Where(ur => deptUserIds.Contains(ur.UserId) || (targetDeptId.Value == 3 && ur.Reason != null && ur.Reason.StartsWith("[Biên bản #")) || ur.User?.DepartmentId == targetDeptId.Value);
             }
 
             var activeBans = activeRestrictionsQuery.Select(ur => ur.UserId).Distinct().Count();
@@ -594,7 +594,7 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
             var violations = violationsQuery.ToList();
 
             int totalRecords = violations.Count;
-            int pending = violations.Count(v => v.Status == "Chờ xử lý");
+            int pending = violations.Count(v => v.Status == "Chờ xử lý" || v.Status == "Đang xử lý");
             int resolved = violations.Count(v => v.Status == "Đã xử lý" || v.Status == "Đã nộp phạt");
 
             // Severity Breakdown

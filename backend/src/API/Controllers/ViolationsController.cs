@@ -248,5 +248,74 @@ namespace HUIT_RoMan.API.Controllers
             var res = await _violationService.ClearRemindersForSessionAsync(sessionId);
             return Ok(res);
         }
+
+        // ─────────────────────────────────────────────────────────────────
+        // VIOLATION ATTACHMENTS (MINIO / S3 OBJECT STORAGE)
+        // ─────────────────────────────────────────────────────────────────
+
+        /// <summary>Upload tệp đính kèm (ảnh, word, pdf) cho biên bản vi phạm lên MinIO</summary>
+        [HttpPost("{id}/attachments")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        [RequestSizeLimit(30 * 1024 * 1024)] // 30MB
+        public async Task<IActionResult> UploadAttachment(int id, [FromForm] Microsoft.AspNetCore.Http.IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "Vui lòng chọn tệp tin cần tải lên." });
+
+            var allowedExts = new[] { ".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf", ".doc", ".docx", ".xls", ".xlsx" };
+            var ext = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (System.Array.IndexOf(allowedExts, ext) < 0)
+                return BadRequest(new { message = $"Định dạng tệp '{ext}' không được hỗ trợ. Chỉ chấp nhận ảnh, PDF hoặc file Word/Excel." });
+
+            using var stream = file.OpenReadStream();
+            var res = await _violationService.UploadAttachmentAsync(
+                id,
+                stream,
+                file.FileName,
+                file.ContentType,
+                file.Length,
+                _currentUserService.UserId);
+
+            if (!res.Success) return BadRequest(res);
+            return Ok(res);
+        }
+
+        /// <summary>Tải xuống hoặc xem tệp đính kèm từ MinIO/Storage</summary>
+        [HttpGet("attachments/{attachmentId}/download")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DownloadAttachment(int attachmentId, [FromQuery] bool inline = false)
+        {
+            var (stream, contentType, fileName) = await _violationService.DownloadAttachmentAsync(attachmentId);
+            if (stream == null)
+                return NotFound(new { message = "Không tìm thấy tệp đính kèm trên hệ thống lưu trữ." });
+
+            var resolvedContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType;
+
+            if (inline)
+            {
+                Response.Headers["Content-Disposition"] = $"inline; filename=\"{System.Uri.EscapeDataString(fileName)}\"";
+                return File(stream, resolvedContentType);
+            }
+
+            return File(stream, resolvedContentType, fileName);
+        }
+
+        /// <summary>Xem trực tiếp tệp đính kèm trên trình duyệt (ảnh, PDF)</summary>
+        [HttpGet("attachments/{attachmentId}/view")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ViewAttachment(int attachmentId)
+        {
+            return await DownloadAttachment(attachmentId, inline: true);
+        }
+
+        /// <summary>Xóa tệp đính kèm khỏi MinIO và CSDL</summary>
+        [HttpDelete("attachments/{attachmentId}")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        public async Task<IActionResult> DeleteAttachment(int attachmentId)
+        {
+            var res = await _violationService.DeleteAttachmentAsync(attachmentId);
+            if (!res.Success) return BadRequest(res);
+            return Ok(res);
+        }
     }
 }

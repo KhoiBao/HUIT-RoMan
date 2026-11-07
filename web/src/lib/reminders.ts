@@ -232,7 +232,7 @@ export async function addReminder(params: AddReminderParams): Promise<AddReminde
         penaltyApplied:
           "Lập biên bản vi phạm do tái phạm sau 3 lần nhắc nhở & Cấm mượn phòng 3 ngày",
         restrictDays: 3,
-        status: "Chờ xử lý",
+        status: "Đã xử lý",
       });
     } catch (err) {
       console.error("Lỗi khi tự động lập biên bản vi phạm:", err);
