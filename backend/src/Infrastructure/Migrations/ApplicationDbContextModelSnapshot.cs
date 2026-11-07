@@ -128,6 +128,10 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Property<int>("GuestCount")
                         .HasColumnType("integer");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -160,7 +164,10 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                     b.HasIndex("ApprovedByUserId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Bookings_UserId_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
                     b.ToTable("Bookings", t =>
                         {
@@ -1054,6 +1061,71 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.HasIndex("UsageConditionId");
 
                     b.ToTable("RoomTypeConditions");
+                });
+
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.SessionReminder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("EscalatedToViolation")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("RemindedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RemindedByStaff")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("RoomId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UsageSessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ViolationRecordId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WarningLevel")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomId");
+
+                    b.HasIndex("UsageSessionId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ViolationRecordId");
+
+                    b.ToTable("SessionReminders");
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.Shift", b =>
@@ -2043,6 +2115,40 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Navigation("RoomType");
 
                     b.Navigation("UsageCondition");
+                });
+
+            modelBuilder.Entity("HUIT_RoMan.Domain.Entities.SessionReminder", b =>
+                {
+                    b.HasOne("HUIT_RoMan.Domain.Entities.Room", "Room")
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.UsageSession", "UsageSession")
+                        .WithMany()
+                        .HasForeignKey("UsageSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HUIT_RoMan.Domain.Entities.ViolationRecord", "ViolationRecord")
+                        .WithMany()
+                        .HasForeignKey("ViolationRecordId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Room");
+
+                    b.Navigation("UsageSession");
+
+                    b.Navigation("User");
+
+                    b.Navigation("ViolationRecord");
                 });
 
             modelBuilder.Entity("HUIT_RoMan.Domain.Entities.ShiftLog", b =>

@@ -24,6 +24,10 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
         public string Note { get; set; } = string.Empty;
         public int? UserId { get; set; }
         public bool? AutoApprove { get; set; }
+
+        // Controller gắn từ header X-Idempotency-Key; gửi lại cùng key trả về đơn gốc.
+        public string? IdempotencyKey { get; set; }
+
         public List<BookingDetailItemDto> Details { get; set; } = new();
     }
 

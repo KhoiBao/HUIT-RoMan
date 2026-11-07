@@ -141,7 +141,7 @@ describe("Cơ chế nhắc nhở vi phạm (Rule of 3 Warnings)", () => {
     await addReminder({ ...baseParams, reason: "Lần 1" });
     expect(getRemindersForSession(101)).toHaveLength(1);
 
-    clearRemindersForSession(101);
+    await clearRemindersForSession(101);
     expect(getRemindersForSession(101)).toHaveLength(0);
   });
 });

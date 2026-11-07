@@ -51,6 +51,41 @@ namespace HUIT_RoMan.Infrastructure.Repositories
             }
         }
 
+        private const int BookingQuotaLockNamespace = 400700;
+
+        public async Task BeginTransactionAsync()
+        {
+            if (_context.Database.CurrentTransaction == null)
+                await _context.Database.BeginTransactionAsync();
+        }
+
+        public async Task CommitTransactionAsync()
+        {
+            var tx = _context.Database.CurrentTransaction;
+            if (tx != null)
+                await tx.CommitAsync();
+        }
+
+        public async Task RollbackTransactionAsync()
+        {
+            var tx = _context.Database.CurrentTransaction;
+            if (tx != null)
+                await tx.RollbackAsync();
+        }
+
+        public async Task AcquireBookingQuotaLockAsync(int userId)
+        {
+            // Khóa tư vấn theo transaction trên PostgreSQL (chặn race hạn mức tuần khi
+            // 2 request cùng user chạy song song). SQLite dùng cho test không có → bỏ qua.
+            if (!_context.Database.IsNpgsql())
+                return;
+
+            await _context.Database.ExecuteSqlRawAsync(
+                "SELECT pg_advisory_xact_lock({0}, {1})",
+                BookingQuotaLockNamespace,
+                userId);
+        }
+
         public void Dispose()
         {
             _context.Dispose();

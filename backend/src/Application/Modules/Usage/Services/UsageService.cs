@@ -648,8 +648,22 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
 
             if (newEndAt <= detail.EndAt)
                 return ApiResponse<UsageSessionDto>.ErrorResponse("Thời gian gia hạn phải sau giờ kết thúc hiện tại.");
-            if ((newEndAt - detail.EndAt).TotalMinutes > 60)
-                return ApiResponse<UsageSessionDto>.ErrorResponse("Chỉ được gia hạn tối đa 60 phút mỗi lần.");
+            if ((newEndAt - detail.EndAt).TotalMinutes > BookingQuotaPolicy.MaxExtensionMinutes)
+                return ApiResponse<UsageSessionDto>.ErrorResponse($"Chỉ được gia hạn tối đa {BookingQuotaPolicy.MaxExtensionMinutes} phút mỗi lần.");
+
+            // Tổng gia hạn của cả lượt mượn (các lần "Đã áp dụng" trước đó) ≤ 60 phút.
+            var appliedExtensions = await _bookingExtensionRepo.FindAsync(e =>
+                e.BookingDetailId == detail.Id
+                && e.Status == "Đã áp dụng");
+            var extendedMinutes = appliedExtensions.Sum(e => (e.NewEndAt - e.PreviousEndAt).TotalMinutes);
+            var requestedMinutes = (newEndAt - detail.EndAt).TotalMinutes;
+            if (extendedMinutes + requestedMinutes > BookingQuotaPolicy.MaxExtensionMinutes)
+            {
+                var alreadyRounded = Math.Round(extendedMinutes);
+                return ApiResponse<UsageSessionDto>.ErrorResponse(
+                    $"Bạn đã gia hạn {alreadyRounded} phút cho lượt mượn này. Tổng thời gian gia hạn tối đa là {BookingQuotaPolicy.MaxExtensionMinutes} phút, không thể gia hạn thêm.",
+                    BookingReasonCodes.ExtensionQuotaExceeded);
+            }
             if (newEndAt <= DateTime.UtcNow)
                 return ApiResponse<UsageSessionDto>.ErrorResponse("Thời gian kết thúc mới phải ở tương lai.");
 

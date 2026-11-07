@@ -32,6 +32,11 @@ namespace HUIT_RoMan.API.Controllers
         public async Task<IActionResult> Create([FromBody] CreateBookingDto request)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            // Chống gửi trùng (double-submit/retry): client sinh UUID và gửi lại nguyên key khi retry.
+            if (Request.Headers.TryGetValue("X-Idempotency-Key", out var idempotencyKey))
+                request.IdempotencyKey = idempotencyKey.FirstOrDefault();
+
             var response = await _bookingService.CreateBookingAsync(request);
             if (!response.Success) return BadRequest(response);
             return CreatedAtAction(nameof(GetById), new { id = response.Data?.Id }, response);
