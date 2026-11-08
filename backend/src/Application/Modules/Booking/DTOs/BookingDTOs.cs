@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace HUIT_RoMan.Application.Modules.Booking.DTOs
 {
@@ -12,15 +13,29 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
         public DateTime EndAt { get; set; }
         public int? StartPeriodId { get; set; }
         public int? EndPeriodId { get; set; }
+
+        [Range(1, 1000, ErrorMessage = "Số lượng khách phải lớn hơn 0.")]
         public int GuestCount { get; set; }
+
+        [Required(ErrorMessage = "Mục đích mượn là bắt buộc.")]
+        [MaxLength(1000, ErrorMessage = "Mục đích mượn tối đa 1000 ký tự.")]
         public string Purpose { get; set; } = string.Empty;
     }
 
     public class CreateBookingDto
     {
+        [Required(ErrorMessage = "Tên hoạt động là bắt buộc.")]
+        [MaxLength(255, ErrorMessage = "Tên hoạt động tối đa 255 ký tự.")]
         public string ActivityName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Mục đích mượn là bắt buộc.")]
+        [MaxLength(1000, ErrorMessage = "Mục đích mượn tối đa 1000 ký tự.")]
         public string Purpose { get; set; } = string.Empty;
+
+        [Range(1, 1000, ErrorMessage = "Số lượng khách phải lớn hơn 0.")]
         public int GuestCount { get; set; }
+
+        [MaxLength(1000, ErrorMessage = "Ghi chú tối đa 1000 ký tự.")]
         public string Note { get; set; } = string.Empty;
         public int? UserId { get; set; }
         public bool? AutoApprove { get; set; }
@@ -122,6 +137,12 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
     {
         public string Decision { get; set; } // "Đã duyệt" or "Từ chối"
         public string RejectionReason { get; set; }
+
+        // Tùy chọn điều chỉnh khi duyệt (áp dụng cho cả cấp 1 và cấp 2):
+        // đổi phòng khác / dời giờ trước khi chốt duyệt.
+        public int? NewRoomId { get; set; }
+        public DateTime? NewStartAt { get; set; }
+        public DateTime? NewEndAt { get; set; }
     }
 
     public class ApproveBookingDto

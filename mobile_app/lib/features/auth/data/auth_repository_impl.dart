@@ -19,13 +19,17 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<SessionUser> me() => _api.me();
 
   @override
-  Future<String?> forgotPassword(String identifier) =>
+  Future<void> forgotPassword(String identifier) =>
       _api.forgotPassword(identifier);
 
   @override
   Future<void> resetPassword(
           String identifier, String resetToken, String newPassword) =>
       _api.resetPassword(identifier, resetToken, newPassword);
+
+  @override
+  Future<void> changePassword(String currentPassword, String newPassword) =>
+      _api.changePassword(currentPassword, newPassword);
 
   @override
   Future<void> logout() => _tokens.clear();

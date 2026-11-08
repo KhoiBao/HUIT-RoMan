@@ -482,8 +482,20 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         // ─────────────────────────────────────────────────────────────────
         // 6. MARK MESSAGES AS READ
         // ─────────────────────────────────────────────────────────────────
-        public async Task<ApiResponse<bool>> MarkMessagesAsReadAsync(int conversationId, int currentUserId)
+        public async Task<ApiResponse<bool>> MarkMessagesAsReadAsync(int conversationId, int currentUserId, bool isStaff)
         {
+            var conversations = await _conversationRepo.FindAsync(c => c.Id == conversationId);
+            var conv = conversations.FirstOrDefault();
+            if (conv == null)
+            {
+                return ApiResponse<bool>.ErrorResponse("Không tìm thấy cuộc hội thoại.");
+            }
+
+            if (!isStaff && conv.UserId != currentUserId)
+            {
+                return ApiResponse<bool>.ErrorResponse("Bạn không có quyền truy cập cuộc trò chuyện này.");
+            }
+
             var messages = await _messageRepo.FindAsync(
                 m => m.ChatConversationId == conversationId && m.UserId != currentUserId && !m.IsRead
             );

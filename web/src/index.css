@@ -12618,6 +12618,17 @@ button.admin-status-pill:disabled {
   background: #0369a1;
 }
 
+/* User profile change password */
+.profile-password-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.profile-password-section .modal-form {
+  margin-top: 10px;
+}
+
 /* User profile attachments */
 .user-violation-attachments {
   margin-top: 8px;

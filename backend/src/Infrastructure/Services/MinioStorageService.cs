@@ -24,11 +24,19 @@ namespace HUIT_RoMan.Infrastructure.Services
             _logger = logger;
 
             var endpoint = configuration["StorageSettings:Endpoint"] ?? configuration["Minio:Endpoint"] ?? "localhost:9000";
-            var accessKey = configuration["StorageSettings:AccessKey"] ?? configuration["Minio:AccessKey"] ?? "huit_admin";
-            var secretKey = configuration["StorageSettings:SecretKey"] ?? configuration["Minio:SecretKey"] ?? "HuitRoMan@2026";
+            var accessKey = configuration["StorageSettings:AccessKey"] ?? configuration["Minio:AccessKey"];
+            var secretKey = configuration["StorageSettings:SecretKey"] ?? configuration["Minio:SecretKey"];
             var useSsl = bool.TryParse(configuration["StorageSettings:UseSsl"] ?? configuration["Minio:UseSSL"], out var ssl) && ssl;
             _defaultBucket = configuration["StorageSettings:BucketName"] ?? configuration["Minio:BucketName"] ?? "violations";
             _localStoragePath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "storage");
+
+            // Không còn fallback credential cứng trong source: thiếu AccessKey/SecretKey thì dùng Local Storage.
+            if (string.IsNullOrWhiteSpace(accessKey) || string.IsNullOrWhiteSpace(secretKey))
+            {
+                _logger.LogWarning("Thiếu cấu hình StorageSettings AccessKey/SecretKey (đặt qua biến môi trường StorageSettings__AccessKey/__SecretKey) — kích hoạt chế độ Local Storage Fallback.");
+                _useLocalStorageFallback = true;
+                return;
+            }
 
             try
             {

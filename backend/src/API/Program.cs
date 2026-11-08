@@ -3,12 +3,37 @@ using HUIT_RoMan.Application.Common.Interfaces;
 using HUIT_RoMan.Domain.Entities;
 using HUIT_RoMan.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Secrets bắt buộc phải được cung cấp qua biến môi trường (file .env) - không có fallback trong code.
+var jwtSecret = builder.Configuration["JwtSettings:Secret"];
+if (string.IsNullOrWhiteSpace(jwtSecret))
+{
+    throw new InvalidOperationException(
+        "Chưa cấu hình JwtSettings:Secret. Sao chép .env.example thành .env và khai báo JWT_SECRET (biến môi trường JwtSettings__Secret).");
+}
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "Chưa cấu hình ConnectionStrings:DefaultConnection. Sao chép .env.example thành .env và khai báo POSTGRES_* .");
+}
+
+// nginx (container web) và tunnel đứng trước API: tin X-Forwarded-For để rate limiter phân hoạch đúng theo IP client.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // Controllers (thin - logic nằm ở Application, DB nằm ở Infrastructure)
 builder.Services.AddControllers();
@@ -48,8 +73,7 @@ builder.Services.AddIdentity<User, IdentityRole<int>>()
     .AddDefaultTokenProviders();
 
 // Add JWT Authentication
-var secretKey = builder.Configuration["JwtSettings:Secret"] ?? "super_secret_key_for_development_huit_roman_12345";
-var key = Encoding.ASCII.GetBytes(secretKey);
+var key = Encoding.ASCII.GetBytes(jwtSecret);
 
 builder.Services.AddAuthentication(options =>
 {
@@ -132,7 +156,34 @@ builder.Services.AddHostedService<HUIT_RoMan.API.Services.BookingReminderWatcher
 // Tác vụ nền: tự đóng phiên đang sử dụng quá giờ kết thúc mà không trả phòng.
 builder.Services.AddHostedService<HUIT_RoMan.API.Services.OverdueSessionAutoCloseWatcher>();
 
+// Chống brute-force: giới hạn tần suất theo IP cho login và các bước OTP quên mật khẩu.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, _) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync(
+            "{\"message\":\"Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau ít phút.\"}");
+    };
+
+    static string PartitionKey(HttpContext context) =>
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+    options.AddPolicy("auth", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            $"auth:{PartitionKey(context)}",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+
+    options.AddPolicy("otp", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            $"otp:{PartitionKey(context)}",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 5, Window = TimeSpan.FromMinutes(1) }));
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 // Docker/CI có thể bật Database__AutoMigrate=true để áp migration trước khi seed.
 // Mặc định tắt để giữ nguyên quy trình `update-db.bat` khi chạy local.
@@ -181,6 +232,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("Web");
+
+app.UseRateLimiter();
 
 if (!app.Environment.IsDevelopment())
 {

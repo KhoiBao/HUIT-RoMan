@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/application/auth_controller.dart';
+import '../features/auth/presentation/change_password_page.dart';
 import '../features/auth/presentation/forgot_password_page.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/booking/application/booking_create_controller.dart';
@@ -10,12 +11,14 @@ import '../features/booking/presentation/booking_create_page.dart';
 import '../features/booking/presentation/booking_detail_page.dart';
 import '../features/booking/presentation/bookings_page.dart';
 import '../features/chat/presentation/chat_page.dart';
+import '../features/history/presentation/violation_history_page.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/notification/presentation/notifications_page.dart';
 import '../features/profile/presentation/profile_page.dart';
 import '../features/rooms/presentation/room_detail_page.dart';
 import '../features/rooms/presentation/rooms_page.dart';
 import '../features/schedule/presentation/schedule_page.dart';
+import '../features/usage/presentation/usage_history_page.dart';
 import 'app_shell.dart';
 import 'splash_page.dart';
 
@@ -95,6 +98,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/chat',
           pageBuilder: (_, state) => _fadeSlidePage(state, const ChatPage())),
+      GoRoute(
+          path: '/change-password',
+          pageBuilder: (_, state) =>
+              _fadeSlidePage(state, const ChangePasswordPage())),
+      GoRoute(
+          path: '/usage-history',
+          pageBuilder: (_, state) =>
+              _fadeSlidePage(state, const UsageHistoryPage())),
+      GoRoute(
+          path: '/violation-history',
+          pageBuilder: (_, state) =>
+              _fadeSlidePage(state, const ViolationHistoryPage())),
     ],
   );
 });

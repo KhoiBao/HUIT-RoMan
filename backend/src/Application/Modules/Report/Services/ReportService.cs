@@ -725,6 +725,17 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
                 var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
                 return (bytes, $"BaoCao_ViPham_CamMuon_{DateTime.Now:yyyyMMdd_HHmm}.csv", "text/csv; charset=utf-8");
             }
+            else if (reportType.ToLower() == "vacancy")
+            {
+                var vacRep = await GetVacancyReportAsync(filter);
+                sb.AppendLine("KhungGio,TBPhongDaDat,TBPhongTrong,TyLePhongTrong(%)");
+                foreach (var s in vacRep.Data?.HourSlots ?? new List<VacancyHourSlotDto>())
+                {
+                    sb.AppendLine($"\"{s.Label}\",{s.AvgBookedRooms},{s.AvgVacancyRooms},{s.VacancyRate}");
+                }
+                var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
+                return (bytes, $"BaoCao_TyLePhongTrong_{DateTime.Now:yyyyMMdd_HHmm}.csv", "text/csv; charset=utf-8");
+            }
             else
             {
                 // Default: Bookings
@@ -737,6 +748,86 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
                 var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();
                 return (bytes, $"BaoCao_LuotMuonPhong_{DateTime.Now:yyyyMMdd_HHmm}.csv", "text/csv; charset=utf-8");
             }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // VACANCY BY HOUR (TỶ LỆ PHÒNG TRỐNG THEO TỪNG THỜI ĐIỂM)
+        // ─────────────────────────────────────────────────────────────────
+
+        private static readonly string[] OccupiedBookingStatuses =
+        {
+            "Đã duyệt", "Approved", "Chờ nhận phòng", "Đang sử dụng", "Hoàn thành"
+        };
+
+        public async Task<ApiResponse<VacancyReportDto>> GetVacancyReportAsync(ReportFilterDto filter)
+        {
+            var targetDeptId = ResolveTargetDepartmentId(filter);
+
+            var rooms = (await _roomRepo.GetAllAsync(r => r.RoomType)).ToList();
+            if (targetDeptId.HasValue)
+            {
+                rooms = rooms.Where(r => r.RoomType?.DepartmentId == targetDeptId.Value).ToList();
+            }
+            if (filter.RoomId.HasValue)
+            {
+                rooms = rooms.Where(r => r.Id == filter.RoomId.Value).ToList();
+            }
+
+            // Khung giờ phục vụ 07:00-21:00 giờ Việt Nam; mặc định 7 ngày gần nhất.
+            var vnToday = DateTime.UtcNow.AddHours(7).Date;
+            var fromDay = filter.FromDate.HasValue ? filter.FromDate.Value.Date : vnToday.AddDays(-6);
+            var toDay = filter.ToDate.HasValue ? filter.ToDate.Value.Date : vnToday;
+            if (toDay < fromDay) toDay = fromDay;
+
+            var days = Enumerable.Range(0, (toDay - fromDay).Days + 1)
+                .Select(i => fromDay.AddDays(i))
+                .ToList();
+
+            var roomIds = rooms.Select(r => r.Id).ToHashSet();
+            var rangeStartUtc = fromDay.AddHours(-7);
+            var rangeEndUtc = toDay.AddDays(1).AddHours(-7);
+
+            var details = (await _bookingDetailRepo.GetAllAsync(d => d.Booking))
+                .Where(d => roomIds.Contains(d.RoomId)
+                            && OccupiedBookingStatuses.Contains(d.Booking?.Status ?? "")
+                            && d.StartAt < rangeEndUtc && d.EndAt > rangeStartUtc)
+                .ToList();
+
+            var totalRooms = rooms.Count;
+            var slots = Enumerable.Range(7, 14).Select(hour =>
+            {
+                double bookedSum = 0;
+                double vacancySum = 0;
+                var dailyRates = new List<double>();
+                foreach (var day in days)
+                {
+                    var slotStartUtc = day.AddHours(hour - 7);
+                    var slotEndUtc = slotStartUtc.AddHours(1);
+                    var booked = details.Count(d => d.StartAt < slotEndUtc && d.EndAt > slotStartUtc);
+                    var vacancyRooms = totalRooms - booked;
+                    bookedSum += booked;
+                    vacancySum += vacancyRooms;
+                    dailyRates.Add(totalRooms == 0 ? 0 : vacancyRooms * 100.0 / totalRooms);
+                }
+
+                return new VacancyHourSlotDto
+                {
+                    Hour = hour,
+                    Label = $"{hour:00}:00 – {(hour + 1) % 24:00}:00",
+                    AvgBookedRooms = Math.Round(bookedSum / days.Count, 2),
+                    AvgVacancyRooms = Math.Round(vacancySum / days.Count, 2),
+                    VacancyRate = Math.Round(dailyRates.Average(), 1)
+                };
+            }).ToList();
+
+            return ApiResponse<VacancyReportDto>.SuccessResponse(new VacancyReportDto
+            {
+                FromDate = fromDay,
+                ToDate = toDay,
+                TotalRooms = totalRooms,
+                DaysCounted = days.Count,
+                HourSlots = slots
+            });
         }
 
         /// <summary>

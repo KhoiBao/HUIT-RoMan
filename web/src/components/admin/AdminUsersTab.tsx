@@ -225,7 +225,7 @@ export default function AdminUsersTab({ onNotify }: Props) {
       const res = await api.post(`/api/Users/${resettingUser.id}/reset-password`, {
         newPassword: newPassword.trim(),
       });
-      const pwdSet = res.data?.data || newPassword.trim();
+      const pwdSet = newPassword.trim();
       setResetSuccessResult({ user: resettingUser, password: pwdSet });
       onNotify(res.data?.message || `Đã đặt lại mật khẩu cho ${resettingUser.fullName}!`, "success");
     } catch (err: any) {

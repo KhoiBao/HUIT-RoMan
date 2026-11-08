@@ -79,7 +79,7 @@ export default function LoginPage() {
             <div>
               <div className="brand-eyebrow">HUIT • ROOM MANAGEMENT</div>
               <div className="brand-title">
-                Hệ thống quản lý phòng dùng chung HUIT
+                Hệ thống quản lý phòng họp thư viện HUIT
               </div>
               <div className="brand-sub">
                 Thư viện HUIT · Trường Đại học Công Thương Thành phố Hồ Chí

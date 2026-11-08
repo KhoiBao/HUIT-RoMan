@@ -6,6 +6,7 @@ public static class BookingStatuses
     public const string Pending = "Chờ duyệt";
     public const string Approved = "Đã duyệt";
     public const string PartiallyApproved = "Duyệt một phần";
+    public const string PendingSecondApproval = "Chờ duyệt cấp 2";
     public const string Rejected = "Từ chối";
     public const string Cancelled = "Đã hủy";
     public const string InUse = "Đang sử dụng";

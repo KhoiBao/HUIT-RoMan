@@ -169,4 +169,26 @@ namespace HUIT_RoMan.Application.Modules.Report.DTOs
         public List<OffenderSummaryDto> FrequentOffenders { get; set; } = new List<OffenderSummaryDto>();
         public List<ActiveBanSummaryDto> CurrentActiveBans { get; set; } = new List<ActiveBanSummaryDto>();
     }
+
+    /// <summary>
+    /// Báo cáo tỷ lệ phòng trống theo từng khung giờ (07:00-21:00 giờ VN),
+    /// trung bình trên khoảng ngày được lọc.
+    /// </summary>
+    public class VacancyReportDto
+    {
+        public DateTime FromDate { get; set; }
+        public DateTime ToDate { get; set; }
+        public int TotalRooms { get; set; }
+        public int DaysCounted { get; set; }
+        public List<VacancyHourSlotDto> HourSlots { get; set; } = new List<VacancyHourSlotDto>();
+    }
+
+    public class VacancyHourSlotDto
+    {
+        public int Hour { get; set; }
+        public string Label { get; set; } = string.Empty;
+        public double AvgBookedRooms { get; set; }
+        public double AvgVacancyRooms { get; set; }
+        public double VacancyRate { get; set; }
+    }
 }

@@ -23,10 +23,18 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
 
     public class UpdateUserDto
     {
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
         public string? FullName { get; set; }
+
+        [System.ComponentModel.DataAnnotations.EmailAddress]
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
         public string? Email { get; set; }
+
         public string? PhoneNumber { get; set; }
+
+        [System.ComponentModel.DataAnnotations.MaxLength(50)]
         public string? Status { get; set; }
+
         public int? DepartmentId { get; set; }
     }
 

@@ -52,9 +52,6 @@ export default function ForgotPasswordModal({
       });
       const data = res.data;
       setMaskedEmail(data.email || identifier);
-      if (data.resetToken) {
-        setOtpToken(data.resetToken); // Hỗ trợ trải nghiệm test nhanh
-      }
       setSuccessMsg(
         data.message ||
           `Mã xác thực đã được gửi về hòm thư trường ${data.email || ""}`
@@ -205,14 +202,7 @@ export default function ForgotPasswordModal({
             </p>
 
             <div className="form-field">
-              <div className="flex-between">
-                <label>Mã OTP xác thực (6 chữ số):</label>
-                {otpToken && (
-                  <span className="pill-otp-demo" title="Mã OTP tạo tự động">
-                    Mã OTP: <strong>{otpToken}</strong>
-                  </span>
-                )}
-              </div>
+              <label>Mã OTP xác thực (6 chữ số):</label>
               <input
                 type="text"
                 required

@@ -1,4 +1,4 @@
-# RoMan Web — React + TypeScript + Vite
+# Web — Hệ thống quản lý phòng họp thư viện HUIT (React + TypeScript + Vite)
 
 Giao diện hệ thống quản lý phòng dùng chung (HUIT). Nghiệp vụ và phân quyền: `docs/nghiep-vu.md`.
 

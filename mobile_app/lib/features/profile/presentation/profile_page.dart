@@ -85,10 +85,28 @@ class ProfilePage extends ConsumerWidget {
                     _MenuGroup(
                       children: [
                         _MenuTile(
+                          icon: Icons.lock_outline_rounded,
+                          title: 'Đổi mật khẩu',
+                          subtitle: 'Cập nhật mật khẩu đăng nhập',
+                          onTap: () => context.push('/change-password'),
+                        ),
+                        _MenuTile(
                           icon: Icons.receipt_long_outlined,
                           title: 'Đơn đặt phòng của tôi',
                           subtitle: 'Theo dõi và quản lý các đơn đã đặt',
                           onTap: () => context.go('/bookings'),
+                        ),
+                        _MenuTile(
+                          icon: Icons.history_outlined,
+                          title: 'Lịch sử sử dụng phòng',
+                          subtitle: 'Các lần nhận và trả phòng của bạn',
+                          onTap: () => context.push('/usage-history'),
+                        ),
+                        _MenuTile(
+                          icon: Icons.gavel_outlined,
+                          title: 'Lịch sử vi phạm',
+                          subtitle: 'Biên bản vi phạm và lệnh cấm mượn',
+                          onTap: () => context.push('/violation-history'),
                         ),
                         _MenuTile(
                           icon: Icons.notifications_none_rounded,

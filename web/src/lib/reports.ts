@@ -138,6 +138,43 @@ export interface ViolationStatsReport {
   currentActiveBans: ActiveBanSummary[];
 }
 
+export interface VacancyHourSlot {
+  hour: number;
+  label: string;
+  avgBookedRooms: number;
+  avgVacancyRooms: number;
+  vacancyRate: number;
+}
+
+export interface VacancyReport {
+  fromDate: string;
+  toDate: string;
+  totalRooms: number;
+  daysCounted: number;
+  hourSlots: VacancyHourSlot[];
+}
+
+export interface VacancySlotHighlight {
+  hour: number;
+  label: string;
+  vacancyRate: number;
+}
+
+export function vacancyHighlights(
+  report: VacancyReport | null
+): { busiest: VacancySlotHighlight | null; quietest: VacancySlotHighlight | null } {
+  const slots = report?.hourSlots ?? [];
+  if (slots.length === 0) return { busiest: null, quietest: null };
+  const toHighlight = (s: VacancyHourSlot): VacancySlotHighlight => ({
+    hour: s.hour,
+    label: s.label,
+    vacancyRate: s.vacancyRate,
+  });
+  const busiest = slots.reduce((a, b) => (b.vacancyRate < a.vacancyRate ? b : a));
+  const quietest = slots.reduce((a, b) => (b.vacancyRate > a.vacancyRate ? b : a));
+  return { busiest: toHighlight(busiest), quietest: toHighlight(quietest) };
+}
+
 export interface ReportFilter {
   fromDate?: string;
   toDate?: string;
@@ -196,8 +233,15 @@ export async function fetchViolationStatsReport(
   return res.data?.data || null;
 }
 
+export async function fetchVacancyReport(
+  params?: ReportFilter
+): Promise<VacancyReport> {
+  const res = await api.get("/api/Reports/vacancy", { params });
+  return res.data?.data || null;
+}
+
 export async function downloadReportCsv(
-  reportType: "bookings" | "rooms" | "violations",
+  reportType: "bookings" | "rooms" | "violations" | "vacancy",
   params?: ReportFilter
 ): Promise<void> {
   const res = await api.get("/api/Reports/export", {

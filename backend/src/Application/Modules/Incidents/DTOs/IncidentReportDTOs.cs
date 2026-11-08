@@ -57,20 +57,29 @@ namespace HUIT_RoMan.Application.Modules.Incidents.DTOs
     {
         public string? TargetType { get; set; } = "Phòng";
         public int? RoomId { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(50)]
         public string? RoomCode { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
         public string? RoomName { get; set; }
         public int? BookingDetailId { get; set; }
         public int? SessionId { get; set; }
         public int? EquipmentId { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
         public string? EquipmentName { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(200)]
         public string? Title { get; set; }
         public string? Category { get; set; } = "Thiết bị hư hỏng";
         public string? Severity { get; set; } = "Khẩn cấp";
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Mô tả sự việc là bắt buộc.")]
+        [System.ComponentModel.DataAnnotations.MaxLength(2000, ErrorMessage = "Mô tả sự việc tối đa 2000 ký tự.")]
         public string Description { get; set; } = string.Empty;
         public string? Status { get; set; }
         public string? ReportedBy { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(20)]
         public string? ReporterPhone { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(255)]
         public string? AssignedTechnician { get; set; }
+        [System.ComponentModel.DataAnnotations.MaxLength(1000, ErrorMessage = "Ghi chú kỹ thuật tối đa 1000 ký tự.")]
         public string? TechnicianNote { get; set; }
         public bool? SetRoomMaintenance { get; set; }
     }

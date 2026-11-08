@@ -8,6 +8,8 @@ void main() {
   test('normalises every booking status (Vietnamese and English)', () {
     expect(BookingStatus.fromApi('Chờ duyệt'), BookingStatus.pending);
     expect(BookingStatus.fromApi('Pending'), BookingStatus.pending);
+    expect(BookingStatus.fromApi('Chờ duyệt cấp 2'),
+        BookingStatus.pendingSecondApproval);
     expect(BookingStatus.fromApi('Đã duyệt'), BookingStatus.approved);
     expect(BookingStatus.fromApi('Approved'), BookingStatus.approved);
     expect(BookingStatus.fromApi('Duyệt một phần'), BookingStatus.partiallyApproved);

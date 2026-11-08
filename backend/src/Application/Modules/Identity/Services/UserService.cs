@@ -16,11 +16,13 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
     {
         private readonly UserManager<User> _userManager;
         private readonly IUnitOfWork? _unitOfWork;
+        private readonly ICurrentUserService? _currentUser;
 
-        public UserService(UserManager<User> userManager, IUnitOfWork? unitOfWork = null)
+        public UserService(UserManager<User> userManager, IUnitOfWork? unitOfWork = null, ICurrentUserService? currentUser = null)
         {
             _userManager = userManager;
             _unitOfWork = unitOfWork;
+            _currentUser = currentUser;
         }
 
         public async Task<ApiResponse<IEnumerable<UserDto>>> GetAllAsync()
@@ -171,16 +173,39 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
 
         public async Task<ApiResponse<bool>> UpdateAsync(int id, UpdateUserDto request)
         {
+            if (_currentUser == null || _currentUser.UserId == null)
+                return ApiResponse<bool>.ErrorResponse("Không xác định được người thực hiện thao tác.");
+
             var u = await _userManager.FindByIdAsync(id.ToString());
             if (u == null)
                 return ApiResponse<bool>.ErrorResponse("Không tìm thấy người dùng.");
+
+            var targetRoles = await _userManager.GetRolesAsync(u);
+            var targetRole = targetRoles.FirstOrDefault();
+            if (!RoleHierarchy.CanManage(_currentUser.Role, targetRole))
+                return ApiResponse<bool>.ErrorResponse(
+                    "Bạn không có quyền chỉnh sửa tài khoản này. Chỉ Quản trị viên mới được sửa thông tin nhân sự, và cấp thấp không được sửa cấp bằng hoặc cao hơn.");
 
             if (!TryNormalizePhone(request.PhoneNumber, out var normalizedPhone))
                 return ApiResponse<bool>.ErrorResponse(
                     "Số điện thoại không hợp lệ. Vui lòng nhập 10-11 chữ số, ví dụ 0912345678.");
 
-            u.FullName = request.FullName ?? u.FullName;
-            u.Email = request.Email ?? u.Email;
+            if (request.FullName != null)
+            {
+                var fullName = request.FullName.Trim();
+                if (string.IsNullOrWhiteSpace(fullName))
+                    return ApiResponse<bool>.ErrorResponse("Họ và tên không được để trống hoặc toàn khoảng trắng.");
+                u.FullName = fullName;
+            }
+
+            if (request.Email != null)
+            {
+                var email = request.Email.Trim();
+                if (string.IsNullOrWhiteSpace(email) || !EmailPattern.IsMatch(email))
+                    return ApiResponse<bool>.ErrorResponse("Email không hợp lệ.");
+                u.Email = email;
+            }
+
             if (request.PhoneNumber != null)
                 u.PhoneNumber = normalizedPhone;
             u.Status = request.Status ?? u.Status;
@@ -192,6 +217,43 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
                 return ApiResponse<bool>.ErrorResponse(string.Join("; ", result.Errors.Select(e => e.Description)));
 
             return ApiResponse<bool>.SuccessResponse(true, "Cập nhật thông tin người dùng thành công.");
+        }
+
+        // Cập nhật hồ sơ cá nhân (PUT /api/Users/me): chỉ các trường liên hệ, không đụng Status/DepartmentId.
+        public async Task<ApiResponse<bool>> UpdateSelfAsync(int id, UpdateUserDto request)
+        {
+            var u = await _userManager.FindByIdAsync(id.ToString());
+            if (u == null)
+                return ApiResponse<bool>.ErrorResponse("Không tìm thấy người dùng.");
+
+            if (!TryNormalizePhone(request.PhoneNumber, out var normalizedPhone))
+                return ApiResponse<bool>.ErrorResponse(
+                    "Số điện thoại không hợp lệ. Vui lòng nhập 10-11 chữ số, ví dụ 0912345678.");
+
+            if (request.FullName != null)
+            {
+                var fullName = request.FullName.Trim();
+                if (string.IsNullOrWhiteSpace(fullName))
+                    return ApiResponse<bool>.ErrorResponse("Họ và tên không được để trống hoặc toàn khoảng trắng.");
+                u.FullName = fullName;
+            }
+
+            if (request.Email != null)
+            {
+                var email = request.Email.Trim();
+                if (string.IsNullOrWhiteSpace(email) || !EmailPattern.IsMatch(email))
+                    return ApiResponse<bool>.ErrorResponse("Email không hợp lệ.");
+                u.Email = email;
+            }
+
+            if (request.PhoneNumber != null)
+                u.PhoneNumber = normalizedPhone;
+
+            var result = await _userManager.UpdateAsync(u);
+            if (!result.Succeeded)
+                return ApiResponse<bool>.ErrorResponse(string.Join("; ", result.Errors.Select(e => e.Description)));
+
+            return ApiResponse<bool>.SuccessResponse(true, "Cập nhật thông tin cá nhân thành công.");
         }
 
 
@@ -336,26 +398,41 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         }
 
 
-        public async Task<ApiResponse<string>> AdminResetPasswordAsync(int id, string? newPassword)
+        public async Task<ApiResponse<bool>> AdminResetPasswordAsync(int id, string? newPassword)
         {
+            if (_currentUser == null || _currentUser.UserId == null)
+                return ApiResponse<bool>.ErrorResponse("Không xác định được người thực hiện thao tác.");
+
+            if (string.IsNullOrWhiteSpace(newPassword))
+                return ApiResponse<bool>.ErrorResponse(
+                    "Vui lòng nhập mật khẩu mới. Hệ thống không còn gán mật khẩu mặc định tự động.");
+
+            var passwordToSet = newPassword.Trim();
+            if (passwordToSet.Length < 6)
+                return ApiResponse<bool>.ErrorResponse("Mật khẩu mới phải có ít nhất 6 ký tự.");
+
             var user = await _userManager.FindByIdAsync(id.ToString());
             if (user == null)
-                return ApiResponse<string>.ErrorResponse("Không tìm thấy người dùng.");
+                return ApiResponse<bool>.ErrorResponse("Không tìm thấy người dùng.");
 
-            var passwordToSet = string.IsNullOrWhiteSpace(newPassword) ? "Huit@123" : newPassword.Trim();
-
-            if (passwordToSet.Length < 6)
-                return ApiResponse<string>.ErrorResponse("Mật khẩu mới phải có ít nhất 6 ký tự.");
+            var targetRoles = await _userManager.GetRolesAsync(user);
+            var targetRole = targetRoles.FirstOrDefault();
+            if (!RoleHierarchy.CanManage(_currentUser.Role, targetRole))
+                return ApiResponse<bool>.ErrorResponse(
+                    "Bạn không có quyền đặt lại mật khẩu tài khoản này. Chỉ Quản trị viên mới được tác động lên tài khoản nhân sự, và cấp thấp không được tác động cấp bằng hoặc cao hơn.");
 
             var removeResult = await _userManager.RemovePasswordAsync(user);
             var addResult = await _userManager.AddPasswordAsync(user, passwordToSet);
             if (!addResult.Succeeded)
             {
                 var errors = string.Join("; ", addResult.Errors.Select(e => e.Description));
-                return ApiResponse<string>.ErrorResponse($"Không thể đặt lại mật khẩu: {errors}");
+                return ApiResponse<bool>.ErrorResponse($"Không thể đặt lại mật khẩu: {errors}");
             }
 
-            return ApiResponse<string>.SuccessResponse(passwordToSet, $"Đã đặt lại mật khẩu cho tài khoản {user.FullName} ({user.CardCode}) thành công!");
+            // Không trả mật khẩu trong response; người gọi đã tự nhập mật khẩu mới.
+            return ApiResponse<bool>.SuccessResponse(
+                true,
+                $"Đã đặt lại mật khẩu cho tài khoản {user.FullName} ({user.CardCode}) thành công. Hãy thông báo mật khẩu mới cho người dùng.");
         }
 
         // ─────────────────────────────────────────────────────────────────

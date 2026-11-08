@@ -43,7 +43,8 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Description = rt.Description,
                 DefaultCapacity = rt.DefaultCapacity,
                 DepartmentId = rt.DepartmentId,
-                IsBookingByPeriod = rt.IsBookingByPeriod
+                IsBookingByPeriod = rt.IsBookingByPeriod,
+                RequiresSecondApproval = rt.RequiresSecondApproval
             }).ToList();
 
             return ApiResponse<IEnumerable<RoomTypeDto>>.SuccessResponse(dtos);
@@ -66,7 +67,8 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Description = rt.Description,
                 DefaultCapacity = rt.DefaultCapacity,
                 DepartmentId = rt.DepartmentId,
-                IsBookingByPeriod = rt.IsBookingByPeriod
+                IsBookingByPeriod = rt.IsBookingByPeriod,
+                RequiresSecondApproval = rt.RequiresSecondApproval
             };
 
             return ApiResponse<RoomTypeDto>.SuccessResponse(dto);
@@ -76,12 +78,18 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
         {
             if (request.DefaultCapacity <= 0)
                 return ApiResponse<RoomTypeDto>.ErrorResponse("Sức chứa mặc định phải lớn hơn 0.");
+
+            var name = request.Name?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(name))
+                return ApiResponse<RoomTypeDto>.ErrorResponse("Tên loại phòng không được để trống hoặc toàn khoảng trắng.");
+
             var rt = new RoomType
             {
-                Name = request.Name,
-                Description = request.Description,
+                Name = name,
+                Description = request.Description?.Trim(),
                 DefaultCapacity = request.DefaultCapacity,
                 IsBookingByPeriod = request.IsBookingByPeriod,
+                RequiresSecondApproval = request.RequiresSecondApproval,
                 Status = "Hoạt động"
             };
 
@@ -104,9 +112,10 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 Description = rt.Description,
                 DefaultCapacity = rt.DefaultCapacity,
                 DepartmentId = rt.DepartmentId,
-                IsBookingByPeriod = rt.IsBookingByPeriod
+                IsBookingByPeriod = rt.IsBookingByPeriod,
+                RequiresSecondApproval = rt.RequiresSecondApproval
             };
-            
+
             return ApiResponse<RoomTypeDto>.SuccessResponse(dto, "Tạo loại phòng thành công");
         }
 
@@ -117,15 +126,20 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
             var rt = await _roomTypeRepo.GetByIdAsync(id);
             if (rt == null) return ApiResponse<bool>.ErrorResponse("Không tìm thấy loại phòng");
 
+            var name = request.Name?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(name))
+                return ApiResponse<bool>.ErrorResponse("Tên loại phòng không được để trống hoặc toàn khoảng trắng.");
+
             if ((_currentUser.Role == "Employee" || _currentUser.Role == "Manager") && _currentUser.DepartmentId.HasValue && rt.DepartmentId != _currentUser.DepartmentId.Value)
             {
                 return ApiResponse<bool>.ErrorResponse("Bạn không có quyền sửa loại phòng của đơn vị khác.");
             }
 
-            rt.Name = request.Name;
-            rt.Description = request.Description;
+            rt.Name = name;
+            rt.Description = request.Description?.Trim();
             rt.DefaultCapacity = request.DefaultCapacity;
             rt.IsBookingByPeriod = request.IsBookingByPeriod;
+            rt.RequiresSecondApproval = request.RequiresSecondApproval;
 
             if (_currentUser.IsAdmin)
             {

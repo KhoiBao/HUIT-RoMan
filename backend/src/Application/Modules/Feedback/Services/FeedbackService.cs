@@ -179,6 +179,13 @@ namespace HUIT_RoMan.Application.Modules.Feedback.Services
 
             var query = feedbacks.AsEnumerable();
 
+            // Người dùng thường chỉ được xem đánh giá do chính mình gửi.
+            if (!_currentUser.IsStaff)
+            {
+                var uid = _currentUser.UserId;
+                query = query.Where(f => f.UserId == uid);
+            }
+
             if (roomId.HasValue && roomId.Value > 0)
             {
                 query = query.Where(f => f.UsageSession?.BookingDetail?.RoomId == roomId.Value);
@@ -228,8 +235,9 @@ namespace HUIT_RoMan.Application.Modules.Feedback.Services
             );
 
             var fb = feedbacks.OrderByDescending(f => f.CreatedAt).FirstOrDefault();
-            if (fb == null)
+            if (fb == null || (!(_currentUser.UserId.HasValue && fb.UserId == _currentUser.UserId.Value) && !_currentUser.IsStaff))
             {
+                // Không phân biệt "không có đánh giá" và "không có quyền xem" để tránh lộ sự tồn tại.
                 return ApiResponse<FeedbackDto?>.SuccessResponse(null, "Chưa có đánh giá cho phiên này.");
             }
 
@@ -248,8 +256,9 @@ namespace HUIT_RoMan.Application.Modules.Feedback.Services
             );
 
             var fb = feedbacks.OrderByDescending(f => f.CreatedAt).FirstOrDefault();
-            if (fb == null)
+            if (fb == null || (!(_currentUser.UserId.HasValue && fb.UserId == _currentUser.UserId.Value) && !_currentUser.IsStaff))
             {
+                // Không phân biệt "không có đánh giá" và "không có quyền xem" để tránh lộ sự tồn tại.
                 return ApiResponse<FeedbackDto?>.SuccessResponse(null, "Chưa có đánh giá cho đơn đặt phòng này.");
             }
 

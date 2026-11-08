@@ -193,6 +193,10 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             if (session == null)
                 return ApiResponse<UsageSessionDto>.ErrorResponse("Không tìm thấy phiên sử dụng phòng.");
 
+            if (!_currentUser.IsStaff && session.UserId != _currentUser.UserId)
+                return ApiResponse<UsageSessionDto>.ErrorResponse(
+                    "Bạn chỉ có thể xem phiên sử dụng của chính mình.");
+
             return ApiResponse<UsageSessionDto>.SuccessResponse(MapToDto(session));
         }
 
@@ -218,6 +222,10 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
 
             if (session == null)
                 return ApiResponse<UsageSessionDto>.ErrorResponse($"Không tìm thấy phiên sử dụng có mã '{code}'.");
+
+            if (!_currentUser.IsStaff && session.UserId != _currentUser.UserId)
+                return ApiResponse<UsageSessionDto>.ErrorResponse(
+                    "Bạn chỉ có thể tra cứu phiên sử dụng của chính mình.");
 
             return ApiResponse<UsageSessionDto>.SuccessResponse(MapToDto(session));
         }
@@ -667,8 +675,10 @@ namespace HUIT_RoMan.Application.Modules.Usage.Services
             if (newEndAt <= DateTime.UtcNow)
                 return ApiResponse<UsageSessionDto>.ErrorResponse("Thời gian kết thúc mới phải ở tương lai.");
 
+            // Giờ phục vụ thư viện: trừ phòng hội thảo/hội trường (không thuộc giờ thư viện)
             var isLibraryRoom = string.Equals(
-                room.RoomType?.Department?.Type, "Library", StringComparison.OrdinalIgnoreCase);
+                room.RoomType?.Department?.Type, "Library", StringComparison.OrdinalIgnoreCase)
+                && !StudentBookingPolicy.IsHallRoomType(room.RoomType?.Name);
             if (_workingHours != null && isLibraryRoom)
             {
                 var week = await _workingHours.GetWeekAsync();

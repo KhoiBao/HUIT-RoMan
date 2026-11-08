@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace HUIT_RoMan.Application.Modules.Room.DTOs
 {
@@ -11,16 +12,24 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
         public int? DepartmentId { get; set; }
         /// <summary>true = mượn theo tiết học cố định; false = mượn theo khung giờ tự do</summary>
         public bool IsBookingByPeriod { get; set; }
+        /// <summary>true = phòng đặc biệt, đơn đặt phải qua thêm cấp duyệt 2</summary>
+        public bool RequiresSecondApproval { get; set; }
     }
 
     public class CreateRoomTypeDto
     {
+        [Required(ErrorMessage = "Tên loại phòng là bắt buộc.")]
+        [MaxLength(255, ErrorMessage = "Tên loại phòng tối đa 255 ký tự.")]
         public string Name { get; set; }
+
+        [MaxLength(1000, ErrorMessage = "Mô tả tối đa 1000 ký tự.")]
         public string Description { get; set; }
         public int DefaultCapacity { get; set; }
         public int? DepartmentId { get; set; }
         /// <summary>true = mượn theo tiết học cố định; false = mượn theo khung giờ tự do</summary>
         public bool IsBookingByPeriod { get; set; }
+        /// <summary>true = phòng đặc biệt, đơn đặt phải qua thêm cấp duyệt 2</summary>
+        public bool RequiresSecondApproval { get; set; }
     }
 
     public class RoomDto
@@ -72,25 +81,55 @@ namespace HUIT_RoMan.Application.Modules.Room.DTOs
 
     public class CreateRoomDto
     {
+        [Required(ErrorMessage = "Tên phòng là bắt buộc.")]
+        [MaxLength(255, ErrorMessage = "Tên phòng tối đa 255 ký tự.")]
         public string Name { get; set; }
-        public string RoomCode { get; set; }
+
+        [Required(ErrorMessage = "Mã tòa là bắt buộc.")]
+        [MaxLength(100, ErrorMessage = "Tòa tối đa 100 ký tự.")]
         public string Building { get; set; }
+
+        [Required(ErrorMessage = "Tầng là bắt buộc.")]
+        [MaxLength(50, ErrorMessage = "Tầng tối đa 50 ký tự.")]
         public string Floor { get; set; }
+
+        [Required(ErrorMessage = "Số phòng là bắt buộc.")]
+        [MaxLength(50, ErrorMessage = "Số phòng tối đa 50 ký tự.")]
         public string RoomNumber { get; set; }
+
+        [Range(1, 10000, ErrorMessage = "Sức chứa phòng phải lớn hơn 0.")]
         public int Capacity { get; set; }
+
+        [MaxLength(1000, ErrorMessage = "Mô tả tối đa 1000 ký tự.")]
         public string Description { get; set; }
         public int RoomTypeId { get; set; }
     }
 
     public class UpdateRoomDto
     {
+        [Required(ErrorMessage = "Tên phòng là bắt buộc.")]
+        [MaxLength(255, ErrorMessage = "Tên phòng tối đa 255 ký tự.")]
         public string Name { get; set; }
-        public string RoomCode { get; set; }
+
+        [Required(ErrorMessage = "Mã tòa là bắt buộc.")]
+        [MaxLength(100, ErrorMessage = "Tòa tối đa 100 ký tự.")]
         public string Building { get; set; }
+
+        [Required(ErrorMessage = "Tầng là bắt buộc.")]
+        [MaxLength(50, ErrorMessage = "Tầng tối đa 50 ký tự.")]
         public string Floor { get; set; }
+
+        [Required(ErrorMessage = "Số phòng là bắt buộc.")]
+        [MaxLength(50, ErrorMessage = "Số phòng tối đa 50 ký tự.")]
         public string RoomNumber { get; set; }
+
+        [Range(1, 10000, ErrorMessage = "Sức chứa phòng phải lớn hơn 0.")]
         public int Capacity { get; set; }
+
+        [MaxLength(50, ErrorMessage = "Trạng thái tối đa 50 ký tự.")]
         public string Status { get; set; }
+
+        [MaxLength(1000, ErrorMessage = "Mô tả tối đa 1000 ký tự.")]
         public string Description { get; set; }
         public int RoomTypeId { get; set; }
     }

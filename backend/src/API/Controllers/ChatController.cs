@@ -249,7 +249,7 @@ namespace HUIT_RoMan.API.Controllers
             if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0) return Unauthorized();
             int userId = _currentUser.UserId.Value;
 
-            var res = await _chatService.MarkMessagesAsReadAsync(id, userId);
+            var res = await _chatService.MarkMessagesAsReadAsync(id, userId, _currentUser.IsStaff);
             if (res.Success)
             {
                 var groupName = $"Conversation_{id}";
@@ -262,6 +262,7 @@ namespace HUIT_RoMan.API.Controllers
         /// Lấy danh sách cán bộ / quản lý đang trong ca trực hôm nay (có thể lọc theo phòng hoặc đơn vị)
         /// </summary>
         [HttpGet("on-duty-staff")]
+        [Authorize]
         public async Task<IActionResult> GetOnDutyStaff([FromQuery] int? roomId, [FromQuery] int? departmentId)
         {
             var res = await _chatService.GetOnDutyStaffAsync(roomId, departmentId);

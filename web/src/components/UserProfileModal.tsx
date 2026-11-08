@@ -17,6 +17,7 @@ import {
   EyeIcon,
   DownloadIcon,
   FileTextIcon,
+  LockIcon,
 } from "./Icon";
 import {
   checkMyEligibility,
@@ -73,6 +74,54 @@ export default function UserProfileModal({
     text: string;
     type: "success" | "error";
   } | null>(null);
+
+  // Đổi mật khẩu
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword) {
+      setToastMsg({ text: "Vui lòng nhập mật khẩu hiện tại.", type: "error" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setToastMsg({ text: "Mật khẩu mới phải có ít nhất 6 ký tự.", type: "error" });
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setToastMsg({ text: "Mật khẩu xác nhận không khớp.", type: "error" });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const res = await api.post("/api/Auth/change-password", {
+        currentPassword,
+        newPassword,
+      });
+      setToastMsg({
+        text: res.data?.message || "Đổi mật khẩu thành công.",
+        type: "success",
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setShowChangePassword(false);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ||
+        (err as Error)?.message ||
+        "Đổi mật khẩu thất bại.";
+      setToastMsg({ text: msg, type: "error" });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -661,6 +710,80 @@ export default function UserProfileModal({
               </div>
             </>
           )}
+
+          {/* Đổi mật khẩu */}
+          <div className="profile-password-section">
+            <div className="attachments-section-header">
+              <h3 className="attachments-section-title">
+                <LockIcon size={14} /> Mật khẩu & Bảo mật
+              </h3>
+              {!showChangePassword && (
+                <button
+                  type="button"
+                  className="btn-att-view"
+                  onClick={() => setShowChangePassword(true)}
+                >
+                  Đổi mật khẩu
+                </button>
+              )}
+            </div>
+
+            {showChangePassword && (
+              <form onSubmit={handleChangePassword} className="modal-form">
+                <div className="form-field">
+                  <label>Mật khẩu hiện tại:</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Nhập mật khẩu đang dùng"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Mật khẩu mới:</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Tối thiểu 6 ký tự"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Xác nhận mật khẩu mới:</label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Nhập lại mật khẩu mới"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="modal-footer-actions">
+                  <button
+                    type="button"
+                    className="btn-modal-cancel"
+                    onClick={() => {
+                      setShowChangePassword(false);
+                      setCurrentPassword("");
+                      setNewPassword("");
+                      setConfirmNewPassword("");
+                    }}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-modal-submit"
+                    disabled={changingPassword}
+                  >
+                    {changingPassword ? "Đang cập nhật..." : "Xác nhận đổi mật khẩu"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
 
         {/* Sticky Modal Footer (luôn nhìn thấy được, không bị tràn hay che mất) */}

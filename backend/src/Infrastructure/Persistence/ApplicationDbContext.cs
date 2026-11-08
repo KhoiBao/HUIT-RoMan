@@ -57,6 +57,14 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             modelBuilder.Ignore<IdentityUserLogin<int>>();
             modelBuilder.Ignore<IdentityUserToken<int>>();
 
+            // Bỏ các cột Identity không dùng: tài khoản được xác thực trực tiếp tại quầy
+            // (không confirm email/SĐT), không dùng OAuth/2FA; khóa tài khoản điều khiển
+            // bằng LockoutEnd (SetStatusAsync) chứ không qua đếm số lần sai mật khẩu.
+            modelBuilder.Entity<User>().Ignore(u => u.EmailConfirmed);
+            modelBuilder.Entity<User>().Ignore(u => u.PhoneNumberConfirmed);
+            modelBuilder.Entity<User>().Ignore(u => u.TwoFactorEnabled);
+            modelBuilder.Entity<User>().Ignore(u => u.AccessFailedCount);
+
             // Mã phòng duy nhất giữa các phòng đang hoạt động; phòng đã xóa mềm
             // không chặn việc tái sử dụng mã khi seed lại.
             modelBuilder.Entity<Room>()
@@ -89,7 +97,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             modelBuilder.Entity<Booking>().ToTable(t =>
             {
                 t.HasCheckConstraint("CK_Bookings_GuestCount_Positive", "\"GuestCount\" > 0");
-                t.HasCheckConstraint("CK_Bookings_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Duyệt một phần', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
+                t.HasCheckConstraint("CK_Bookings_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Duyệt một phần', 'Chờ duyệt cấp 2', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
                 t.HasCheckConstraint("CK_Bookings_Approval_Audit",
                     "(\"ApprovalMode\" IS NULL AND \"ApprovedByUserId\" IS NULL AND \"ApprovedAt\" IS NULL) OR (\"ApprovalMode\" IN ('MANUAL', 'AUTO') AND \"ApprovedByUserId\" IS NOT NULL AND \"ApprovedAt\" IS NOT NULL)");
             });
@@ -104,7 +112,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             {
                 t.HasCheckConstraint("CK_BookingDetails_GuestCount_Positive", "\"GuestCount\" > 0");
                 t.HasCheckConstraint("CK_BookingDetails_Time_Range", "\"EndAt\" > \"StartAt\"");
-                t.HasCheckConstraint("CK_BookingDetails_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
+                t.HasCheckConstraint("CK_BookingDetails_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Chờ duyệt cấp 2', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
                 t.HasCheckConstraint("CK_BookingDetails_Approval_Audit",
                     "(\"ApprovalMode\" IS NULL AND \"ApprovedByUserId\" IS NULL AND \"ApprovedAt\" IS NULL) OR (\"ApprovalMode\" IN ('MANUAL', 'AUTO') AND \"ApprovedByUserId\" IS NOT NULL AND \"ApprovedAt\" IS NOT NULL)");
             });
