@@ -146,6 +146,9 @@ export const ApprovalHistoryModal: React.FC<ApprovalHistoryModalProps> = ({
                       <span className={`history-badge ${getStatusBadgeClass(h.statusName)}`}>
                         {h.statusName}
                       </span>
+                      {(h.level === 1 || h.level === 2) && (
+                        <span className="history-badge status-default">Cấp {h.level}</span>
+                      )}
                       <time className="history-time" dateTime={h.decidedAt}>
                         {formatDateTime(h.decidedAt)}
                       </time>

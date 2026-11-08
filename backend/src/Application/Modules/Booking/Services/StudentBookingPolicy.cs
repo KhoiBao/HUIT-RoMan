@@ -34,6 +34,20 @@ namespace HUIT_RoMan.Application.Modules.Booking.Services
         }
 
         /// <summary>
+        /// Phòng hội thảo/hội trường: không thuộc giờ phục vụ của Thư viện
+        /// (không chịu quy định nghỉ Chủ Nhật và khung giờ 07:00–20:00).
+        /// </summary>
+        public static bool IsHallRoomType(string? roomTypeName)
+        {
+            if (string.IsNullOrWhiteSpace(roomTypeName)) return false;
+            var normalized = roomTypeName.Trim().ToLowerInvariant();
+            return normalized.Contains("hội thảo")
+                || normalized.Contains("hoi thao")
+                || normalized.Contains("hội trường")
+                || normalized.Contains("hoi truong");
+        }
+
+        /// <summary>
         /// Kiểm tra một lượt đặt phòng của sinh viên theo giờ UTC.
         /// Trả về thông báo lỗi, hoặc null nếu hợp lệ.
         /// </summary>

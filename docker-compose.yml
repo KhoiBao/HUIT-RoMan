@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-LibraryDb}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD chua duoc dat trong file .env}
     ports:
       # 5433 ở máy host để không đụng PostgreSQL local thường dùng 5432.
       - "${DB_PORT:-5433}:5432"
@@ -29,14 +29,19 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_HTTP_PORTS: "8080"
-      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB:-LibraryDb};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-123}"
-      JwtSettings__Secret: ${JWT_SECRET:-super_secret_key_for_development_huit_roman_12345}
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB:-LibraryDb};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD chua duoc dat trong file .env}"
+      JwtSettings__Secret: ${JWT_SECRET:?JWT_SECRET chua duoc dat trong file .env}
       JwtSettings__Issuer: HUIT-RoMan-API
       JwtSettings__Audience: HUIT-RoMan-Client
       Database__AutoMigrate: "true"
+      SmtpSettings__UserName: ${SMTP_USER:-}
+      SmtpSettings__Password: ${SMTP_PASSWORD:-}
+      SmtpSettings__SenderEmail: ${SMTP_SENDER_EMAIL:-}
+      SmtpSettings__SenderName: ${SMTP_SENDER_NAME:-}
+      SmtpSettings__EnableEmail: ${SMTP_ENABLE_EMAIL:-true}
       StorageSettings__Endpoint: ${MINIO_ENDPOINT:-minio:9000}
-      StorageSettings__AccessKey: ${MINIO_ROOT_USER:-huit_admin}
-      StorageSettings__SecretKey: ${MINIO_ROOT_PASSWORD:-HuitRoMan@2026}
+      StorageSettings__AccessKey: ${MINIO_ROOT_USER:?MINIO_ROOT_USER chua duoc dat trong file .env}
+      StorageSettings__SecretKey: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD chua duoc dat trong file .env}
       StorageSettings__BucketName: ${MINIO_BUCKET_NAME:-violations}
       StorageSettings__UseSsl: "false"
     ports:
@@ -65,8 +70,8 @@ services:
     container_name: huit-roman-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-huit_admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-HuitRoMan@2026}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER chua duoc dat trong file .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD chua duoc dat trong file .env}
     ports:
       - "${MINIO_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"

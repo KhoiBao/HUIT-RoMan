@@ -28,7 +28,7 @@ enum _BookingFilter {
     final status = booking.status;
     return switch (this) {
       _BookingFilter.all => true,
-      _BookingFilter.pending => status == BookingStatus.pending,
+      _BookingFilter.pending => status.isAwaitingDecision,
       _BookingFilter.approved =>
         status == BookingStatus.approved ||
             status == BookingStatus.partiallyApproved,

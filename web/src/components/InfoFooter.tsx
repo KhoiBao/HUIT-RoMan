@@ -20,7 +20,7 @@ export default function InfoFooter() {
             <div className="roman-footer-brand">
               <Link to="/home" className="roman-footer-logo">
                 <span>
-                  <strong>Hệ thống quản lý phòng dùng chung HUIT</strong>
+                  <strong>Hệ thống quản lý phòng họp thư viện HUIT</strong>
                   <small>HUIT · Phòng dùng chung</small>
                 </span>
               </Link>
@@ -59,10 +59,10 @@ export default function InfoFooter() {
               <h4>Quy định &amp; hỗ trợ</h4>
               <ul>
                 <li>
-                  <Link to="/home#quy-trinh">Quy trình 4 bước</Link>
+                  <Link to="/quy-dinh#huong-dan">Hướng dẫn sử dụng</Link>
                 </li>
                 <li>
-                  <Link to="/home#quy-trinh">Nội quy sử dụng phòng</Link>
+                  <Link to="/quy-dinh#noi-quy">Nội quy sử dụng phòng</Link>
                 </li>
                 <li>
                   <a
@@ -116,7 +116,7 @@ export default function InfoFooter() {
 
           <div className="roman-footer-bottom">
             <span>
-              © {year} Hệ thống quản lý phòng dùng chung HUIT. Bản quyền thuộc
+              © {year} Hệ thống quản lý phòng họp thư viện HUIT. Bản quyền thuộc
               Trường Đại học Công Thương TP.HCM.
             </span>
             <span>HUIT · Không gian học thuật dùng chung</span>

@@ -30,6 +30,11 @@ namespace HUIT_RoMan.Domain.Entities
         public int? DepartmentId { get; set; }
         public virtual Department Department { get; set; }
 
+        // OTP đặt lại mật khẩu (lưu hash, không lưu mã gốc)
+        public string? OtpHash { get; set; }
+        public DateTime? OtpExpiresAt { get; set; }
+        public int OtpFailedAttempts { get; set; }
+
         // Navigation properties
         public virtual Employee EmployeeProfile { get; set; }
         public virtual ICollection<ChatMessage> ChatMessages { get; set; } = new List<ChatMessage>();

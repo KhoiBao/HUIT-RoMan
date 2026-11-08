@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import HomeHero from "../components/HomeHero";
-import ProcessSection from "../components/ProcessSection";
 import RoomTypesSection from "../components/RoomTypesSection";
 import {
   buildRoomTypeSummaries,
@@ -191,8 +190,6 @@ export default function HomePage() {
       />
 
       <RoomTypesSection types={summaries} loading={loading && !snapshot} />
-
-      <ProcessSection />
     </div>
   );
 }

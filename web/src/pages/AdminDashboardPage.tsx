@@ -981,7 +981,7 @@ export default function AdminDashboardPage() {
           <div className="admin-sidebar-brand">
             <img
               src="/roman-logo-icon.png"
-              alt="HUIT RoMan"
+              alt="Hệ thống quản lý phòng họp thư viện HUIT"
               className="admin-brand-logo"
             />
             {!isSidebarCompact && (

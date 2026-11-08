@@ -51,6 +51,14 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(res);
         }
 
+        /// <summary>Tỷ lệ phòng trống theo từng khung giờ 07:00-21:00, trung bình trên khoảng ngày lọc</summary>
+        [HttpGet("vacancy")]
+        public async Task<IActionResult> GetVacancyStats([FromQuery] ReportFilterDto filter)
+        {
+            var res = await _reportService.GetVacancyReportAsync(filter);
+            return Ok(res);
+        }
+
         /// <summary>Xuất báo cáo dạng file CSV chuẩn UTF-8 có BOM</summary>
         [HttpGet("export")]
         public async Task<IActionResult> ExportCsv([FromQuery] string reportType, [FromQuery] ReportFilterDto filter)

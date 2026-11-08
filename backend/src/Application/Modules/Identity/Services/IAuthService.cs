@@ -8,6 +8,7 @@ namespace HUIT_RoMan.Application.Modules.Identity.Services
         Task<AuthResponse> LoginAsync(LoginRequest request);
         Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request);
         Task<bool> ResetPasswordAsync(ResetPasswordRequest request);
+        Task<bool> ChangePasswordAsync(int userId, ChangePasswordRequest request);
     }
 }
 

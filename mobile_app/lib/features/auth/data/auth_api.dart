@@ -19,19 +19,22 @@ class AuthApi {
     return SessionUser.fromJson(asMap(data));
   }
 
-  Future<String?> forgotPassword(String identifier) async {
-    final data = await _client.post(
-      '/api/Auth/forgot-password',
-      body: {'identifier': identifier},
-    );
-    return asMap(data)['resetToken'] as String?;
-  }
+  Future<void> forgotPassword(String identifier) => _client.post(
+        '/api/Auth/forgot-password',
+        body: {'identifier': identifier},
+      );
 
   Future<void> resetPassword(
           String identifier, String resetToken, String newPassword) =>
       _client.post('/api/Auth/reset-password', body: {
         'identifier': identifier,
         'resetToken': resetToken,
+        'newPassword': newPassword,
+      });
+
+  Future<void> changePassword(String currentPassword, String newPassword) =>
+      _client.post('/api/Auth/change-password', body: {
+        'currentPassword': currentPassword,
         'newPassword': newPassword,
       });
 }

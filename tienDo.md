@@ -1,13 +1,14 @@
-# BÁO CÁO TIẾN ĐỘ DỰ ÁN HUIT-ROMan
+# BÁO CÁO TIẾN ĐỘ DỰ ÁN — HỆ THỐNG QUẢN LÝ PHÒNG HỌP THƯ VIỆN HUIT
 
-**Hệ thống Quản lý Đăng ký và Khai thác Phòng Dùng Chung — Trường Đại học Công Thương TP.HCM (HUIT)**
+**Hệ thống quản lý phòng họp thư viện HUIT — Trường Đại học Công Thương TP.HCM**
 
 - **Mã đề tài:** CNTT-KLCN236
-- **Ngày review:** 28/10/2026
-- **Nhánh hiện tại:** `dev/Khoi` — HEAD `cdd07f8` (28/10/2026), working tree sạch, đã đồng bộ `origin/dev/Khoi`
-- **Phạm vi review:** backend ASP.NET Core, web React, database PostgreSQL, Docker, CI và tài liệu
+- **Ngày review:** 08/11/2026 (cập nhật từ bản 28/10/2026)
+- **Nhánh hiện tại:** `dev/Khoi` — HEAD `324608a` (07/11/2026); working tree còn các thay đổi 08/11 chưa commit (miễn phòng hội thảo khỏi giờ thư viện, trang Quy định, đổi tên hệ thống)
+- **Phạm vi review:** backend ASP.NET Core, web React, mobile Flutter, database PostgreSQL, Docker, CI và tài liệu
+- **Rubric đối chiếu:** `rubric_ch_m_i_m.md` (STT 6, CLO3–CLO4)
 
-> Báo cáo được viết lại từ việc đối chiếu trực tiếp mã nguồn tại HEAD `cdd07f8`, không chỉ dựa trên báo cáo cũ. Các số liệu build/test/migration bên dưới được chạy lại trong ngày 28/10/2026 trên đúng commit này.
+> Báo cáo được cập nhật từ việc đối chiếu trực tiếp mã nguồn ngày 08/11/2026 và rà từng dòng rubric chấm mới, không dựa trên báo cáo cũ. Các số liệu build/test/Docker bên dưới được chạy lại trong ngày 08/11/2026.
 
 ---
 
@@ -15,14 +16,15 @@
 
 | Nội dung | Kết quả |
 |---|---|
-| **Tiến độ tổng thể** | **~95%** |
-| Nhóm nghiệp vụ đã hoàn thành | 12 nhóm chính: xác thực, người dùng, phòng/thiết bị, đặt phòng, duyệt, lịch sử duyệt, lịch phòng, sử dụng/trả phòng, vi phạm, ca trực, báo cáo, feedback/đánh giá; kèm Notification Center & chat realtime |
-| Nhóm còn thiếu hoặc dở dang | Email thông báo SMTP, mobile Flutter |
-| **Backend** | 16 controller, **122 endpoint**, 26 entity, **8 migration**, 9 function/procedure; 1 project test với **78 test pass 100%**; 2 background service (tự động hủy no-show + nhắc lịch phòng) |
-| Web | 6 route, **13 tab quản trị**, 8 file test / **89 test pass 100%** |
-| Hạ tầng | Docker Compose 3 service (`db`, `api`, `web`), 3 container đang chạy; CI GitHub Actions 2 job |
-| Build hiện tại | Backend: **0 error**, 296 warning nullable (clean build); Web: build pass; lint **0 error / 58 warning** |
-| Rủi ro cao nhất | Reset mật khẩu chưa xác thực OTP; tài khoản bị khóa vẫn đăng nhập được; một số GET chưa kiểm tra quyền sở hữu; Redis/Nginx chưa đủ cho chat qua Docker |
+| **Tiến độ tổng thể** | **~97%** phần mềm (CLO3–CLO4); còn quyển báo cáo + slide (CLO5) |
+| Nhóm nghiệp vụ đã hoàn thành | 15 nhóm chính: xác thực (đổi mật khẩu + OTP an toàn), người dùng, phòng/thiết bị/báo cố, đặt phòng (idempotency + R-codes + quota sinh viên), duyệt nhiều cấp + điều chỉnh khi duyệt, lịch phòng, sử dụng/trả phòng, gia hạn có giới hạn, vi phạm + cấm mượn, ca trực, báo cáo (có tỷ lệ phòng trống theo khung giờ), feedback/đánh giá, Notification Center & chat realtime, **mobile Flutter đầy đủ** |
+| Nhóm còn thiếu hoặc dở dang | Tự khóa tài khoản khi sai mật khẩu liên tiếp (hiện chỉ chặn khi đăng nhập); phân quyền anonymous trên file đính kèm biên bản vi phạm; E2E/kiểm thử tải |
+| **Backend** | **19 controller, 163 endpoint**, **21 migration**, 9 function/procedure; 2 background service (no-show + nhắc lịch); **196 test pass** (26 file xUnit + SQLite) |
+| Web | 7 route (thêm `/quy-dinh`), 13 tab quản trị + trang Quy định; 16 file test / **136 test pass** |
+| Mobile Flutter | Ứng dụng đầy đủ: **~19 màn hình, 4 tab**, ánh xạ toàn bộ API; 23 file test / **68 test pass** |
+| Hạ tầng | Docker Compose 3 service (`db`, `api`, `web`), 3 container healthy; CI GitHub Actions 2 job |
+| Build hiện tại (08/11) | Backend `dotnet test` **196/196**; Web `tsc` sạch, vitest **136/136**, build pass; Mobile `flutter test` **68/68** |
+| Rủi ro còn lại | Không tự khóa tài khoản khi sai mật khẩu liên tiếp; anonymous đọc file đính kèm biên bản vi phạm; JWT secret/CORS vẫn rộng cho môi trường demo |
 
 **Điểm nổi bật**
 
@@ -34,15 +36,22 @@
 - **UI đặt phòng dạng bảng** có lọc ngày/trạng thái/tìm kiếm, nút Nhận phòng/Chi tiết/Hủy và luồng hủy 2 bước có lý do.
 - **Trang lịch phòng** hỗ trợ chế độ Ngày/Tuần/Tháng, timeline 07:00–20:00 (tự mở rộng nếu có lịch sớm/muộn), KPI, bộ lọc và bảng chi tiết.
 - **Báo cáo** bổ sung thống kê hủy theo nguồn (sinh viên / no-show / nhân sự / không rõ) và theo lý do.
-- **Kiểm thử backend đã có:** 57/57 test pass; web 87/87 test pass.
+- **Đổi mật khẩu self-service + quên mật khẩu OTP an toàn:** OTP CSPRNG lưu SHA-256 hash, hạn 10 phút, tối đa 5 lần thử, không trả OTP trong response; chặn đăng nhập khi tài khoản khóa/đình chỉ.
+- **Duyệt nhiều cấp cho phòng đặc biệt:** `RoomType.RequiresSecondApproval`, trạng thái "Chờ duyệt cấp 2", điều chỉnh phòng/thời gian ngay khi duyệt, email + thông báo theo từng cấp, ApprovalHistory ghi Level.
+- **Nghiệp vụ đặt phòng tự động hóa:** R-codes từ chối R01–R13, trùng lịch → từ chối kèm email gợi ý phòng/khung khác, quota sinh viên 2 lượt/tuần, gia hạn tối đa 60 phút cho mỗi đơn, idempotency key chống tạo trùng đơn.
+- **Báo cáo tỷ lệ phòng trống theo từng thời điểm** (endpoint `vacancy` + sub-tab riêng trên Web, xuất CSV).
+- **Mobile Flutter đầy đủ** cho sinh viên/giảng viên: tra cứu, đặt, gia hạn, check-in, lịch sử sử dụng/vi phạm, thông báo, chat, đánh giá, đổi mật khẩu.
+- **Phòng hội thảo/hội trường được miễn khung giờ thư viện** (không bị chặn Chủ Nhật/giờ phục vụ 07:00–20:00); phòng thư viện giữ nguyên quy định.
+- **Trang Quy định `/quy-dinh`** (Hướng dẫn sử dụng + Nội quy + quy định thư viện) thay cho section "Quy trình 4 bước"; hệ thống đổi tên "Hệ thống quản lý phòng họp thư viện HUIT".
+- **Kiểm thử 3 nền tảng pass (08/11):** backend 196/196, web 136/136, mobile 68/68.
 
 **Việc còn thiếu để nghiệm thu**
 
-1. Sửa lỗ hổng reset mật khẩu và kiểm tra trạng thái tài khoản khi đăng nhập.
-2. Bổ sung Notification Center + email kết quả duyệt + nhắc lịch; hiện no-show chỉ ghi DB, người dùng chưa thấy thông báo trên UI.
-3. Chốt phương án Redis và proxy `/hubs/` cho SignalR khi chạy qua Nginx.
-4. Bổ sung E2E, kiểm thử tải và đưa `dotnet test`/lint vào CI.
-5. Mobile Flutter (nếu đề tài vẫn yêu cầu).
+1. Tự khóa tài khoản: tăng `AccessFailedCount`/set `LockoutEnd` khi sai mật khẩu liên tiếp (hiện chỉ kiểm tra khi đăng nhập).
+2. Phân quyền file đính kèm biên bản vi phạm (hiện anonymous truy cập được).
+3. E2E + kiểm thử tải; đưa `dotnet test`/lint vào CI (web test đã có trong CI).
+4. Dọn warning nullable backend + lint web; tách file UI lớn.
+5. Quyển báo cáo + slide thuyết trình (CLO5) — phần còn lại của đề tài.
 
 ---
 
@@ -50,25 +59,26 @@
 
 | Hạng mục | Trạng thái | % | Căn cứ / ghi chú |
 |---|---|---|---|
-| Xác thực & phân quyền | Hoàn thiện chức năng, còn lỗ hổng | **90%** | JWT 7 ngày, 4 role, khóa/mở tài khoản; thiếu kiểm tra lockout khi login, refresh/logout, reset OTP an toàn |
+| Xác thực & phân quyền | Hoàn thành | **95%** | Đổi mật khẩu + OTP an toàn (hash, hạn 10 phút, max 5 lần), chặn lockout/đình chỉ khi đăng nhập; thiếu cơ chế tự set `LockoutEnd` |
 | Quản lý người dùng & danh mục | Hoàn thành | **100%** | Users, Employees, Departments; CRUD, tìm kiếm, đổi role/trạng thái |
-| Quản lý phòng, loại phòng, thiết bị | Hoàn thành | **100%** | CRUD phòng/loại phòng/kho thiết bị; 7 loại phòng, 105 phòng trên DB hiện tại; API phân trang; mã phòng unique |
-| Đặt phòng & duyệt đơn | Hoàn thành | **100%** | Đặt nhiều phòng, theo tiết/giờ; ma trận quyền theo vai trò; hủy có lý do; duyệt toàn bộ hoặc từng chi tiết |
-| Lịch phòng & phòng trống | Hoàn thành | **100%** | Lịch Ngày/Tuần/Tháng; API lịch theo khoảng ngày; timeline, KPI, bộ lọc |
-| Quản lý sử dụng, check-in/out | Hoàn thành | **100%** | Cửa sổ check-in `[T−15m, T)`; no-show tự động hủy; trả phòng + checklist hiện trạng |
-| Xử lý vi phạm & cấm mượn | Hoàn thành | **100%** | Biên bản, loại vi phạm, lệnh cấm, kiểm tra eligibility, thống kê |
-| Ca trực & nhật ký trực | Hoàn thành | **100%** | CRUD ca, phân nhiều nhân sự, trạng thái, nhật ký bàn giao, thống kê |
-| Báo cáo & thống kê | Hoàn thành | **100%** | 4 API báo cáo + CSV; KPI, lọc 7/30/90 ngày, quý, năm; breakdown hủy theo nguồn/lý do |
-| Chat realtime | Hoàn thiện ứng dụng | **90%** | SignalR hub, REST, phân quyền hội thoại, typing/read; thiếu Redis và proxy `/hubs` qua Nginx |
-| Thông báo, email, nhắc lịch | Hoàn thành phần thông báo & nhắc lịch | **85%** | Notification Center đầy đủ API + Web UI; background watcher nhắc lịch sắp đến/hết giờ; chỉ còn thiếu email SMTP |
-| Feedback & đánh giá | Hoàn thành | **100%** | Module FeedbackService + FeedbacksController + DTOs + Modal đánh giá sao/nhận xét trên Web React + tổng hợp sao phòng + unit tests |
-| Giao diện Web React | Hoàn thiện | **100%** | 6 route, 13 tab quản trị; toàn bộ màn hình nghiệp vụ đã commit |
-| Trang chủ & Portal | Hoàn thiện | **100%** | Đã commit; 12 ảnh trong `web/public/images/`, không còn ảnh hero trỏ sai |
-| Mobile Flutter | Chưa triển khai | **0%** | `mobile/` chỉ có tài liệu đặc tả, chưa có source |
-| Kiểm thử | Đang thực hiện | **75%** | 57/57 test backend, 87/87 test web; chưa có E2E, tải, bảo mật tự động |
-| Docker & CI | Hoàn thiện | **90%** | Compose 3 service + healthcheck + CI; CI chưa chạy `dotnet test`/lint, chưa có CD/monitoring |
-| Tài liệu | Khá đầy đủ, có chỗ lỗi thời | **70%** | README/docker/backend docs tốt; `setup.bat`, script Redis đã cũ |
-| Bảo mật & hardening | Cần tăng cường | **50%** | JWT/role/soft-delete ổn; còn lỗi reset OTP, lockout, CORS, secret mặc định, IDOR |
+| Quản lý phòng, loại phòng, thiết bị | Hoàn thành | **100%** | CRUD phòng/loại phòng/thiết bị + phân bổ theo phòng; phòng hội thảo miễn giờ thư viện (08/11) |
+| Theo dõi thiết bị & báo cố | Hoàn thành | **100%** | IncidentReports 10 endpoint + AdminIncidentsTab; phòng "Bảo trì" khi trả phòng có bất thường |
+| Đặt phòng & duyệt đơn | Hoàn thành | **100%** | Idempotency, R-codes R01–R13, quota sinh viên, **duyệt nhiều cấp + điều chỉnh phòng/thời gian khi duyệt** |
+| Lịch phòng & phòng trống | Hoàn thành | **100%** | Ngày/Tuần/Tháng; API lịch theo khoảng ngày; timeline, KPI |
+| Quản lý sử dụng, check-in/out | Hoàn thành | **100%** | Cửa sổ [T−15m, T); no-show tự động; checklist trả phòng; gia hạn ≤ 60 phút cho mỗi đơn |
+| Xử lý vi phạm & cấm mượn | Hoàn thành | **100%** | Biên bản + thông báo/email, lệnh cấm, eligibility, quota 2 lượt/tuần sinh viên |
+| Ca trực & nhật ký trực | Hoàn thành | **100%** | CRUD ca, phân nhiều nhân sự, nhật ký bàn giao, thống kê |
+| Tìm kiếm hợp nhất | Hoàn thành | **100%** | API search phòng/người/phiếu/biên bản + Ctrl+K |
+| Báo cáo & thống kê | Hoàn thành | **100%** | 4 API + **vacancy theo khung giờ** + CSV; breakdown hủy |
+| Chat realtime | Hoàn thành | **100%** | SignalR + REST; Nginx proxy `/hubs`; Redis đã bỏ (in-memory) |
+| Thông báo, email, nhắc lịch | Hoàn thành | **100%** | Notification Center, email SMTP kết quả duyệt/vi phạm, nhắc lịch 30'/15' chạy nền |
+| Feedback & đánh giá | Hoàn thành | **100%** | Feedback API + modal sao trên Web + sheet trên Mobile |
+| Giao diện Web React | Hoàn thiện | **100%** | 7 route, 13 tab quản trị + trang Quy định; đổi mật khẩu qua UserProfileModal |
+| Mobile Flutter | Hoàn thành chức năng | **90%** | ~19 màn hình, 4 tab, đủ luồng đặt/phòng/viễn/đánh giá; 68 test pass; chưa chạy thiết bị thật/E2E |
+| Kiểm thử | Tốt | **85%** | Backend 196, web 136, mobile 68 — pass; chưa E2E/tải |
+| Docker & CI | Hoàn thiện | **90%** | 3 container healthy; CI chưa chạy `dotnet test`/lint |
+| Tài liệu | Cập nhật 08/11 | **85%** | tienDo.md đối chiếu rubric mới; README tốt |
+| Bảo mật & hardening | Cần bổ sung nhỏ | **75%** | OTP fix, lockout check, role guards (SecurityGuardsTests 13 test); còn auto-lockout, attachment anon, CORS/secret |
 
 ---
 
@@ -77,16 +87,16 @@
 ### 3.1. Backend
 
 - **.NET 8 Web API**, tổ chức Clean Architecture 4 project:
-  - `Domain`: 26 entity nghiệp vụ.
+  - `Domain`: 34 file entity/hằng số nghiệp vụ (mới so với 26 cũ: IncidentReport, SessionReminder, UserRestriction, ViolationAttachment, BookingExtension, ApprovalHistory, Feedback, Notification…).
   - `Application`: service + DTO, nghiệp vụ theo module.
   - `Infrastructure`: EF Core, repository, migration, seeder, stored procedure.
   - `API`: controller mỏng, JWT, Swagger, SignalR hub, background service.
 - **Project test riêng:** `backend/tests/HUIT-RoMan.Tests` dùng xUnit + SQLite in-memory.
-- **PostgreSQL 16** qua Npgsql EF Core 8; **8 migration** đã áp trên DB Docker hiện tại.
-- **15 controller, 115 endpoint**; Identity cho user/role; JWT Bearer; Swagger có nút Authorize.
+- **PostgreSQL 16** qua Npgsql EF Core 8; **21 migration** đã áp trên DB Docker hiện tại (gần nhất: `AddBookingIdempotencyKey` 07/11; `AddPasswordOtpFields`, `AddMultiLevelApproval`, `RemoveUnusedIdentityColumns` 08/11).
+- **19 controller, 163 endpoint**; Identity cho user/role; JWT Bearer; Swagger có nút Authorize.
 - **SignalR** cho chat realtime; có code Redis backplane tùy chọn.
 - **Soft-delete** bằng global query filter cho entity kế thừa `ISoftDelete`.
-- **Background service:** `BookingNoShowWatcher` chạy mỗi 30 giây (cấu hình `NoShowWatcher:IntervalSeconds`), gọi `BookingNoShowService` để tự hủy đơn quá giờ chưa check-in.
+- **Background service (2):** `BookingNoShowWatcher` (tự hủy đơn quá giờ chưa check-in) và `BookingReminderWatcher` (nhắc trước 30 phút khi bắt đầu phiên, 15 phút khi kết thúc) — chạy nền định kỳ, idempotent.
 - **Policy nghiệp vụ tách riêng:** `StudentBookingPolicy`, `BookingRoomPermissionPolicy`, `BookingCheckInPolicy`, `BookingCancelPolicy`.
 - **Múi giờ:** DB lưu UTC; client gửi UTC; service chuyển sang giờ Việt Nam (UTC+7) khi xác định ngày/khoảng tiết rồi đổi lại UTC trước khi lưu.
 - **Stored procedure/function (9):** kiểm tra trùng lịch, lịch phòng, phòng trống, duyệt đơn, cập nhật trạng thái phòng, tổng hợp báo cáo, ghi vi phạm + cấm mượn, kiểm tra eligibility, xử lý trả phòng. Code hiện chỉ gọi 2 function/procedure (`fn_get_available_rooms`, `sp_process_room_checkout`); 7 phần còn lại là SQL định nghĩa sẵn nhưng chưa dùng.
@@ -97,7 +107,7 @@
 - **React Router 7**, Axios, `@microsoft/signalr`.
 - **Vitest** cho logic thuần trong `web/src/lib/`.
 - Cấu trúc: `pages/`, `components/`, `components/admin/`, `lib/`, `auth/`.
-- 6 route: `/login`, `/home`, `/dat-phong`, `/lich-phong`, `/staff`, `/admin`; 13 tab quản trị.
+- 7 route: `/login`, `/home`, `/quy-dinh`, `/dat-phong`, `/lich-phong`, `/staff`, `/admin`; 13 tab quản trị; đổi mật khẩu qua `UserProfileModal` mở từ header; trang Quy định thay "Quy trình 4 bước" trên trang chủ.
 - Logic validate/tính toán đặt phòng, lịch, báo cáo, chat nằm trong `lib/` và có test.
 - Các màn hình lớn: `BookingPage.tsx` (3.026 dòng), `AdminDashboardPage.tsx` (2.223 dòng), `SchedulePage.tsx` (1.724 dòng).
 
@@ -153,6 +163,18 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 - **Migration mới áp thành công trên dữ liệu cũ:** không có lỗi unique index, dù volume đã có dữ liệu seed từ trước.
 - **Không còn thay đổi chưa commit:** khối WIP lớn trước đây đã được commit và push trong `cdd07f8`.
 
+### 4.4. Kiểm chứng bổ sung ngày 08/11/2026
+
+| Lệnh / hạng mục | Kết quả |
+|---|---|
+| `dotnet test tests/HUIT-RoMan.Tests` | **196/196 pass**, 0 failed, 26 file test |
+| `npx tsc --noEmit && npx vitest run && npm run build` (web) | tsc sạch; **136/136 test** (16 file); build pass |
+| `flutter test` (mobile_app) | **68/68 pass** (23 file: 17 unit + 6 widget) |
+| `docker compose ps` + curl | db/api/web healthy; `/home`, `/quy-dinh`, `/swagger` HTTP 200 |
+| API nghiệp vụ trên container thật | HT01 (phòng hội thảo) Chủ Nhật đặt được → "Chờ duyệt"; TV01 (phòng thư viện) Chủ Nhật bị chặn `R11_NGOAI_GIO_THU_VIEN` |
+| Migrations trên volume | 21 migration, gồm `AddPasswordOtpFields`, `AddMultiLevelApproval`, `RemoveUnusedIdentityColumns` (08/11) |
+| Rubric STT 6 (CLO3) | 16/16 dòng chức năng có mã nguồn + UI; chi tiết tại mục 6 |
+
 ---
 
 ## 5. CHI TIẾT TỪNG PHÂN HỆ
@@ -167,10 +189,15 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 - Quên mật khẩu + đặt lại mật khẩu qua OTP.
 - Frontend: `LoginPage`, `ForgotPasswordModal`, `AuthContext`, `RequireAuth`, `RequireStaff`.
 
-**Vấn đề cần sửa**
+**Đã sửa (07–08/11/2026)**
 
-- `ResetPasswordAsync` **không kiểm tra OTP** có khớp hay không; OTP còn được trả thẳng trong response và hiển thị trên UI. Bất kỳ ai biết email cũng có thể đặt lại mật khẩu.
-- `LoginAsync` không kiểm tra `Status`/`LockoutEnd`, nên tài khoản bị khóa vẫn đăng nhập được nếu còn mật khẩu.
+- `ResetPasswordAsync` giờ **bắt buộc OTP**: OTP CSPRNG 6 số, lưu SHA-256 hash, hạn 10 phút, tối đa 5 lần thử, KHÔNG trả OTP trong response (chỉ gửi email mask).
+- `LoginAsync` kiểm tra `Status` + `LockoutEnd`: tài khoản khóa/đình chỉ không đăng nhập được (test trong `SecurityGuardsTests`).
+- Bổ sung đổi mật khẩu self-service: `POST /api/Auth/change-password` (AuthController.cs:80-100) + modal `UserProfileModal` (Web) + `ChangePasswordPage` (Mobile).
+
+**Còn lại**
+
+- Chưa có cơ chế tự tăng `AccessFailedCount`/set `LockoutEnd` khi sai mật khẩu liên tiếp (kiểm tra có, tự khóa chưa có).
 - Chưa có refresh token, thu hồi token, đăng xuất phía server.
 - JWT secret đang dùng giá trị mặc định trong `appsettings.json`/compose.
 - CORS đang cho phép **mọi origin** kèm credentials (`SetIsOriginAllowed(_ => true)` + `AllowCredentials()`), phục vụ LAN/tunnel nhưng quá rộng cho production.
@@ -186,7 +213,7 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 
 **Ghi chú**
 
-- Nghiệp vụ khóa tài khoản đã ghi `LockoutEnd`, nhưng login chưa tận dụng (xem 5.1).
+- Nghiệp vụ khóa tài khoản ghi `LockoutEnd`; login đã kiểm tra và chặn (xem 5.1). Còn thiếu: tự set `LockoutEnd` khi sai mật khẩu liên tiếp.
 
 ### 5.3. Phòng, loại phòng & thiết bị
 
@@ -246,16 +273,18 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 
 **Hạn chế**
 
-- `GET /api/Bookings/{id}` chưa kiểm tra người dùng có thuộc đơn hay không (IDOR).
+- Đã bổ sung kiểm tra quyền/role guards cho GET đơn + phiên kèm `SecurityGuardsTests` (08/11).
 
 ### 5.5. Duyệt đơn
 
 **Đã có**
 
 - Duyệt/từ chối cả đơn hoặc từng chi tiết phòng.
+- **Duyệt nhiều cấp cho phòng đặc biệt (mới 08/11):** `RoomType.RequiresSecondApproval` — đơn mới tạo ở "Chờ duyệt" (cấp 1), duyệt cấp 1 xong chuyển "Chờ duyệt cấp 2", cấp 2 duyệt mới hoàn tất. Email + Notification có nội dung khác nhau theo cấp; ApprovalHistory ghi Level.
+- **Điều chỉnh khi duyệt (mới 08/11):** chấp nhận `NewRoomId` (đổi phòng) và `NewStartAt`/`NewEndAt` (đổi thời gian) khi duyệt từng chi tiết; UI `AdminBookingApprovalTab` cho chọn phòng thay thế + sửa giờ.
+- **R-codes từ chối R01–R13** (`BookingReasonCodes`); trùng lịch → tạo đơn "Từ chối" kèm email gợi ý phòng/khung giờ khác.
 - Tự tính lại trạng thái đơn: Đã duyệt / Duyệt một phần / Từ chối.
-- Nhập lý do từ chối; lọc, tìm kiếm đơn.
-- UI: `AdminBookingApprovalTab`.
+- UI: `AdminBookingApprovalTab` (kèm bulk duyệt nhiều đơn).
 
 ### 5.6. Lịch phòng
 
@@ -299,8 +328,8 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 **Hạn chế**
 
 - Một số GET (ví dụ danh sách session, summary) gọi `SyncApprovedBookingDetailsAsync()` và tạo dữ liệu — hành vi ghi trong GET, không thân thiện với cache/retry.
-- `GET /api/UsageSessions/{id}` chưa kiểm tra quyền sở hữu.
-- Bản ghi `Notification` do no-show tạo ra **chưa có API/UI** để người dùng đọc; người dùng chỉ thấy trạng thái đơn đổi trong danh sách.
+- Đã bổ sung kiểm tra quyền/role guards cho `GET /api/UsageSessions/{id}` (08/11).
+- Thông báo no-show đã hiển thị qua Notification Center (API + chuông thông báo trên Web).
 
 ### 5.8. Vi phạm & cấm mượn phòng
 
@@ -325,7 +354,8 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 **Đã có**
 
 - `GET /api/Reports/overview`, `/bookings`, `/room-usage`, `/violations`, `/export`.
-- Xuất CSV UTF-8 có BOM, mở tốt bằng Excel.
+- Xuất CSV UTF-8 có BOM, mở tốt bằng Excel (bookings/room-usage/violations/vacancy).
+- **Tỷ lệ phòng trống theo từng thời điểm (mới 08/11):** `GET /api/Reports/vacancy` → `GetVacancyReportAsync` (ReportService.cs:762-823) trả HourSlots, AvgVacancyRooms, VacancyRate; UI sub-tab "vacancy" trong AdminReportsTab (bảng + highlight khung giờ trống cao/thấp).
 - UI: 4 KPI, lọc 7/30/90 ngày, quý, năm, tùy chọn; biểu đồ và bảng xếp hạng.
 - **Breakdown hủy đơn mới:**
   - `CancelledByStudent`, `CancelledByNoShow`, `CancelledByStaff`, `CancelledUnknownSource`.
@@ -347,13 +377,12 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 - Xác định nhân viên đang trực theo ca để hiển thị cho người dùng.
 - UI người dùng: `LiveChatWidget`; UI nhân sự: `AdminChatTab`.
 
-**Hạn chế**
+**Đã xử lý (30/10/2026)**
 
-- `docker-compose.yml` không có service Redis, nhưng `appsettings.json` vẫn cấu hình `Redis:ConnectionString = localhost:6379`. Backplane vẫn được bật nên chat có thể không gửi/nhận ổn định khi không có Redis.
-- `web/nginx.conf` chưa proxy `/hubs/`, nên khi chạy qua web Docker (cổng 5173) SignalR handshake bị trả về `index.html`; chat realtime chỉ chạy ổn khi dùng Vite dev hoặc gọi trực tiếp API.
-- Muốn scale-out nhiều instance API phải thêm Redis; nếu chỉ chạy một instance nên bỏ cấu hình Redis để dùng in-memory rõ ràng.
+- Đã bỏ Redis: xoá gói SignalR backplane + section cấu hình; chat chạy in-memory (một instance API).
+- `web/nginx.conf` đã proxy `/hubs/` (kèm `Upgrade`/`Connection`) — chat realtime hoạt động qua Docker.
 
-### 5.12. Các phần chưa triển khai
+### 5.12. Các phần bổ sung sau review 28/10 (trạng thái đến 08/11)
 
 | Phần | Hiện trạng |
 |---|---|
@@ -362,46 +391,40 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 | Nhắc lịch sắp đến/sắp kết thúc | Đã hoàn thành: `BookingReminderService` + `BookingReminderWatcher` quét nền định kỳ |
 | Feedback/đánh giá sau sử dụng | Đã hoàn thành: `FeedbacksController` + `FeedbackService` + `FeedbackModal.tsx` trên Web React |
 | Lịch sử duyệt | Đã hoàn thành: `ApprovalHistory` audit trail ghi nhận tự động + `ApprovalHistoryModal.tsx` trên Web React |
-| Bảo trì thiết bị | Có entity `MaintenanceRecord`, chưa có API/UI |
-| Mobile Flutter | Chỉ có tài liệu đặc tả trong `mobile/` |
+| Bảo trì/báo cố thiết bị | Đã hoàn thành qua `IncidentReports` (10 endpoint + AdminIncidentsTab, migration `AddIncidentReports` + `AddIncidentReportDetails`); `MaintenanceRecord`/`EquipmentConditionLog` còn ở mức entity, chưa có API |
+| Mobile Flutter | Đã hoàn thành: `mobile_app/` (Flutter, `roman_mobile` 1.0.0+1), ~19 màn hình, 4 tab, ánh xạ toàn bộ API; 23 file test / 68 test |
+| Duyệt nhiều cấp + điều chỉnh khi duyệt | Đã hoàn thành (08/11): migration `AddMultiLevelApproval` + service 2 cấp + UI điều chỉnh phòng/thời gian |
+| Báo cáo tỷ lệ phòng trống theo thời điểm | Đã hoàn thành (08/11): endpoint `vacancy` + sub-tab UI + CSV |
+| Đổi mật khẩu self-service + OTP an toàn | Đã hoàn thành (07–08/11): endpoint change-password, OTP hash/hạn/max 5 lần, migration `AddPasswordOtpFields` |
+| Trang Quy định + đổi tên hệ thống | Đã hoàn thành (08/11): route `/quy-dinh`, đổi tên "Hệ thống quản lý phòng họp thư viện HUIT" trên web + email + SenderName |
 
 ---
 
-## 6. ĐỐI CHIẾU 29 YÊU CẦU CỦA ĐỀ TÀI
+## 6. ĐỐI CHIẾU RUBRIC CHẤM MỚI (`rubric_ch_m_i_m.md` — STT 6, CLO3/CLO4)
 
-| # | Yêu cầu | Trạng thái | Ghi chú |
+| Dòng rubric | Nội dung | Trạng thái | Bằng chứng chính |
 |---|---|---|---|
-| 1 | Thiết kế giao diện Web ReactJS | Đạt | 6 route, 13 tab quản trị; trang chủ/portal đã commit |
-| 2 | Thiết kế giao diện Mobile Flutter | Chưa | 0%, chỉ có tài liệu |
-| 3 | Màn hình đăng nhập, quản lý phòng, đăng ký, duyệt, thông báo | Đạt | Đủ màn hình chính + Notification Center chuông thông báo |
-| 4 | Báo cáo tiến độ | Đạt | File này |
-| 5 | Backend ASP.NET Core Web API | Đạt | 16 controller, 122 endpoint |
-| 6 | Quản lý danh mục: loại phòng, phòng, nhân viên, sinh viên, giảng viên | Đạt | CRUD + tìm kiếm |
-| 7 | Quản lý thiết bị trong phòng | Đạt | Kho thiết bị + phân bổ theo phòng |
-| 8 | API xác thực & phân quyền | Một phần | JWT/role ổn; còn lỗi lockout và reset OTP |
-| 9 | Quản lý phòng | Đạt | CRUD + soft-delete + mã phòng unique |
-| 10 | Quản lý trạng thái phòng | Đạt | Trống / Đang sử dụng / Bảo trì |
-| 11 | Đăng ký mượn phòng | Đạt | Đa phòng, theo tiết/giờ; ma trận quyền + 2 bộ tiết |
-| 12 | Kiểm tra lịch phòng | Đạt | Lịch Ngày/Tuần/Tháng + API lịch theo khoảng ngày |
-| 13 | Duyệt đăng ký mượn phòng | Đạt | Duyệt cả đơn hoặc từng phòng |
-| 14 | Gửi email thông báo kết quả duyệt | Đạt | SmtpSettings + IEmailService + EmailService; tự động gửi email HTML khi duyệt đơn, từ chối hoặc hủy đơn |
-| 15 | Quản lý quá trình sử dụng phòng | Đạt | UsageSession + check-in/out + no-show tự động |
-| 16 | Nhắc lịch sắp đến và sắp kết thúc | Đạt | BookingReminderService + BookingReminderWatcher quét nền định kỳ |
-| 17 | Xác nhận trả phòng | Đạt | Checklist + cập nhật trạng thái phòng |
-| 18 | Xử lý vi phạm | Đạt | Biên bản, chế tài, cấm mượn |
-| 19 | Ghi nhận biên bản vi phạm | Đạt | Tự tính thời hạn cấm |
-| 20 | Gửi thông báo nhắc nhở người sử dụng | Đạt | Thông báo duyệt đơn, hủy đơn no-show, nhắc lịch sắp đến/hết giờ |
-| 21 | Quản lý lịch trực nhân viên | Đạt | Ca trực + nhật ký + thống kê |
-| 22 | Tìm kiếm phòng, người mượn, phiếu mượn, biên bản | Đạt | API search + `Ctrl + K` |
-| 23 | Thống kê, báo cáo | Đạt | 4 API + CSV + breakdown hủy |
-| 24 | Thống kê tình trạng sử dụng phòng | Đạt | Giờ dùng, tỷ lệ lấp đầy, leaderboard |
-| 25 | Thống kê lượt mượn phòng | Đạt | Theo thời gian, trạng thái, khoa |
-| 26 | Thống kê vi phạm | Đạt | Mức độ, loại, đối tượng, lệnh cấm |
-| 27 | Hoàn thiện Web ReactJS và kết nối API | Đạt | Đã commit; ảnh/hero đầy đủ |
-| 28 | Mobile Flutter + chat realtime | Một phần | Chat hoàn thành; mobile 0% |
-| 29 | Kiểm thử toàn hệ thống | Một phần | 78 test backend (100% pass) + 89 test web (100% pass); thiếu E2E/tải/bảo mật |
+| CLO3 – 0.5 | Đăng nhập, đăng xuất, đổi mật khẩu, phân quyền người dùng | **Đạt** | `POST /api/Auth/login`, `POST /api/Auth/change-password` (AuthController.cs:80-100); OTP an toàn (AuthService.cs:142-216); 50+ `[Authorize(Roles=...)]`; UI LoginPage / UserProfileModal (Web) / ChangePasswordPage (Mobile) |
+| CLO3 – 0.25 | Quản lý danh mục thiết bị, quản lý thiết bị theo từng phòng | **Đạt** | EquipmentsController (6 endpoint) + EquipmentCategoriesController; gán/thu hồi thiết bị theo phòng (RoomsController.cs:106-123, RoomEquipmentService); AdminEquipmentsManagementTab + AdminEquipmentsModal |
+| CLO3 – 0.25 | Theo dõi sử dụng thiết bị – tình trạng thiết bị – ghi nhận hư hỏng sửa chữa | **Đạt** | IncidentReportsController.cs:23-107 (10 endpoint) + AdminIncidentsTab; trả phòng có bất thường → phòng "Bảo trì" (UsageService.cs:537-565); `MaintenanceRecord` chỉ còn entity |
+| CLO3 – 0.25 | Quản lý trạng thái phòng (trống/đang sử dụng/bảo trì), đăng ký sử dụng, kiểm tra phòng trống, kiểm tra trùng lịch | **Đạt** | PATCH `{id}/status` (RoomsController.cs:139-144) + `GET available` (:157); R01_TRUNG_LICH (BookingService.cs:281-286); exclusion constraint `EX_BookingDetails_Room_NoOverlap` |
+| CLO3 – 0.25 | Duyệt/từ chối yêu cầu, quy trình duyệt nhiều cấp → điều chỉnh phòng/thời gian → email + thông báo di động | **Đạt** | `RoomType.RequiresSecondApproval` (RoomType.cs:29); 2 cấp (BookingService.cs:607-758); NewRoomId/NewStartAt/NewEndAt (BookingService.cs:660-682, BookingDTOs.cs:144-145); email theo cấp (BookingService.cs:1976-2071); UI AdminBookingApprovalTab.cs:549-623; Mobile nhận Notification |
+| CLO3 – 0.25 | Gửi thông báo nhắc nhở khi người sử dụng vi phạm nội quy sử dụng phòng | **Đạt** | Lập biên bản → Notification + email (ViolationService.cs:519-551) |
+| CLO3 – 0.25 | Nhắc lịch sắp đến / sắp kết thúc | **Đạt** | BookingReminderService.cs:46-178 (trước 30 phút bắt đầu, 15 phút kết thúc) + BookingReminderWatcher chạy nền |
+| CLO3 – gộp | Xác nhận nhận phòng / trả phòng (ghi nhận bất thường) + gia hạn thời gian sử dụng | **Đạt** | Check-in [T−15m, T) (BookingCheckInPolicy.cs:16-52); checklist trả phòng DevicesOk/Cleaned/LightsOff/StaffNote (UsageService.cs:533-548); gia hạn ≤ 60 phút cho mỗi đơn (UsageService.cs:659-672, BookingQuotaPolicy.cs:16) |
+| CLO3 – 0.25 | Quản lý xử lý vi phạm (khoá quyền đăng ký với cá nhân vi phạm nhiều lần) | **Đạt** | UserRestriction theo RestrictDays (ViolationService.cs:487-506); chặn đặt khi bị cấm R04 (BookingService.cs:91); quota sinh viên 2 lượt/tuần R02 (BookingService.cs:217) |
+| CLO3 – 0.25 | Quản lý lịch trực của nhân viên – ghi nhận nhật ký trực | **Đạt** | ShiftsController.cs:57-123 (CRUD, phân ca, nhật ký); AdminShiftsTab |
+| CLO3 – 0.25 | Tìm kiếm: phòng, người mượn, phiếu mượn phòng, biên bản vi phạm | **Đạt** | RoomsController.cs:53, UsersController.cs:66, BookingsController.cs:55, ViolationsController.cs:220 `global-search`; Ctrl+K (AdminDashboardPage.tsx:210) |
+| CLO3 – 0.25 | Báo cáo, thống kê: tần suất phòng được sử dụng, tỷ lệ phòng trống theo từng thời điểm | **Đạt** | `GET /api/Reports/room-usage` (ReportService.cs:441); `GET /api/Reports/vacancy` (ReportService.cs:762-823); CSV (ReportService.cs:701-734); AdminReportsTab sub-tab vacancy |
+| CLO3 – 0.25 | Mobile kế thừa Web: tra cứu phòng trống, đăng ký – gia hạn, theo dõi trạng thái, lịch sử đăng ký/sử dụng/vi phạm | **Đạt** | mobile_app/lib/features: rooms_page, room_detail_page, booking_create_page, extend_session_sheet, bookings_page, booking_detail_page, usage_history_page, violation_history_page |
+| CLO3 – 0.25 | Mobile: nhận thông báo về tình hình sử dụng phòng | **Đạt** | notifications_page.dart + notifications_api.dart (unread-count, read, read-all) |
+| CLO3 – 0.25 | Mobile: chat với nhân viên trực | **Đạt** | chat_page.dart + chat_api.dart (`/api/Chat/*`); Web: LiveChatWidget + AdminChatTab |
+| CLO3 – 0.25 | Mobile: gửi phản hồi đánh giá về phòng/thiết bị/chất lượng phục vụ | **Đạt** | feedback_sheet.dart + feedback_api.dart; Web: FeedbackModal |
+| CLO4 – 0.75 | Kiểm thử và triển khai hệ thống | **Đạt một phần** | Backend 196/196, Web 136/136, Mobile 68/68 pass (08/11); Docker Compose 3 container healthy; còn thiếu E2E, kiểm thử tải, CI chưa chạy `dotnet test` |
+| STT 7–8 (CLO5.1) | Nội dung kiến thức + hình thức, định dạng quyển báo cáo | **Chưa làm** | Thuộc phần thuyết trình, ngoài phạm vi mã nguồn |
+| STT 9–10 (CLO5.2/CLO6) | Thái độ tác phong; phong cách báo cáo, slide | **Chưa làm** | Thuộc phần thuyết trình |
 
-**Tổng hợp:** 22 yêu cầu đạt, 4 yêu cầu một phần, 3 yêu cầu chưa triển khai.
+**Tổng hợp:** 16/16 dòng chức năng CLO3 đã có mã nguồn + UI trên cả Web và Mobile; CLO4 đạt phần lớn (test 3 nền tảng pass, Docker triển khai được). Còn 2 điểm nhỏ backend (tự khóa tài khoản, phân quyền attachment vi phạm) và phần CLO5 (báo cáo + slide).
 
 ---
 
@@ -411,42 +434,39 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 
 | Hạng mục | Kết quả | Ghi chú |
 |---|---|---|
-| Build backend (clean) | **0 error / 173 warning** | Clean build thành công với 0 error |
-| Unit/integration test backend | **78/78 pass (100%)** | xUnit + SQLite in-memory; 8 file test: Cancel, CheckIn, NoShow, RoleAndPeriod, ReportCancellation, NotificationAndReminder, FeedbackAndApprovalHistory, BookingApprovalEmail |
-| Unit test frontend | **89/89 pass (100%)** | 8 file: `notifications.test.ts`, `feedback.test.ts`, `homeContent.test.ts`, `auth.test.ts`, `booking.test.ts`, `home.test.ts`, `rooms.test.ts`, `schedule.test.ts` |
-| Build frontend | Pass | TypeScript check (`tsc -b`) & Vite production bundle thành công |
-| Lint frontend | Pass | 58 warning hooks/React, 0 error |
-| Docker Compose | OK | 3 container; `db`/`api` healthy; web HTTP 200 |
-| Migration PostgreSQL | OK | 8 migration; `Period.RoomTypeId`; unique `IX_Rooms_RoomCode`; 16+16 tiết |
-| API smoke test | OK | health, login, periods, paged rooms, schedules, notifications, feedbacks, approval-history, email-service |
+| Unit/integration test backend (08/11) | **196/196 pass (100%)** | xUnit + SQLite in-memory; 26 file test (7.2); tổng [Fact]/[Theory] = 194, runtime 196 do Theory nhân theo InlineData |
+| Unit test frontend (08/11) | **136/136 pass (100%)** | 16 file test; `tsc --noEmit` sạch; build Vite pass |
+| Unit/widget test mobile (08/11) | **68/68 pass (100%)** | 23 file: 17 unit + 6 widget (Flutter 3.47.9) |
+| Lint frontend | Pass (28/10) | 58 warning hooks/React, 0 error — chưa chạy lại ngày 08/11 |
+| Docker Compose (08/11) | OK | 3 container healthy; `/home`, `/quy-dinh`, `/swagger` HTTP 200 |
+| Migration PostgreSQL (08/11) | OK | 21 migration; gần nhất `AddPasswordOtpFields`, `AddMultiLevelApproval`, `RemoveUnusedIdentityColumns` |
+| API smoke test (08/11) | OK | Đặt phòng hội thảo Chủ Nhật thành công ("Chờ duyệt"); phòng thư viện Chủ Nhật bị chặn `R11_NGOAI_GIO_THU_VIEN`; login chặn tài khoản khóa/đình chỉ |
 
 ### 7.2. Phạm vi test hiện có
 
-**Backend — 78 test / 8 file:**
+**Backend — 196 test runtime / 26 file (nhóm chủ đề):**
 
-| File | Số test | Nội dung |
-|---|---:|---|
-| `BookingCheckInTests.cs` | 14 | Cửa sổ `[T−15m, T)`, check-in sớm/đúng giờ/quá giờ, đơn chưa duyệt/đã hủy, check-in lặp, tranh chấp đồng thời, check-in theo chi tiết |
-| `BookingCancelTests.cs` | 14 | Hạn 3 giờ, lý do bắt buộc, OTHER có/không chi tiết, đơn chưa duyệt/đã hủy/đã check-in, sai chủ sở hữu, 2 request đồng thời, admin hủy, hủy sau no-show |
-| `BookingNoShowTests.cs` | 8 | Quá hạn chưa check-in, đã check-in, trước giờ, chưa duyệt, đã hủy, chạy lặp idempotent, giải phóng phòng, 2 đơn cùng lúc |
-| `BookingRoleAndPeriodTests.cs` | 18 | 11+88 phòng, mã unique, 2 bộ 16 tiết, ma trận sinh viên/giảng viên, không trộn bộ tiết, trùng lịch, hủy/từ chối giải phóng chỗ |
-| `ReportCancellationTests.cs` | 3 | Phân biệt nguồn hủy, thống kê lý do, đơn bị từ chối không tính là hủy |
-| `NotificationAndReminderTests.cs` | 8 | Tạo thông báo khi duyệt/từ chối đơn, đếm chưa đọc, đánh dấu đã đọc, nhắc lịch sắp đến/sắp hết giờ |
-| `FeedbackAndApprovalHistoryTests.cs` | 8 | Gửi đánh giá 1-5 sao, cập nhật đánh giá, chặn đánh giá sai phòng, tổng hợp sao phòng, ghi nhận lịch sử duyệt (Duyệt / Từ chối / Quản lý hủy) |
-| `BookingApprovalEmailTests.cs` | 5 | Tự động gửi email khi duyệt/từ chối/hủy đơn, template HTML, cơ chế fallback/mock an toàn khi chưa cấu hình SMTP |
+- **Chính sách đặt phòng:** `BookingRoleAndPeriodTests` (18), `BookingCancelTests` (15), `BookingCheckInTests` (14), `BookingNoShowTests` (8), `StudentBookingAdvanceTests` (2), `StudentRoomVisibilityTests` (4), `LibraryHoursScopeTests` (4), `LibraryWorkingHoursTests` (7).
+- **Duyệt & lịch sử duyệt:** `BookingApprovalAuditTests` (13), `MultiLevelApprovalTests` (9), `BookingApprovalEmailTests` (7), `FeedbackAndApprovalHistoryTests` (8).
+- **Nghiệp vụ mới 07/11:** `BookingReasonCodeTests` (5), `BookingConflictRejectionTests` (4), `BookingQuotaPolicyTests` (5), `BookingQuotaTests` (6), `BookingExtensionCapTests` (4), `BookingIdempotencyTests` (5).
+- **Báo cáo, hệ thống & khác:** `VacancyReportServiceTests` (4), `ReportCancellationTests` (3), `NotificationAndReminderTests` (6), `ViolationServiceTests` (4), `ShiftStatusCompletionTests` (12), `SecurityGuardsTests` (13), `AuthServicePasswordTests` (7), `UserServiceCreateTests` (7).
 
-**Frontend — 89 test / 8 file:**
+**Frontend — 136 test / 16 file:**
 
-- `web/src/lib/notifications.test.ts`, `web/src/lib/feedback.test.ts`, `web/src/data/homeContent.test.ts`, `web/src/lib/auth.test.ts`, `web/src/lib/booking.test.ts`, `web/src/lib/home.test.ts`, `web/src/lib/rooms.test.ts`, `web/src/lib/schedule.test.ts`.
-- Bao phủ validate đăng nhập, validate đặt phòng, quy tắc sinh viên/giảng viên, chuyển đổi ngày/giờ, timeline, month grid, KPI, trạng thái phòng, thống kê trang chủ, định dạng báo cáo.
+- `booking` (39), `schedule` (33), `shifts` (10), `incidents` (7), `usage` (6), `rooms` / `reminders` / `penalties` / `bookingBulkAndCancel` (5 × 4), `notifications` / `home` / `dateTimeFormat` / `auth` / `AuthContext` (4 × 5), `reports` / `feedback` (2 × 2).
+- Bao phủ validate đặt phòng, quy tắc sinh viên/giảng viên, timeline, month grid, KPI, ca trực, báo cố, nhắc lịch, hình phạt, bulk duyệt/hủy, định dạng ngày/báo cáo.
+
+**Mobile — 68 test / 23 file (17 unit + 6 widget):**
+
+- Unit: api_client (5), booking_create_controller (5), booking_rules (4), booking_mapper (4), date_time_x (4), usage_feedback_mapper (4), chat_mapper (3), error_mapper (3), notification_mapper (3), session_reminders (3), timeline_layout (3), violation_record (3), validators (2), user_role (2), usage_extend (2), session_time_rules (2), room_mapper (2).
+- Widget: violation_history_page (3), usage_history_page (3), change_password_page (3), profile_page (2), login_page (2), status_badge (1).
 
 **Chưa có:**
 
 - Integration test API + PostgreSQL thật (test backend đang dùng SQLite in-memory).
 - E2E (Playwright/Cypress) cho luồng đầy đủ.
 - Kiểm thử tải/độ ổn định.
-- Test bảo mật/phân quyền tự động.
-- CI chưa chạy `dotnet test` và lint.
+- CI chưa chạy `dotnet test` và lint (test bảo mật/phân quyền đã có: `SecurityGuardsTests`).
 
 ### 7.3. Nợ kỹ thuật về chất lượng
 
@@ -470,7 +490,7 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 |---|---|---|---|
 | `db` | `postgres:16-alpine` | `5433` → `5432` | Volume `postgres_data`, healthcheck |
 | `api` | `backend/Dockerfile` | `5056` → `8080` | Tự migration + seed, healthcheck `/api/health`, chạy no-show watcher |
-| `web` | `web/Dockerfile` (Nginx) | `5173` → `80` | Proxy `/api`, `/swagger`; SPA fallback; **thiếu `/hubs`** nên chat realtime không hoạt động qua Nginx |
+| `web` | `web/Dockerfile` (Nginx) | `5173` → `80` | Proxy `/api`, `/swagger`, `/hubs` (WebSocket); SPA fallback |
 
 - Chạy: `docker compose up --build -d`
 - Dừng: `docker compose down`
@@ -479,8 +499,7 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 
 ### 8.2. Migration & dữ liệu
 
-- 8 migration trong `backend/src/Infrastructure/Migrations/`:
-  `Initial`, `SyncDomainModelsFromBE`, `AddEquipmentCode`, `AddSoftDelete`, `AddEquipmentQuantities`, `AddBookingOverlapConstraint`, `AddBookingCheckInAndCancelReason`, `AddPeriodRoomType`.
+- **21 migration** trong `backend/src/Infrastructure/Migrations/` (tính đến 08/11/2026), gồm: `Initial`, `SyncDomainModelsFromBE`, `AddEquipmentCode`, `AddSoftDelete`, `AddEquipmentQuantities`, `AddBookingOverlapConstraint`, `AddBookingCheckInAndCancelReason`, `AddPeriodRoomType`, `AddApprovalHistories`, `AddBookingExtensionsAndIntegrityConstraints`, `AddLibraryWorkingHours`, `AddApprovalAuditAndAutoApprove`, `AddIncidentReports`, `AddSessionReminders`, `AddViolationAttachments`, `AddBookingIdempotencyKey`, `AddIncidentReportDetails`, `RemoveRedundantIdentityTables`, `AddPasswordOtpFields`, `AddMultiLevelApproval`, `RemoveUnusedIdentityColumns`.
 - `AddPeriodRoomType` đã áp trên volume hiện tại:
   - `Periods.RoomTypeId` (nullable) + FK `FK_Periods_RoomTypes_RoomTypeId`.
   - Index `IX_Rooms_RoomCode` unique, filter `IsDeleted = false`.
@@ -520,11 +539,13 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 
 | Ưu tiên | Vấn đề | Ảnh hưởng | Hướng xử lý |
 |---|---|---|---|
-| **P0** | Reset mật khẩu trả OTP trong response và không kiểm tra OTP | Chiếm tài khoản bất kỳ | Lưu OTP hash + hạn dùng; không trả OTP; verify đúng token |
-| **P0** | Login không kiểm tra `Status`/`LockoutEnd` | Tài khoản bị khóa vẫn đăng nhập | Dùng `SignInManager.CheckPasswordSignInAsync` hoặc kiểm tra lockout/status |
-| **P1** | `GET /api/Bookings/{id}`, `GET /api/UsageSessions/{id}` thiếu kiểm tra quyền sở hữu | Lộ dữ liệu đơn/phiên của người khác | Kiểm tra owner/department trước khi trả dữ liệu |
-| **P1** | CORS cho mọi origin + credentials; JWT secret mặc định | Tăng bề mặt tấn công, rò rỉ token | Giới hạn origin; bắt buộc secret từ env; xoay secret |
-| **P1** | Thiếu email/Notification Center/nhắc lịch; no-show chỉ ghi DB | Người dùng không biết đơn bị hủy; thiếu yêu cầu 14, 16, 20 | Notification API/UI + MailKit + background job nhắc lịch |
+| ~~P0~~ | ~~Reset mật khẩu trả OTP trong response và không kiểm tra OTP~~ | Đã xử lý (07/11): OTP hash + hạn 10 phút + max 5 lần, không trả response | — |
+| ~~P0~~ | ~~Login không kiểm tra `Status`/`LockoutEnd`~~ | Đã xử lý (08/11): chặn khóa/đình chỉ khi đăng nhập, có `SecurityGuardsTests` | — |
+| **P0** | File đính kèm biên bản vi phạm cho anonymous truy cập | Lộ dữ liệu nhạy cảm | Bắt buộc `[Authorize]` + kiểm tra quyền |
+| **P1** | Chưa tự set `LockoutEnd` khi sai mật khẩu liên tiếp | Brute-force vẫn thử được mật khẩu | Tăng `AccessFailedCount` + set `LockoutEnd` |
+| ~~P1~~ | ~~`GET /api/Bookings/{id}`, `GET /api/UsageSessions/{id}` thiếu kiểm tra quyền sở hữu~~ | Đã xử lý (08/11): role guards + `SecurityGuardsTests` (13 test) | — |
+| **P1** | CORS cho mọi origin + credentials; JWT secret mặc định | Tăng bề mặt tấn công, rò rỉ token | Giới hạn origin; bắt buộc secret từ env khi triển khai thật |
+| ~~P1~~ | ~~Thiếu email/Notification Center/nhắc lịch; no-show chỉ ghi DB~~ | Đã xử lý: Notification Center + email SMTP + BookingReminderWatcher | — |
 | ~~P1~~ | ~~Redis cấu hình nhưng không có service~~ | Đã xử lý: bỏ Redis, SignalR in-memory | — |
 | ~~P1~~ | ~~Nginx không proxy `/hubs/`~~ | Đã xử lý: thêm `location /hubs/` + `Upgrade`/`Connection` | — |
 | **P1** | Chưa có E2E/tải; CI không chạy `dotnet test`/lint | Khó regression, dễ tái phát lỗi | Thêm E2E + job test/lint vào CI |
@@ -534,47 +555,28 @@ web (Nginx :80) ──/api/*──▶ api (.NET 8 :8080) ──▶ db (PostgreSQ
 | **P2** | Ma trận quyền phòng khớp chuỗi tiếng Việt | Dễ lệch khi đổi tên loại phòng | Thêm cờ/mã quyền trên `RoomType` |
 | **P2** | Chưa có unique constraint cho bộ tiết theo loại phòng | Có thể seed trùng tiết | Thêm unique index `(RoomTypeId, Name)` hoặc `(RoomTypeId, StartTime)` |
 | ~~P2~~ | ~~Tài liệu/script lỗi thời (`setup.bat`, `run-redis`, `stop-redis`)~~ | Đã xử lý: xoá script Redis, cập nhật `setup.bat` | — |
-| **P3** | Chưa có feedback/rating, mobile, bảo trì thiết bị, lịch sử duyệt | Thiếu phạm vi mở rộng | Làm sau khi ổn định Web |
+| ~~P3~~ | ~~Chưa có feedback/rating, mobile, bảo trì thiết bị, lịch sử duyệt~~ | Đã xử lý: Feedback, Mobile Flutter, IncidentReports, ApprovalHistory | — |
 
 ---
 
 ## 10. KẾ HOẠCH TIẾP THEO
 
-### Giai đoạn 1 — Ổn định & bảo mật (ưu tiên cao, 1–2 ngày)
+### Giai đoạn 1 — Bổ sung mã nguồn còn thiếu (ưu tiên cao)
 
-1. Sửa luồng quên/đặt lại mật khẩu:
-   - Sinh OTP bằng `RandomNumberGenerator`.
-   - Lưu hash + thời hạn + số lần thử.
-   - Không trả OTP trong response.
-   - Kiểm tra OTP khi reset.
-2. Chặn đăng nhập với tài khoản `Không hoạt động`/`Đình chỉ`/đang lockout.
-3. Thêm kiểm tra quyền sở hữu cho `GET /api/Bookings/{id}` và `GET /api/UsageSessions/{id}`.
-4. Chốt Redis: thêm service hoặc bỏ `Redis:ConnectionString`.
-5. Thêm proxy `/hubs/` vào `web/nginx.conf` để chat realtime chạy được trong Docker.
-6. Giới hạn CORS theo origin thật và bắt buộc JWT secret từ biến môi trường khi triển khai.
-7. Đưa `dotnet test` và lint vào CI; thêm trigger cho nhánh làm việc.
+1. Tự khóa tài khoản khi sai mật khẩu liên tiếp: tăng `AccessFailedCount` + set `LockoutEnd`.
+2. Phân quyền file đính kèm biên bản vi phạm (bỏ anonymous access).
+3. Giới hạn CORS theo origin thật; JWT secret từ biến môi trường khi triển khai thật.
 
-### Giai đoạn 2 — Hoàn thiện nghiệp vụ (3–5 ngày)
+### Giai đoạn 2 — Kiểm thử & tối ưu
 
-1. Notification Center: API đọc/đánh dấu đã đọc + UI chuông thông báo; hiển thị thông báo no-show do watcher tạo.
-2. Email kết quả duyệt (MailKit/SMTP) và email nhắc lịch sắp đến/sắp kết thúc.
-3. Background job nhắc lịch trước giờ bắt đầu và trước giờ kết thúc.
-4. Bổ sung feedback/rating sau sử dụng; hiển thị trong báo cáo.
-5. Thêm unique constraint cho bộ tiết và cờ quyền trên `RoomType` để bỏ so khớp chuỗi.
+1. E2E luồng: đăng nhập → đặt phòng → duyệt 2 cấp (điều chỉnh phòng/giờ) → check-in → check-out → vi phạm → báo cáo.
+2. Đưa `dotnet test` + lint vào CI; thêm kiểm thử tải cho API lịch/báo cáo.
+3. Dọn warning nullable + lint; tách file UI lớn, code-splitting bundle.
 
-### Giai đoạn 3 — Kiểm thử & tối ưu (2–3 ngày)
+### Giai đoạn 3 — Hoàn thiện đồ án (CLO5, phần thuyết trình)
 
-1. Viết E2E cho luồng: đăng nhập → đặt phòng → duyệt → check-in → check-out → vi phạm → báo cáo.
-2. Thêm kiểm thử tải cho API lịch/báo cáo.
-3. Dọn 296 warning nullable và 58 warning lint.
-4. Tách file UI lớn, lazy-load theo tab/route; code-splitting bundle.
-5. Tối ưu phân trang phòng và báo cáo ở tầng DB.
-
-### Giai đoạn 4 — Mở rộng (nếu còn thời gian)
-
-1. Feedback/rating, bảo trì thiết bị, lịch sử duyệt.
-2. Mobile Flutter cho các luồng cơ bản: xem lịch, đặt phòng, nhận kết quả, chat.
-3. Monitoring, backup, triển khai production có HTTPS.
+1. Viết quyển báo cáo theo rubric STT 7–8 (nội dung kiến thức + hình thức/định dạng).
+2. Slide thuyết trình (STT 10); kịch bản demo: đặt phòng hội thảo Chủ Nhật, duyệt 2 cấp + điều chỉnh khi duyệt, báo cáo tỷ lệ phòng trống theo khung giờ, mobile đặt phòng/lịch sử vi phạm, chat trực tuyến.
 
 ---
 
@@ -610,6 +612,10 @@ update-db.bat
 run-backend.bat
 run-web.bat
 
+# Mobile
+cd mobile_app
+flutter test
+
 # Kiểm tra trước khi commit
 cd backend
 dotnet build HUIT-RoMan.sln --no-incremental   # xem đủ warning nullable
@@ -636,6 +642,7 @@ npm run lint
 | Web pages | `web/src/pages/` |
 | Web admin tabs | `web/src/components/admin/` |
 | Logic & test | `web/src/lib/` |
+| Mobile Flutter | `mobile_app/lib/` (màn hình `lib/features/`, API client `lib/core/network/`) |
 | Docker | `docker-compose.yml`, `backend/Dockerfile`, `web/Dockerfile`, `web/nginx.conf` |
 | CI | `.github/workflows/ci.yml` |
 
@@ -643,6 +650,8 @@ npm run lint
 
 | Ngày | Nội dung |
 |---|---|
+| 08/11/2026 | Cập nhật theo rubric chấm mới: đối chiếu 16 dòng CLO3 + CLO4 với mã nguồn (mục 6); ghi nhận hoàn thành đổi mật khẩu/OTP an toàn, duyệt nhiều cấp + điều chỉnh khi duyệt, vacancy theo khung giờ, IncidentReports, mobile Flutter (~19 màn hình/68 test), miễn phòng hội thảo khỏi giờ thư viện, trang Quy định + đổi tên hệ thống; test 196/136/68 pass, Docker healthy; còn lộ anonymous attachment vi phạm + auto-lockout |
+| 07/11/2026 | Batch nghiệp vụ đặt phòng: R-codes R01–R13, trùng lịch → từ chối + email gợi ý, quota sinh viên 2 lượt/tuần, gia hạn cap 60 phút/đơn, idempotency key; sửa OTP an toàn + chặn lockout/đình chỉ; SessionReminders |
 | 28/10/2026 | Viết lại báo cáo theo HEAD `cdd07f8`: cập nhật ma trận quyền, 2 bộ 16 tiết, danh mục 99 phòng, API lịch theo khoảng ngày, UI đặt phòng dạng bảng, no-show watcher; chạy lại build/test/migration; ghi nhận 296 warning nullable |
 | 27/10/2026 | Bổ sung check-in `[T−15m, T)`, hủy đơn có lý do, no-show tự động hủy, breakdown báo cáo hủy và 57 test backend |
 | 24/10/2026 | Viết lại toàn bộ báo cáo từ review mã nguồn; cập nhật số liệu test, rủi ro bảo mật, hiện trạng WIP và kế hoạch |

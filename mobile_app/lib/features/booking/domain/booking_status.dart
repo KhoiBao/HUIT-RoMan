@@ -1,5 +1,6 @@
 enum BookingStatus {
   pending,
+  pendingSecondApproval,
   approved,
   partiallyApproved,
   rejected,
@@ -11,6 +12,7 @@ enum BookingStatus {
   static BookingStatus fromApi(String? raw) {
     final v = (raw ?? '').trim().toLowerCase();
     if (v.isEmpty) return BookingStatus.unknown;
+    if (v.contains('cấp 2')) return BookingStatus.pendingSecondApproval;
     if (v.contains('một phần') || v.contains('partial')) {
       return BookingStatus.partiallyApproved;
     }
@@ -34,6 +36,7 @@ enum BookingStatus {
 
   String get label => switch (this) {
         BookingStatus.pending => 'Chờ duyệt',
+        BookingStatus.pendingSecondApproval => 'Chờ duyệt cấp 2',
         BookingStatus.approved => 'Đã duyệt',
         BookingStatus.partiallyApproved => 'Duyệt một phần',
         BookingStatus.rejected => 'Từ chối',
@@ -45,6 +48,10 @@ enum BookingStatus {
 
   bool get isApproved =>
       this == BookingStatus.approved || this == BookingStatus.partiallyApproved;
+
+  bool get isAwaitingDecision =>
+      this == BookingStatus.pending ||
+      this == BookingStatus.pendingSecondApproval;
 
   bool get isClosed =>
       this == BookingStatus.rejected ||

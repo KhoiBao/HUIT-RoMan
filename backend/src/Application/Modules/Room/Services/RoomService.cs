@@ -165,14 +165,14 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
 
             var room = new Domain.Entities.Room
             {
-                Name = request.Name,
-                RoomCode =  request.Building + request.Floor + request.RoomNumber,
-                Building = request.Building,
-                Floor = request.Floor,
-                RoomNumber = request.RoomNumber,
+                Name = request.Name.Trim(),
+                RoomCode =  request.Building.Trim() + request.Floor.Trim() + request.RoomNumber.Trim(),
+                Building = request.Building.Trim(),
+                Floor = request.Floor.Trim(),
+                RoomNumber = request.RoomNumber.Trim(),
                 Capacity = request.Capacity,
                 Status = "Trống",
-                Description = request.Description,
+                Description = request.Description?.Trim(),
                 RoomTypeId = request.RoomTypeId
             };
 
@@ -226,14 +226,14 @@ namespace HUIT_RoMan.Application.Modules.Room.Services
                 }
             }
 
-            r.Name = request.Name;
-            r.RoomCode = request.Building + request.Floor + request.RoomNumber;
-            r.Building = request.Building;
-            r.Floor = request.Floor;
-            r.RoomNumber = request.RoomNumber;
+            r.Name = request.Name.Trim();
+            r.RoomCode = request.Building.Trim() + request.Floor.Trim() + request.RoomNumber.Trim();
+            r.Building = request.Building.Trim();
+            r.Floor = request.Floor.Trim();
+            r.RoomNumber = request.RoomNumber.Trim();
             r.Capacity = request.Capacity;
             r.Status = normalizedStatus;
-            r.Description = request.Description;
+            r.Description = request.Description?.Trim();
             r.RoomTypeId = request.RoomTypeId;
 
             _roomRepo.Update(r);

@@ -21,6 +21,7 @@ import {
   InfoIcon,
 } from "../Icon";
 import { useConfirm } from "../../context/ConfirmContext";
+import { useAuth } from "../../auth/AuthContext";
 import {
   describeCancelSource,
   describeCancelReason,
@@ -93,11 +94,29 @@ interface Props {
   canManageAutoApproval?: boolean;
 }
 
+/** Phòng dùng cho select điều chỉnh khi duyệt */
+interface AdjustRoomOption {
+  id: number;
+  roomCode: string;
+  roomName: string;
+  capacity: number;
+}
+
+/** Chuyển ISO UTC sang giá trị cho input datetime-local (giờ máy). */
+function toLocalInputValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
 export default function AdminBookingApprovalTab({
   onNotify,
   canManageAutoApproval = false,
 }: Props) {
   const { alert, confirm } = useConfirm();
+  const { user: currentUser } = useAuth();
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -126,6 +145,12 @@ export default function AdminBookingApprovalTab({
     detail?: BookingDetail;
   } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<BookingItem | null>(null);
+
+  // Điều chỉnh phòng/thời gian khi duyệt (tùy chọn)
+  const [adjustRoomId, setAdjustRoomId] = useState<string>("");
+  const [adjustStartAt, setAdjustStartAt] = useState<string>("");
+  const [adjustEndAt, setAdjustEndAt] = useState<string>("");
+  const [adjustRooms, setAdjustRooms] = useState<AdjustRoomOption[]>([]);
 
   // Chế độ duyệt tự động
   const [autoSetting, setAutoSetting] = useState<AutoApprovalSetting | null>(null);
@@ -219,6 +244,40 @@ export default function AdminBookingApprovalTab({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [approveTarget, submittingAction]);
 
+  // Mở hộp thoại duyệt chi tiết: nạp danh sách phòng + khôi phục thời gian gốc
+  useEffect(() => {
+    if (!approveTarget || approveTarget.type !== "detail" || !approveTarget.detail) {
+      setAdjustRoomId("");
+      setAdjustStartAt("");
+      setAdjustEndAt("");
+      return;
+    }
+    setAdjustRoomId("");
+    setAdjustStartAt(toLocalInputValue(approveTarget.detail.startAt));
+    setAdjustEndAt(toLocalInputValue(approveTarget.detail.endAt));
+    let active = true;
+    api
+      .get("/api/Rooms")
+      .then((res) => {
+        if (!active) return;
+        const list = res.data?.data || res.data || [];
+        setAdjustRooms(
+          list.map((r: any) => ({
+            id: r.id,
+            roomCode: r.roomCode,
+            roomName: r.name,
+            capacity: r.capacity,
+          }))
+        );
+      })
+      .catch(() => {
+        if (active) setAdjustRooms([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [approveTarget]);
+
   // Fetch bookings from API
   const fetchBookings = async () => {
     try {
@@ -310,11 +369,14 @@ export default function AdminBookingApprovalTab({
   const stats = useMemo(() => {
     const total = bookings.length;
     const pending = bookings.filter((b) => b.status === "Chờ duyệt").length;
+    const pendingSecondLevel = bookings.filter(
+      (b) => b.status === "Chờ duyệt cấp 2"
+    ).length;
     const approved = bookings.filter(
       (b) => b.status === "Đã duyệt" || b.status === "Duyệt một phần"
     ).length;
     const rejected = bookings.filter((b) => b.status === "Từ chối").length;
-    return { total, pending, approved, rejected };
+    return { total, pending, pendingSecondLevel, approved, rejected };
   }, [bookings]);
 
   // Filtered list
@@ -386,25 +448,16 @@ export default function AdminBookingApprovalTab({
         rejectionReason: "",
       });
       if (res.data?.success) {
+        // Backend trả message đúng ngữ cảnh: phòng đặc biệt sẽ chuyển sang chờ duyệt cấp 2
         onNotify(
-          nextPendingId
-            ? `Đã duyệt yêu cầu #${bookingId}. Còn yêu cầu #${nextPendingId} đang chờ.`
-            : `Đã duyệt đặt phòng #${bookingId} thành công!`,
+          res.data?.message ||
+            (nextPendingId
+              ? `Đã duyệt yêu cầu #${bookingId}. Còn yêu cầu #${nextPendingId} đang chờ.`
+              : `Đã duyệt đặt phòng #${bookingId} thành công!`),
           "success"
         );
-        setBookings((prev) =>
-          prev.map((b) =>
-            b.id === bookingId
-              ? {
-                  ...b,
-                  status: "Đã duyệt",
-                  details: b.details.map((d) => ({ ...d, status: "Đã duyệt" })),
-                }
-              : b
-          )
-        );
         setApproveTarget(null);
-        fetchBookings();
+        await fetchBookings();
         if (advance && nextPendingId) {
           window.setTimeout(() => {
             document
@@ -493,16 +546,26 @@ export default function AdminBookingApprovalTab({
     }
   };
 
-  // Handle Approve individual room detail
-  const handleApproveDetail = async (detailId: number, roomCode: string) => {
+  // Handle Approve individual room detail (có thể kèm điều chỉnh phòng/thời gian)
+  const handleApproveDetail = async (
+    detailId: number,
+    roomCode: string,
+    adjustment?: { newRoomId?: number; newStartAt?: string; newEndAt?: string }
+  ) => {
     try {
       setApprovingDetailId(detailId);
       const res = await api.patch(`/api/Bookings/details/${detailId}/approve`, {
         decision: "Đã duyệt",
         rejectionReason: "",
+        ...(adjustment?.newRoomId ? { newRoomId: adjustment.newRoomId } : {}),
+        ...(adjustment?.newStartAt ? { newStartAt: adjustment.newStartAt } : {}),
+        ...(adjustment?.newEndAt ? { newEndAt: adjustment.newEndAt } : {}),
       });
       if (res.data?.success) {
-        onNotify(`Đã duyệt phòng ${roomCode} thành công!`, "success");
+        onNotify(
+          res.data?.message || `Đã duyệt phòng ${roomCode} thành công!`,
+          "success"
+        );
         setBookings((prev) =>
           prev.map((b) => {
             const hasDetail = b.details.some((d) => d.id === detailId);
@@ -516,13 +579,18 @@ export default function AdminBookingApprovalTab({
             const allRejected = updatedDetails.every(
               (d) => d.status === "Từ chối"
             );
+            const anySecondLevel = updatedDetails.some(
+              (d) => d.status === "Chờ duyệt cấp 2"
+            );
             const anyProcessed = updatedDetails.some(
-              (d) => d.status !== "Chờ duyệt"
+              (d) => d.status !== "Chờ duyệt" && d.status !== "Chờ duyệt cấp 2"
             );
             const nextStatus = allApproved
               ? "Đã duyệt"
               : allRejected
               ? "Từ chối"
+              : anySecondLevel
+              ? "Chờ duyệt cấp 2"
               : anyProcessed
               ? "Duyệt một phần"
               : b.status;
@@ -550,6 +618,47 @@ export default function AdminBookingApprovalTab({
     } finally {
       setApprovingDetailId(null);
     }
+  };
+
+  // Xác nhận duyệt chi tiết từ hộp thoại: validate điều chỉnh trước khi gọi API
+  const handleConfirmApproveDetail = () => {
+    const detail = approveTarget?.detail;
+    if (!detail) return;
+    const startVal = adjustStartAt ? new Date(adjustStartAt) : null;
+    const endVal = adjustEndAt ? new Date(adjustEndAt) : null;
+    if ((startVal && !endVal) || (!startVal && endVal)) {
+      void alert({
+        title: "Thiếu thời gian điều chỉnh",
+        message:
+          "Vui lòng nhập cả giờ bắt đầu và giờ kết thúc khi điều chỉnh thời gian.",
+        type: "warning",
+      });
+      return;
+    }
+    if (startVal && endVal && endVal.getTime() <= startVal.getTime()) {
+      void alert({
+        title: "Thời gian không hợp lệ",
+        message: "Giờ kết thúc phải sau giờ bắt đầu.",
+        type: "warning",
+      });
+      return;
+    }
+    const adjustment: { newRoomId?: number; newStartAt?: string; newEndAt?: string } = {};
+    const selectedRoomId = Number(adjustRoomId);
+    if (selectedRoomId && selectedRoomId !== detail.roomId) {
+      adjustment.newRoomId = selectedRoomId;
+    }
+    if (startVal && endVal) {
+      const startIso = startVal.toISOString();
+      const endIso = endVal.toISOString();
+      if (startVal.getTime() !== new Date(detail.startAt).getTime()) {
+        adjustment.newStartAt = startIso;
+      }
+      if (endVal.getTime() !== new Date(detail.endAt).getTime()) {
+        adjustment.newEndAt = endIso;
+      }
+    }
+    handleApproveDetail(detail.id, detail.roomCode, adjustment);
   };
 
   // Open Cancel / Revoke Approval Modal
@@ -732,6 +841,13 @@ export default function AdminBookingApprovalTab({
             <HourglassIcon size={12} className="mr-1 inline-block" /> Chờ duyệt
           </span>
         );
+      case "Chờ duyệt cấp 2":
+        return (
+          <span className="admin-status-pill pill-pending">
+            <HourglassIcon size={12} className="mr-1 inline-block" /> Chờ duyệt
+            cấp 2
+          </span>
+        );
       case "Đã duyệt":
         return (
           <span className="admin-status-pill pill-approved">
@@ -890,6 +1006,22 @@ export default function AdminBookingApprovalTab({
           </span>
           <span className="stat-val color-amber">{stats.pending}</span>
         </div>
+        {stats.pendingSecondLevel > 0 && (
+          <div
+            className={`admin-stat-card cursor-pointer ${
+              statusFilter === "Chờ duyệt cấp 2" ? "stat-active" : ""
+            }`}
+            onClick={() => {
+              setStatusFilter("Chờ duyệt cấp 2");
+              setPage(1);
+            }}
+          >
+            <span className="stat-label color-amber">
+              <HourglassIcon size={12} className="mr-1 inline-block" /> Chờ duyệt cấp 2
+            </span>
+            <span className="stat-val color-amber">{stats.pendingSecondLevel}</span>
+          </div>
+        )}
         <div
           className={`admin-stat-card cursor-pointer ${
             statusFilter === "Đã duyệt" ? "stat-active" : ""
@@ -1003,6 +1135,7 @@ export default function AdminBookingApprovalTab({
           {[
             { id: "ALL", label: "Tất cả" },
             { id: "Chờ duyệt", label: "Chờ duyệt" },
+            { id: "Chờ duyệt cấp 2", label: "Chờ duyệt cấp 2" },
             { id: "Đã duyệt", label: "Đã duyệt" },
             { id: "Từ chối", label: "Đã từ chối" },
             { id: "Đã hủy", label: "Đã hủy" },
@@ -1146,13 +1279,14 @@ export default function AdminBookingApprovalTab({
             {pagedBookings.map((b) => {
             const isExpanded = expandedId === b.id;
             const isPending = b.status === "Chờ duyệt";
+            const isSecondLevelPending = b.status === "Chờ duyệt cấp 2";
 
             return (
               <div
                 key={b.id}
                 id={`booking-card-${b.id}`}
                 className={`admin-booking-card-item ${
-                  isPending ? "border-highlight-pending" : ""
+                  isPending || isSecondLevelPending ? "border-highlight-pending" : ""
                 }`}
               >
                 <div
@@ -1213,9 +1347,14 @@ export default function AdminBookingApprovalTab({
                       </p>
                     )}
                     {b.approvedByName &&
-                      (b.status === "Đã duyệt" || b.status === "Duyệt một phần") && (
+                      (b.status === "Đã duyệt" ||
+                        b.status === "Duyệt một phần" ||
+                        b.status === "Chờ duyệt cấp 2") && (
                         <p className="booking-approver-line">
-                          Duyệt bởi <strong>{b.approvedByName}</strong>
+                          {b.status === "Chờ duyệt cấp 2"
+                            ? "Duyệt cấp 1 bởi"
+                            : "Duyệt bởi"}{" "}
+                          <strong>{b.approvedByName}</strong>
                           {b.approvedAt ? ` • ${formatDateTime(b.approvedAt)}` : ""}
                         </p>
                       )}
@@ -1365,12 +1504,18 @@ export default function AdminBookingApprovalTab({
                           </tr>
                         </thead>
                         <tbody>
-                          {b.details.map((detail) => (
+                          {b.details.map((detail) => {
+                            const canDecide =
+                              detail.status === "Chờ duyệt" ||
+                              detail.status === "Chờ duyệt cấp 2";
+                            const isL2Approver =
+                              detail.approvedByUserId === currentUser?.id;
+                            return (
                             <tr
                               key={detail.id}
-                              className={detail.status === "Chờ duyệt" ? "admin-clickable-row" : ""}
+                              className={canDecide ? "admin-clickable-row" : ""}
                               onClick={() => {
-                                if (detail.status === "Chờ duyệt") {
+                                if (canDecide) {
                                   setApproveTarget({
                                     type: "detail",
                                     booking: b,
@@ -1378,7 +1523,7 @@ export default function AdminBookingApprovalTab({
                                   });
                                 }
                               }}
-                              title={detail.status === "Chờ duyệt" ? "Bấm vào dòng để xét duyệt phòng này" : undefined}
+                              title={canDecide ? "Bấm vào dòng để xét duyệt phòng này" : undefined}
                             >
                               <td>
                                 <div className="room-info-cell">
@@ -1422,14 +1567,24 @@ export default function AdminBookingApprovalTab({
                                       Lý do: {detail.rejectionReason}
                                     </div>
                                   )}
-                                  {detail.approvedByName && detail.status === "Đã duyệt" && (
-                                    <div className="detail-approver-line">
-                                      Duyệt bởi {detail.approvedByName}
-                                      {detail.approvedAt
-                                        ? ` • ${formatDateTime(detail.approvedAt)}`
-                                        : ""}
-                                    </div>
-                                  )}
+                                  {detail.approvedByName &&
+                                    detail.status === "Đã duyệt" && (
+                                      <div className="detail-approver-line">
+                                        Duyệt bởi {detail.approvedByName}
+                                        {detail.approvedAt
+                                          ? ` • ${formatDateTime(detail.approvedAt)}`
+                                          : ""}
+                                      </div>
+                                    )}
+                                  {detail.approvedByName &&
+                                    detail.status === "Chờ duyệt cấp 2" && (
+                                      <div className="detail-approver-line">
+                                        Duyệt cấp 1 bởi {detail.approvedByName}
+                                        {detail.approvedAt
+                                          ? ` • ${formatDateTime(detail.approvedAt)}`
+                                          : ""}
+                                      </div>
+                                    )}
                                 </div>
                               </td>
                               <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
@@ -1453,6 +1608,53 @@ export default function AdminBookingApprovalTab({
                                       ) : (
                                         <>
                                           <CheckIcon size={12} /> Duyệt phòng này
+                                        </>
+                                      )}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn-mini-reject"
+                                      onClick={() =>
+                                        openRejectModal(
+                                          "detail",
+                                          detail.id,
+                                          `Phòng ${detail.roomCode} (#${detail.id})`
+                                        )
+                                      }
+                                      disabled={submittingAction}
+                                      title="Từ chối phòng này"
+                                    >
+                                      <XIcon size={12} /> Từ chối
+                                    </button>
+                                  </div>
+                                ) : detail.status === "Chờ duyệt cấp 2" ? (
+                                  <div className="table-row-actions">
+                                    <button
+                                      type="button"
+                                      className="btn-mini-approve"
+                                      onClick={() =>
+                                        setApproveTarget({
+                                          type: "detail",
+                                          booking: b,
+                                          detail,
+                                        })
+                                      }
+                                      disabled={
+                                        approvingDetailId === detail.id ||
+                                        submittingAction ||
+                                        isL2Approver
+                                      }
+                                      title={
+                                        isL2Approver
+                                          ? "Bạn đã duyệt cấp 1 cho phòng này — cần người khác thực hiện duyệt cấp 2"
+                                          : "Duyệt cấp 2 cho phòng này"
+                                      }
+                                    >
+                                      {approvingDetailId === detail.id ? (
+                                        <span>Đang duyệt...</span>
+                                      ) : (
+                                        <>
+                                          <CheckIcon size={12} /> Duyệt cấp 2
                                         </>
                                       )}
                                     </button>
@@ -1496,7 +1698,8 @@ export default function AdminBookingApprovalTab({
                                 )}
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1644,7 +1847,11 @@ export default function AdminBookingApprovalTab({
                 <CheckCircleIcon size={18} className="mr-1" /> Xác nhận duyệt{" "}
                 {approveTarget.type === "booking"
                   ? `yêu cầu #${approveTarget.booking.id}`
-                  : `phòng ${approveTarget.detail?.roomCode}`}
+                  : `phòng ${approveTarget.detail?.roomCode}${
+                      approveTarget.detail?.status === "Chờ duyệt cấp 2"
+                        ? " (cấp 2)"
+                        : ""
+                    }`}
               </h3>
               <button
                 type="button"
@@ -1724,6 +1931,57 @@ export default function AdminBookingApprovalTab({
                 )}
               </div>
 
+              {approveTarget.type === "detail" && (
+                <div className="form-group-admin" style={{ marginTop: "14px" }}>
+                  <label
+                    style={{
+                      fontWeight: 600,
+                      color: "#334155",
+                      display: "block",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    Điều chỉnh khi duyệt (tùy chọn):
+                  </label>
+                  <select
+                    className="admin-select"
+                    style={{ width: "100%", marginBottom: "8px" }}
+                    value={adjustRoomId}
+                    onChange={(e) => setAdjustRoomId(e.target.value)}
+                    title="Đổi phòng khác cho yêu cầu này nếu cần"
+                  >
+                    <option value="">
+                      Giữ nguyên phòng {approveTarget.detail?.roomCode}
+                    </option>
+                    {adjustRooms
+                      .filter((r) => r.id !== approveTarget.detail?.roomId)
+                      .map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.roomCode} — {r.roomName} ({r.capacity} người)
+                        </option>
+                      ))}
+                  </select>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <input
+                      type="datetime-local"
+                      className="admin-select"
+                      style={{ flex: "1 1 180px" }}
+                      value={adjustStartAt}
+                      onChange={(e) => setAdjustStartAt(e.target.value)}
+                      aria-label="Giờ bắt đầu điều chỉnh"
+                    />
+                    <input
+                      type="datetime-local"
+                      className="admin-select"
+                      style={{ flex: "1 1 180px" }}
+                      value={adjustEndAt}
+                      onChange={(e) => setAdjustEndAt(e.target.value)}
+                      aria-label="Giờ kết thúc điều chỉnh"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="confirm-sub-note note-warning">
                 <AlertTriangleIcon size={16} />
                 <span>
@@ -1763,15 +2021,18 @@ export default function AdminBookingApprovalTab({
                   if (approveTarget.type === "booking") {
                     handleApproveBooking(approveTarget.booking.id);
                   } else if (approveTarget.detail) {
-                    handleApproveDetail(
-                      approveTarget.detail.id,
-                      approveTarget.detail.roomCode
-                    );
+                    handleConfirmApproveDetail();
                   }
                 }}
-                disabled={submittingAction || approvingBookingId !== null}
+                disabled={
+                  submittingAction ||
+                  approvingBookingId !== null ||
+                  approvingDetailId !== null
+                }
               >
-                {approvingBookingId ? "Đang duyệt..." : "Xác nhận duyệt"}
+                {approvingBookingId || approvingDetailId
+                  ? "Đang duyệt..."
+                  : "Xác nhận duyệt"}
               </button>
             </div>
           </div>

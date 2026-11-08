@@ -8,6 +8,7 @@ import {
   RefreshCwIcon,
   CalendarIcon,
   ClockIcon,
+  HourglassIcon,
   XIcon,
   CheckIcon,
 } from "../Icon";
@@ -20,6 +21,8 @@ export interface RoomTypeItem {
   defaultCapacity: number;
   departmentId?: number;
   isBookingByPeriod: boolean;
+  /** Phòng đặc biệt: đơn đặt phải qua thêm cấp duyệt 2 */
+  requiresSecondApproval: boolean;
 }
 
 interface Props {
@@ -40,6 +43,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
     description: "",
     defaultCapacity: 10,
     isBookingByPeriod: false,
+    requiresSecondApproval: false,
   });
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -77,6 +81,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
       description: "",
       defaultCapacity: 10,
       isBookingByPeriod: false,
+      requiresSecondApproval: false,
     });
   };
 
@@ -88,6 +93,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
       description: item.description || "",
       defaultCapacity: item.defaultCapacity,
       isBookingByPeriod: item.isBookingByPeriod,
+      requiresSecondApproval: item.requiresSecondApproval,
     });
   };
 
@@ -109,6 +115,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
           description: formData.description.trim(),
           defaultCapacity: Number(formData.defaultCapacity),
           isBookingByPeriod: Boolean(formData.isBookingByPeriod),
+          requiresSecondApproval: Boolean(formData.requiresSecondApproval),
         });
         if (res.data?.success) {
           onNotify(`Đã thêm loại phòng "${formData.name}" thành công!`, "success");
@@ -119,6 +126,7 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
           description: formData.description.trim(),
           defaultCapacity: Number(formData.defaultCapacity),
           isBookingByPeriod: Boolean(formData.isBookingByPeriod),
+          requiresSecondApproval: Boolean(formData.requiresSecondApproval),
         });
         if (res.data?.success) {
           onNotify(`Đã cập nhật loại phòng "${formData.name}" thành công!`, "success");
@@ -251,15 +259,22 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
                     <strong>{t.defaultCapacity}</strong> người
                   </td>
                   <td>
-                    {t.isBookingByPeriod ? (
-                      <span className="badge-period">
-                        <CalendarIcon size={12} className="mr-1 inline-block" /> Theo Tiết học cố định
-                      </span>
-                    ) : (
-                      <span className="badge-hour">
-                        <ClockIcon size={12} className="mr-1 inline-block" /> Theo Khung giờ tự do
-                      </span>
-                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                      {t.isBookingByPeriod ? (
+                        <span className="badge-period">
+                          <CalendarIcon size={12} className="mr-1 inline-block" /> Theo Tiết học cố định
+                        </span>
+                      ) : (
+                        <span className="badge-hour">
+                          <ClockIcon size={12} className="mr-1 inline-block" /> Theo Khung giờ tự do
+                        </span>
+                      )}
+                      {t.requiresSecondApproval && (
+                        <span className="admin-status-pill pill-pending">
+                          <HourglassIcon size={12} className="mr-1 inline-block" /> Cần duyệt cấp 2
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="table-action-btns">
@@ -362,6 +377,25 @@ export default function AdminRoomTypesTab({ onNotify }: Props) {
                         }
                       />
                       <span>Theo tiết học cố định (Tiết 1-12)</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-group-admin">
+                  <label>Quy trình duyệt:</label>
+                  <div className="radio-pill-group">
+                    <label className="radio-label">
+                      <input
+                        type="checkbox"
+                        checked={formData.requiresSecondApproval}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            requiresSecondApproval: e.target.checked,
+                          })
+                        }
+                      />
+                      <span>Yêu cầu duyệt cấp 2 (Quản lý/Quản trị viên khác chốt sau cấp 1)</span>
                     </label>
                   </div>
                 </div>

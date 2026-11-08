@@ -32,5 +32,9 @@ namespace HUIT_RoMan.Domain.Entities
 
         [StringLength(10)]
         public string? ApprovalMode { get; set; }
+
+        // Cấp duyệt cho luồng duyệt nhiều cấp: 1 = cấp 1, 2 = cấp 2.
+        // Null với bản ghi duyệt thường (phòng không yêu cầu cấp 2).
+        public int? Level { get; set; }
     }
 }

@@ -10,6 +10,7 @@ namespace HUIT_RoMan.Application.Modules.Report.Services
         Task<ApiResponse<BookingStatsReportDto>> GetBookingStatsReportAsync(ReportFilterDto filter);
         Task<ApiResponse<RoomUsageReportDto>> GetRoomUsageReportAsync(ReportFilterDto filter);
         Task<ApiResponse<ViolationStatsReportDto>> GetViolationStatsReportAsync(ReportFilterDto filter);
+        Task<ApiResponse<VacancyReportDto>> GetVacancyReportAsync(ReportFilterDto filter);
         Task<(byte[] Bytes, string FileName, string ContentType)> ExportReportCsvAsync(string reportType, ReportFilterDto filter);
     }
 }

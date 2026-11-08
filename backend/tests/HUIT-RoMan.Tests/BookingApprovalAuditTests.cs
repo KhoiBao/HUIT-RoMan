@@ -344,8 +344,7 @@ namespace HUIT_RoMan.Tests
                 Status = "Hoạt động",
                 Email = "system.auto-approve@invalid.local",
                 CardCode = "SYS-AUTO",
-                PasswordHash = null,
-                EmailConfirmed = false
+                PasswordHash = null
             });
             h.Db.Employees.Add(new Employee
             {

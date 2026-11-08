@@ -37,14 +37,14 @@ namespace HUIT_RoMan.API.Controllers
             return Ok(response);
         }
 
-        /// <summary>Cập nhật thông tin cá nhân của người dùng hiện tại</summary>
+        /// <summary>Cập nhật thông tin cá nhân của người dùng hiện tại (không bao gồm trạng thái / đơn vị)</summary>
         [HttpPut("me")]
         public async Task<IActionResult> UpdateCurrentUser([FromBody] UpdateUserDto request)
         {
             if (_currentUser.UserId == null)
                 return Unauthorized(new { message = "Bạn chưa đăng nhập." });
 
-            var response = await _userService.UpdateAsync(_currentUser.UserId.Value, request);
+            var response = await _userService.UpdateSelfAsync(_currentUser.UserId.Value, request);
             if (!response.Success) return BadRequest(response);
             return Ok(response);
         }

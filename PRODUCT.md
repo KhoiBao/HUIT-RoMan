@@ -16,7 +16,7 @@ web
 
 ## Product Purpose
 
-Hệ thống quản lý phòng dùng chung HUIT quản lý việc đăng ký và khai thác phòng dùng chung tại Trường Đại học Công Thương TP.HCM (HUIT): thay sổ đăng ký và trao đổi thủ công bằng một luồng đặt phòng có duyệt, có kiểm soát sử dụng thực tế và có báo cáo khai thác. Thành công = luồng end-to-end (đăng nhập → đặt → duyệt → nhận phòng → trả phòng → xử lý vi phạm → báo cáo) chạy trơn tru khi demo và đủ chắc để thư viện / Phòng Đào tạo dùng thử thật.
+Hệ thống quản lý phòng họp thư viện HUIT quản lý việc đăng ký và khai thác phòng dùng chung tại Trường Đại học Công Thương TP.HCM (HUIT): thay sổ đăng ký và trao đổi thủ công bằng một luồng đặt phòng có duyệt, có kiểm soát sử dụng thực tế và có báo cáo khai thác. Thành công = luồng end-to-end (đăng nhập → đặt → duyệt → nhận phòng → trả phòng → xử lý vi phạm → báo cáo) chạy trơn tru khi demo và đủ chắc để thư viện / Phòng Đào tạo dùng thử thật.
 
 ## Positioning
 
@@ -43,7 +43,7 @@ Mô hình đặt phòng bám theo **khung tiết học của HUIT** thay vì khu
 
 ## Brand Commitments
 
-- Tên hiển thị **Hệ thống quản lý phòng dùng chung HUIT**; không dùng tên riêng "RoMan" trên bất kỳ bề mặt người dùng nào.
+- Tên hiển thị **Hệ thống quản lý phòng họp thư viện HUIT**; không dùng tên riêng "RoMan" trên bất kỳ bề mặt người dùng nào.
 - Gắn với Trường Đại học Công Thương TP.HCM (HUIT); toàn bộ UI copy dùng tiếng Việt.
 - Không tự đặt ra khẩu hiệu, số liệu, khách hàng hay cam kết dịch vụ không có thật.
 

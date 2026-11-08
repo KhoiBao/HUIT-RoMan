@@ -74,7 +74,7 @@ namespace HUIT_RoMan.API.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
 
             // Đánh dấu tin nhắn đã đọc
-            await _chatService.MarkMessagesAsReadAsync(conversationId, userId);
+            await _chatService.MarkMessagesAsReadAsync(conversationId, userId, isStaff);
             await Clients.Group(groupName).SendAsync("MessagesMarkedAsRead", new { ConversationId = conversationId, ReaderUserId = userId });
 
             await Clients.Caller.SendAsync("JoinedConversation", conversationId);

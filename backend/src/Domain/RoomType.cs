@@ -23,7 +23,10 @@ namespace HUIT_RoMan.Domain.Entities
         public int? DepartmentId { get; set; }
         public virtual Department Department { get; set; }
 
-        public bool IsBookingByPeriod { get; set; } 
+        public bool IsBookingByPeriod { get; set; }
+
+        // Phòng đặc biệt: đơn đặt phải qua thêm cấp duyệt 2 (Quản lý/Quản trị viên khác người duyệt cấp 1).
+        public bool RequiresSecondApproval { get; set; }
 
         // Navigation properties
         public virtual ICollection<Room> Rooms { get; set; } = new List<Room>();

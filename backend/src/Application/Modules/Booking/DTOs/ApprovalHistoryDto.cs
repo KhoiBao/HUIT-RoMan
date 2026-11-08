@@ -31,6 +31,9 @@ namespace HUIT_RoMan.Application.Modules.Booking.DTOs
 
         // MANUAL | AUTO. NULL với bản ghi cũ.
         public string? ApprovalMode { get; set; }
+
+        // Cấp duyệt trong luồng duyệt nhiều cấp: 1 = cấp 1, 2 = cấp 2. NULL với duyệt thường.
+        public int? Level { get; set; }
     }
 }
 

@@ -36,18 +36,26 @@ namespace HUIT_RoMan.Application.Modules.Identity.DTOs
     public class ForgotPasswordResponse
     {
         public bool Success { get; set; }
-        public string Message { get; set; } 
+        public string Message { get; set; }
         public string Email { get; set; } = string.Empty;
-        public string ResetToken { get; set; } = string.Empty;
     }
 
     public class ResetPasswordRequest
     {
         [Required]
-        public string Identifier { get; set; } = string.Empty; 
+        public string Identifier { get; set; } = string.Empty;
 
         [Required]
         public string ResetToken { get; set; } = string.Empty;
+
+        [Required]
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class ChangePasswordRequest
+    {
+        [Required]
+        public string CurrentPassword { get; set; } = string.Empty;
 
         [Required]
         public string NewPassword { get; set; } = string.Empty;

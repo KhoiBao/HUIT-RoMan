@@ -16,7 +16,7 @@ namespace HUIT_RoMan.Application.Modules.Chat.Services
         Task<ApiResponse<bool>> ReopenConversationAsync(int conversationId, int currentUserId, bool isStaff);
         Task<ApiResponse<DeleteMessageResult>> DeleteMessageAsync(int messageId, int currentUserId, string currentUserRole);
         Task<ApiResponse<bool>> DeleteConversationAsync(int conversationId, int currentUserId, string currentUserRole);
-        Task<ApiResponse<bool>> MarkMessagesAsReadAsync(int conversationId, int currentUserId);
+        Task<ApiResponse<bool>> MarkMessagesAsReadAsync(int conversationId, int currentUserId, bool isStaff);
         Task<ApiResponse<List<OnDutyStaffDto>>> GetOnDutyStaffAsync(int? roomId = null, int? departmentId = null);
     }
 }

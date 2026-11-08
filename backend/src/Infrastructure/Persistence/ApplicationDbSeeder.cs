@@ -277,7 +277,6 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                     CardCode = SystemAccounts.AutoApproveEmployeeCode,
                     FullName = SystemAccounts.AutoApproveDisplayName,
                     Email = "system.auto-approve@huit.invalid",
-                    EmailConfirmed = false,
                     Status = "Hoạt động",
                     DepartmentId = departmentId
                 };
@@ -287,10 +286,9 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 if (!created.Succeeded) return;
             }
 
-            if (user.PasswordHash != null || user.EmailConfirmed)
+            if (user.PasswordHash != null)
             {
                 user.PasswordHash = null;
-                user.EmailConfirmed = false;
                 await userManager.UpdateAsync(user);
             }
 
@@ -388,7 +386,6 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 {
                     UserName = email,
                     Email = email,
-                    EmailConfirmed = true,
                     CardCode = cardCode,
                     FullName = fullName,
                     Status = "Hoạt động",
@@ -506,7 +503,8 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                 "Phòng hội thảo",
                 "Phòng hội thảo tại Thư viện, sức chứa 50–90 người",
                 90,
-                departmentId);
+                departmentId,
+                requiresSecondApproval: true);
 
             var demoRooms = new (string Name, string Code, string Building, string Floor, string RoomNumber, int Capacity, int TypeId, string Description)[]
             {
@@ -688,7 +686,8 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             string description,
             int defaultCapacity,
             int departmentId,
-            bool isBookingByPeriod = false)
+            bool isBookingByPeriod = false,
+            bool requiresSecondApproval = false)
         {
             var roomType = await dbContext.RoomTypes
                 .IgnoreQueryFilters()
@@ -703,6 +702,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
                     DefaultCapacity = defaultCapacity,
                     DepartmentId = departmentId,
                     IsBookingByPeriod = isBookingByPeriod,
+                    RequiresSecondApproval = requiresSecondApproval,
                     Status = "Hoạt động",
                     CreatedAt = DateTime.UtcNow
                 };
@@ -715,6 +715,7 @@ namespace HUIT_RoMan.Infrastructure.Persistence
             roomType.DefaultCapacity = defaultCapacity;
             roomType.DepartmentId = departmentId;
             roomType.IsBookingByPeriod = isBookingByPeriod;
+            roomType.RequiresSecondApproval = requiresSecondApproval;
             roomType.Status = "Hoạt động";
             roomType.IsDeleted = false;
             roomType.UpdatedAt = DateTime.UtcNow;

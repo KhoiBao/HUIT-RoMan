@@ -5,11 +5,14 @@ import {
   fetchBookingStatsReport,
   fetchRoomUsageReport,
   fetchViolationStatsReport,
+  fetchVacancyReport,
+  vacancyHighlights,
   downloadReportCsv,
   type SystemOverviewReport,
   type BookingStatsReport,
   type RoomUsageReport,
   type ViolationStatsReport,
+  type VacancyReport,
 } from "../../lib/reports";
 import {
   ClockIcon,
@@ -56,8 +59,8 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
   const isAdmin = user?.role === "Admin";
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("ALL");
 
-  // Sub-tab selection: "bookings" | "rooms" | "violations"
-  const [subTab, setSubTab] = useState<"bookings" | "rooms" | "violations">("bookings");
+  // Sub-tab selection: "bookings" | "rooms" | "violations" | "vacancy"
+  const [subTab, setSubTab] = useState<"bookings" | "rooms" | "violations" | "vacancy">("bookings");
 
   // Date Range Quick Filter
   const [rangePreset, setRangePreset] = useState<"7days" | "30days" | "quarter" | "year" | "custom">("30days");
@@ -73,6 +76,7 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
   const [bookingReport, setBookingReport] = useState<BookingStatsReport | null>(null);
   const [roomReport, setRoomReport] = useState<RoomUsageReport | null>(null);
   const [violationReport, setViolationReport] = useState<ViolationStatsReport | null>(null);
+  const [vacancyReport, setVacancyReport] = useState<VacancyReport | null>(null);
 
   // Compute active date range filters
   const dateParams = useMemo(() => {
@@ -117,17 +121,19 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
   const loadReports = async () => {
     setLoading(true);
     try {
-      const [over, book, room, vio] = await Promise.all([
+      const [over, book, room, vio, vac] = await Promise.all([
         fetchOverviewReport(filterParams),
         fetchBookingStatsReport(filterParams),
         fetchRoomUsageReport(filterParams),
         fetchViolationStatsReport(filterParams),
+        fetchVacancyReport(filterParams),
       ]);
 
       setOverview(over);
       setBookingReport(book);
       setRoomReport(room);
       setViolationReport(vio);
+      setVacancyReport(vac);
     } catch (err: unknown) {
       console.error("Lỗi tải báo cáo thống kê:", err);
       onNotify?.("Không thể tải dữ liệu báo cáo lúc này.", "warning");
@@ -141,7 +147,9 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
   }, [filterParams]);
 
   // Handle Export CSV
-  const handleExport = async (type: "bookings" | "rooms" | "violations") => {
+  const handleExport = async (
+    type: "bookings" | "rooms" | "violations" | "vacancy"
+  ) => {
     setIsExporting(true);
     try {
       await downloadReportCsv(type, filterParams);
@@ -379,6 +387,14 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
         >
           <BanIcon size={16} />
           <span>Thống kê vi phạm &amp; Kỷ luật</span>
+        </button>
+        <button
+          type="button"
+          className={`report-subtab-btn ${subTab === "vacancy" ? "active" : ""}`}
+          onClick={() => setSubTab("vacancy")}
+        >
+          <ClockIcon size={16} />
+          <span>Tỷ lệ phòng trống theo khung giờ</span>
         </button>
       </div>
 
@@ -941,6 +957,189 @@ export default function AdminReportsTab({ onNotify }: AdminReportsTabProps) {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      ) : subTab === "vacancy" ? (
+        /* ── SUB-TAB 4: VACANCY BY HOUR ───────────────────────────────────── */
+        <div className="report-subtab-view">
+          <div
+            className="profile-section-card"
+            style={{
+              background: "var(--rp-surface)",
+              border: "1px solid var(--rp-border)",
+              borderRadius: "12px",
+              padding: "20px",
+              marginBottom: "20px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "8px 16px" }}>
+              <div>
+                <h3 style={{ fontSize: "16px", fontWeight: 800, color: "var(--rp-title)", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                  <ClockIcon size={18} />
+                  <span>TỶ LỆ PHÒNG TRỐNG THEO TỪNG KHUNG GIỜ</span>
+                </h3>
+                <span style={{ fontSize: "12.5px", color: "var(--rp-muted)" }}>
+                  Trung bình trên {vacancyReport?.daysCounted ?? 0} ngày (
+                  {vacancyReport ? new Date(vacancyReport.fromDate).toLocaleDateString("vi-VN") : "—"} →{" "}
+                  {vacancyReport ? new Date(vacancyReport.toDate).toLocaleDateString("vi-VN") : "—"}) ·{" "}
+                  {vacancyReport?.totalRooms ?? 0} phòng trong phạm vi
+                </span>
+              </div>
+              {(() => {
+                const highlights = vacancyHighlights(vacancyReport);
+                if (!highlights.busiest) return null;
+                return (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", fontSize: "12.5px", fontWeight: 700 }}>
+                    <span
+                      style={{
+                        background: "var(--rp-danger-bg)",
+                        color: "var(--rp-danger-ink)",
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      Cao điểm: {highlights.busiest.label} ({highlights.busiest.vacancyRate}% trống)
+                    </span>
+                    <span
+                      style={{
+                        background: "var(--rp-success-bg, #ecfdf5)",
+                        color: "var(--rp-success-text)",
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      Vắng nhất: {highlights.quietest?.label} ({highlights.quietest?.vacancyRate}% trống)
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {!vacancyReport?.hourSlots.length ? (
+              <div
+                style={{
+                  padding: "48px 24px",
+                  textAlign: "center",
+                  color: "var(--rp-muted)",
+                  border: "1px dashed var(--rp-border-strong)",
+                  borderRadius: "10px",
+                  background: "var(--rp-soft)",
+                }}
+              >
+                <strong style={{ display: "block", color: "var(--rp-text)", marginBottom: "4px" }}>
+                  Chưa có dữ liệu phòng trống
+                </strong>
+                Kiểm tra lại khoảng thời gian hoặc phạm vi đơn vị đã chọn.
+              </div>
+            ) : (
+              <>
+                <div style={{ overflowX: "auto", paddingBottom: "10px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-end",
+                      gap: "10px",
+                      height: "220px",
+                      paddingTop: "20px",
+                      borderBottom: "2px solid var(--rp-border-strong)",
+                      minWidth: "700px",
+                    }}
+                  >
+                    {vacancyReport.hourSlots.map((slot) => {
+                      const heightPct = Math.min(100, Math.max(2, slot.vacancyRate));
+                      return (
+                        <div
+                          key={slot.hour}
+                          title={`${slot.label}: ${slot.vacancyRate}% trống (TB ${slot.avgVacancyRooms} phòng trống / ${slot.avgBookedRooms} phòng đã đặt)`}
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            height: "100%",
+                            justifyContent: "flex-end",
+                          }}
+                        >
+                          <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--rp-text)", marginBottom: "4px" }}>
+                            {slot.vacancyRate}%
+                          </span>
+                          <div
+                            style={{
+                              width: "100%",
+                              height: `${heightPct}%`,
+                              background: slot.vacancyRate >= 50 ? "#10b981" : "#f59e0b",
+                              borderRadius: "6px 6px 0 0",
+                              transition: "height 0.2s ease",
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      minWidth: "700px",
+                      marginTop: "6px",
+                    }}
+                  >
+                    {vacancyReport.hourSlots.map((slot) => (
+                      <span
+                        key={slot.hour}
+                        style={{
+                          flex: 1,
+                          textAlign: "center",
+                          fontSize: "11px",
+                          color: "var(--rp-muted)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {slot.label.replace(" – ", "\n")}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <table className="admin-custom-table" style={{ marginTop: "16px" }}>
+                  <thead>
+                    <tr>
+                      <th>Khung giờ</th>
+                      <th style={{ textAlign: "center" }}>TB phòng đã đặt</th>
+                      <th style={{ textAlign: "center" }}>TB phòng trống</th>
+                      <th style={{ textAlign: "center", width: "140px" }}>Tỷ lệ trống</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vacancyReport.hourSlots.map((slot) => (
+                      <tr key={slot.hour}>
+                        <td>
+                          <strong style={{ color: "var(--rp-title)" }}>{slot.label}</strong>
+                        </td>
+                        <td style={{ textAlign: "center", color: "var(--rp-text)" }}>
+                          {slot.avgBookedRooms}
+                        </td>
+                        <td style={{ textAlign: "center", color: "var(--rp-text)" }}>
+                          {slot.avgVacancyRooms}
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <span
+                            className="table-status-pill"
+                            style={{
+                              fontWeight: 700,
+                              background: slot.vacancyRate >= 50 ? "var(--rp-success-bg, #ecfdf5)" : "var(--rp-danger-bg)",
+                              color: slot.vacancyRate >= 50 ? "var(--rp-success-text)" : "var(--rp-danger-ink)",
+                            }}
+                          >
+                            {slot.vacancyRate}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
           </div>
         </div>
       ) : (

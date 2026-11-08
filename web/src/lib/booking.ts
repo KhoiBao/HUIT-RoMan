@@ -1119,6 +1119,8 @@ export interface ApprovalHistoryItem {
   actorName?: string;
   /** MANUAL | AUTO. NULL với dữ liệu cũ */
   approvalMode?: string | null;
+  /** Cấp duyệt trong luồng duyệt nhiều cấp: 1 = cấp 1, 2 = cấp 2. NULL với duyệt thường */
+  level?: number | null;
 }
 
 /** Lấy lịch sử phê duyệt / từ chối / hủy đặt phòng */

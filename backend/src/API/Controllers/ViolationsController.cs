@@ -167,6 +167,14 @@ namespace HUIT_RoMan.API.Controllers
         [HttpGet("user-eligibility/{userId}")]
         public async Task<IActionResult> CheckEligibility(int userId)
         {
+            if (_currentUserService.UserId == null)
+                return Unauthorized(new { message = "Bạn chưa đăng nhập." });
+
+            // Chỉ người dùng tự tra cứu tình trạng của chính mình, hoặc cán bộ được tra cứu người khác.
+            if (userId != _currentUserService.UserId.Value && !_currentUserService.IsStaff)
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new { message = "Bạn chỉ có thể xem tình trạng mượn phòng của chính mình." });
+
             var res = await _violationService.CheckUserEligibilityAsync(userId);
             return Ok(res);
         }
@@ -223,6 +231,7 @@ namespace HUIT_RoMan.API.Controllers
 
         /// <summary>Lấy danh sách nhắc nhở (lọc theo phiên, người dùng hoặc đơn vị)</summary>
         [HttpGet("reminders")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
         public async Task<IActionResult> GetReminders([FromQuery] int? sessionId, [FromQuery] int? userId, [FromQuery] int? departmentId)
         {
             var res = await _violationService.GetRemindersAsync(sessionId, userId, departmentId);

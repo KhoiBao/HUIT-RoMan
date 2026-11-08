@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { RequireAuth, RequireStaff } from "./auth/RequireAuth";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
+import RegulationsPage from "./pages/RegulationsPage";
 import SchedulePage from "./pages/SchedulePage";
 import BookingPage from "./pages/BookingPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route element={<PortalLayout />}>
               <Route path="/home" element={<HomePage />} />
+              <Route path="/quy-dinh" element={<RegulationsPage />} />
               <Route
                 path="/dat-phong"
                 element={

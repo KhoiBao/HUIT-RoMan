@@ -65,6 +65,9 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Property<int?>("EmployeeId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("Level")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -175,7 +178,7 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_Bookings_GuestCount_Positive", "\"GuestCount\" > 0");
 
-                            t.HasCheckConstraint("CK_Bookings_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Duyệt một phần', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
+                            t.HasCheckConstraint("CK_Bookings_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Duyệt một phần', 'Chờ duyệt cấp 2', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
                         });
                 });
 
@@ -257,7 +260,7 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                             t.HasCheckConstraint("CK_BookingDetails_GuestCount_Positive", "\"GuestCount\" > 0");
 
-                            t.HasCheckConstraint("CK_BookingDetails_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
+                            t.HasCheckConstraint("CK_BookingDetails_Status", "\"Status\" IN ('Chờ duyệt', 'Đã duyệt', 'Chờ duyệt cấp 2', 'Từ chối', 'Đã hủy', 'Đang sử dụng', 'Hoàn thành')");
 
                             t.HasCheckConstraint("CK_BookingDetails_Time_Range", "\"EndAt\" > \"StartAt\"");
                         });
@@ -1058,6 +1061,9 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<bool>("RequiresSecondApproval")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1401,9 +1407,6 @@ namespace HUIT_RoMan.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AccessFailedCount")
-                        .HasColumnType("integer");
-
                     b.Property<string>("CardCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1422,9 +1425,6 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
-
-                    b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -1448,14 +1448,20 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<DateTime?>("OtpExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("OtpFailedAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OtpHash")
+                        .HasColumnType("text");
+
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
 
                     b.Property<string>("PhoneNumber")
                         .HasColumnType("text");
-
-                    b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
@@ -1463,9 +1469,6 @@ namespace HUIT_RoMan.Infrastructure.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

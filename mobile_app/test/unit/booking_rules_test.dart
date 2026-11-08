@@ -5,26 +5,27 @@ import 'package:roman_mobile/features/booking/domain/clock_time.dart';
 
 void main() {
   test('students must stay inside 07:00-20:00, max 2h, no Sunday', () {
+    final nowUtc = DateTime.utc(2026, 10, 31);
     final monday = DateTime(2026, 11, 2);
     expect(
       BookingRules.validateStudentWindow(monday,
-          const ClockTime(7, 0), const ClockTime(9, 0)),
+          const ClockTime(7, 0), const ClockTime(9, 0), nowUtc: nowUtc),
       isNull,
     );
     expect(
       BookingRules.validateStudentWindow(monday,
-          const ClockTime(6, 30), const ClockTime(8, 0)),
+          const ClockTime(6, 30), const ClockTime(8, 0), nowUtc: nowUtc),
       isNotNull,
     );
     expect(
       BookingRules.validateStudentWindow(monday,
-          const ClockTime(8, 0), const ClockTime(11, 0)),
+          const ClockTime(8, 0), const ClockTime(11, 0), nowUtc: nowUtc),
       contains('2 giờ'),
     );
     final sunday = DateTime(2026, 11, 8);
     expect(
       BookingRules.validateStudentWindow(sunday,
-          const ClockTime(8, 0), const ClockTime(9, 0)),
+          const ClockTime(8, 0), const ClockTime(9, 0), nowUtc: nowUtc),
       contains('Chủ Nhật'),
     );
   });
